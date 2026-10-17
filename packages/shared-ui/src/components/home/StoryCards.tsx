@@ -76,36 +76,45 @@ export const IdeaCard = React.memo(({ idea, index, opening, onFocusIndex, onSele
   );
 });
 
-export const MakeYourOwnCard = React.memo(
-  ({ onFocusIndex, onSelect }: { onFocusIndex: (index: number) => void; onSelect: () => void }) => {
-    const focus = useCallback(() => onFocusIndex(0), [onFocusIndex]);
-    return (
-      <Focusable
-        label="Make your own"
-        hint="Describe a story and we will film the first scene"
-        position={1}
-        altLabels={MAKE_ALT_LABELS}
-        onSelect={onSelect}
-        onFocus={focus}
-        style={styles.slot}
-      >
-        {(focused) => (
-          <View style={styles.column}>
-            <FocusScale focused={focused}>
-              <View style={[styles.card, styles.makeCard]}>
-                {focused && <FocusFrame radius={radii.card} />}
-                <Icon name="pen" size={48} />
-              </View>
-            </FocusScale>
-            <Text style={[styles.title, focused && styles.titleFocused]} numberOfLines={1}>
-              Make your own
-            </Text>
-          </View>
-        )}
-      </Focusable>
-    );
-  },
-);
+interface MakeYourOwnCardProps {
+  paused: boolean;
+  onFocusIndex: (index: number) => void;
+  onSelect: () => void;
+}
+
+export const MakeYourOwnCard = React.memo(({ paused, onFocusIndex, onSelect }: MakeYourOwnCardProps) => {
+  const focus = useCallback(() => onFocusIndex(0), [onFocusIndex]);
+  return (
+    <Focusable
+      label="Make your own"
+      hint={paused ? 'Paused. New stories are paused right now' : 'Describe a story and we will film the first scene'}
+      position={1}
+      altLabels={MAKE_ALT_LABELS}
+      onSelect={onSelect}
+      onFocus={focus}
+      style={styles.slot}
+    >
+      {(focused) => (
+        <View style={styles.column}>
+          <FocusScale focused={focused}>
+            <View style={[styles.card, styles.makeCard]}>
+              {focused && <FocusFrame radius={radii.card} />}
+              <Icon name="pen" size={48} color={paused ? colors.paperDim : colors.paper} />
+              {paused && (
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>Paused</Text>
+                </View>
+              )}
+            </View>
+          </FocusScale>
+          <Text style={[styles.title, focused && styles.titleFocused]} numberOfLines={1}>
+            Make your own
+          </Text>
+        </View>
+      )}
+    </Focusable>
+  );
+});
 
 const MAKE_ALT_LABELS = ['Make my own', 'Create a story', 'New story'];
 

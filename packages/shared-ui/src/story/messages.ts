@@ -35,10 +35,10 @@ export function messageForError(code: ApiErrorCode | 'node_failed', context: Mes
     case 'purchase_invalid':
       return messages.purchaseInvalid;
     case 'budget_exhausted':
-      if (context === 'custom') return 'New scenes are paused until tomorrow. Pick one of the choices.';
-      if (context === 'preset') return 'New scenes are paused until tomorrow. Pick the other choice.';
-      if (context === 'start') return "New stories are paused until tomorrow. Pick one of tonight's stories.";
-      return 'New scenes are paused until tomorrow.';
+      if (context === 'custom') return 'New scenes are paused right now. Pick one of the choices.';
+      if (context === 'preset') return 'This path has not been filmed yet. Pick another choice.';
+      if (context === 'start') return "New stories are paused right now. Pick one of tonight's stories.";
+      return 'New scenes are paused right now.';
     case 'rate_limited':
       return 'StoryQuest is busy right now. Try again in a moment.';
     case 'network':

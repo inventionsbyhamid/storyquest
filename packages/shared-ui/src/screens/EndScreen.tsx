@@ -158,7 +158,7 @@ export default function EndScreen() {
           ) : null}
         </View>
 
-        {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} />}
+        {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} raised />}
       </View>
     </SpatialNavigationRoot>
   );

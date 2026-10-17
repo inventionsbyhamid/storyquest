@@ -55,6 +55,8 @@ export type IdeaView = z.infer<typeof IdeaView>;
 export const TodayResponse = z.object({
   date: z.string(),
   ideas: z.array(IdeaView),
+  /** True while a budget cap stops new scenes; filmed scenes still play. */
+  filmingPaused: z.boolean().optional(),
 });
 export type TodayResponse = z.infer<typeof TodayResponse>;
 
@@ -168,6 +170,8 @@ export const WalletView = z.object({
   sceneCost: z.number().int().min(0),
   products: z.array(SparkProduct),
   purchasesEnabled: z.boolean(),
+  /** True while a budget cap stops new scenes; filmed scenes still play. */
+  filmingPaused: z.boolean().optional(),
 });
 export type WalletView = z.infer<typeof WalletView>;
 

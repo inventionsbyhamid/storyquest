@@ -14,6 +14,8 @@ import { messageForError } from '../story/messages';
 import { colors, radii, screen, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { prefetchImage } from '../utils/prefetch';
+import { isFilmingPaused, reportFilmingPaused } from '../budget/filming';
+import { useFilmingPaused } from '../budget/useFilmingPaused';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
 import { PosterPlate } from '../components/home/PosterPlate';
@@ -32,7 +34,25 @@ type LoadState =
 const PLATE_WIDTH = scaledPixels(760);
 const PLATE_HEIGHT = Math.round((PLATE_WIDTH * 9) / 16) + scaledPixels(20);
 
-const StoryText = React.memo(({ idea, empty }: { idea: IdeaView | null; empty: boolean }) => {
+interface StoryTextProps {
+  idea: IdeaView | null;
+  empty: boolean;
+  paused: boolean;
+}
+
+const StoryText = React.memo(({ idea, empty, paused }: StoryTextProps) => {
+  if (!idea && paused) {
+    return (
+      <View>
+        <Text style={styles.title} numberOfLines={2}>
+          {empty ? 'No stories tonight yet' : 'Make your own'}
+        </Text>
+        <Text style={styles.logline} numberOfLines={2}>
+          {empty ? messageForError('internal', 'today') : messageForError('budget_exhausted', 'start')}
+        </Text>
+      </View>
+    );
+  }
   if (!idea) {
     return (
       <View>
@@ -96,31 +116,38 @@ interface StoryRowProps {
   onFocusIndex: (index: number) => void;
   onSelectIdea: (idea: IdeaView) => void;
   onMakeYourOwn: () => void;
+  paused: boolean;
 }
 
-const StoryRow = React.memo(({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn }: StoryRowProps) => (
-  <View style={styles.rowArea}>
-    <Text style={styles.rowTitle}>Tonight's stories</Text>
-    <SpatialNavigationScrollView horizontal offsetFromStart={screen.side + CARD_WIDTH + CARD_GAP} style={styles.scroll}>
-      <SpatialNavigationView direction="horizontal" style={styles.rowContent}>
-        <DefaultFocus enable={ideas.length === 0}>
-          <MakeYourOwnCard onFocusIndex={onFocusIndex} onSelect={onMakeYourOwn} />
-        </DefaultFocus>
-        {ideas.map((idea, i) => (
-          <DefaultFocus key={idea.id} enable={i === 0}>
-            <IdeaCard
-              idea={idea}
-              index={i + 1}
-              opening={openingId === idea.id}
-              onFocusIndex={onFocusIndex}
-              onSelectIdea={onSelectIdea}
-            />
+const StoryRow = React.memo(
+  ({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn, paused }: StoryRowProps) => (
+    <View style={styles.rowArea}>
+      <Text style={styles.rowTitle}>Tonight's stories</Text>
+      <SpatialNavigationScrollView
+        horizontal
+        offsetFromStart={screen.side + CARD_WIDTH + CARD_GAP}
+        style={styles.scroll}
+      >
+        <SpatialNavigationView direction="horizontal" style={styles.rowContent}>
+          <DefaultFocus enable={ideas.length === 0}>
+            <MakeYourOwnCard paused={paused} onFocusIndex={onFocusIndex} onSelect={onMakeYourOwn} />
           </DefaultFocus>
-        ))}
-      </SpatialNavigationView>
-    </SpatialNavigationScrollView>
-  </View>
-));
+          {ideas.map((idea, i) => (
+            <DefaultFocus key={idea.id} enable={i === 0}>
+              <IdeaCard
+                idea={idea}
+                index={i + 1}
+                opening={openingId === idea.id}
+                onFocusIndex={onFocusIndex}
+                onSelectIdea={onSelectIdea}
+              />
+            </DefaultFocus>
+          ))}
+        </SpatialNavigationView>
+      </SpatialNavigationScrollView>
+    </View>
+  ),
+);
 
 export default function HomeScreen() {
   const navigation = useNavigation<ScreenNavigation<'Home'>>();
@@ -142,6 +169,7 @@ export default function HomeScreen() {
     api
       .getToday({ signal: controller.signal })
       .then((today) => {
+        reportFilmingPaused(today.filmingPaused);
         today.ideas.forEach((idea) => prefetchImage(resolveMediaUrl(idea.posterUrl)));
         setLoad({ status: 'ready', today });
       })
@@ -155,7 +183,11 @@ export default function HomeScreen() {
 
   const retry = useCallback(() => setAttempt((n) => n + 1), []);
   const dismissNotice = useCallback(() => setNotice(null), []);
-  const makeYourOwn = useCallback(() => navigation.navigate('Create'), [navigation]);
+  const filmingPaused = useFilmingPaused();
+  const makeYourOwn = useCallback(() => {
+    if (isFilmingPaused()) setNotice({ id: Date.now(), text: messageForError('budget_exhausted', 'start') });
+    else navigation.navigate('Create');
+  }, [navigation]);
 
   const openIdea = useCallback(
     async (idea: IdeaView) => {
@@ -213,7 +245,7 @@ export default function HomeScreen() {
             <>
               <View style={styles.hero}>
                 <View style={styles.heroText}>
-                  <StoryText idea={focusedIdea} empty={ideas.length === 0} />
+                  <StoryText idea={focusedIdea} empty={ideas.length === 0} paused={filmingPaused} />
                 </View>
                 <PosterPlate uri={plateUri} page={!focusedIdea} style={styles.heroPlate} />
               </View>
@@ -223,11 +255,12 @@ export default function HomeScreen() {
                 onFocusIndex={setFocusedIndex}
                 onSelectIdea={openIdea}
                 onMakeYourOwn={makeYourOwn}
+                paused={filmingPaused}
               />
             </>
           )}
 
-          {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} />}
+          {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} raised />}
         </View>
       </MotionContext.Provider>
     </SpatialNavigationRoot>

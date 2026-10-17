@@ -172,6 +172,25 @@ describe('api client', () => {
     await expect(client.choose('story-1', preset)).rejects.toMatchObject({ code: 'bad_request', status: 409 });
   });
 
+  it('hands final errors to onError but not cancellations', async () => {
+    const seen: string[] = [];
+    const fetchMock = vi.fn(async () => jsonResponse({ error: { code: 'budget_exhausted', message: 'paused' } }, 429));
+    const client = createApiClient({
+      getBaseUrl: () => 'https://api.example.test',
+      getDeviceId: async () => 'tv_device',
+      fetch: fetchMock as unknown as typeof fetch,
+      sleep: async () => undefined,
+      onError: (error) => seen.push(error.code),
+    });
+    await expect(client.startStory({ kind: 'idea', ideaId: 'idea-1' })).rejects.toMatchObject({
+      code: 'budget_exhausted',
+    });
+    const controller = new AbortController();
+    controller.abort();
+    await expect(client.getWallet({ signal: controller.signal })).rejects.toMatchObject({ code: 'aborted' });
+    expect(seen).toEqual(['budget_exhausted']);
+  });
+
   it('maps unknown error bodies by status', async () => {
     const { client } = setup([jsonResponse(undefined, 404)]);
     await expect(client.getStory('missing')).rejects.toMatchObject({ code: 'not_found', status: 404 });

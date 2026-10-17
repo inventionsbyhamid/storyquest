@@ -80,7 +80,7 @@ export default function MovieScreen() {
       <CaptionBar caption={title} folio="Your movie" madeIn={null} showToken={captionToken} />
       {!started && !failed && <WaitingCard label="Loading your movie" detail={title} delayMs={600} />}
       {started && paused && <PausedBadge />}
-      {failed && <Notice id={1} text={messages.movieFailed} onDismiss={noop} />}
+      {failed && <Notice id={1} text={messages.movieFailed} onDismiss={noop} raised />}
     </View>
   );
 }

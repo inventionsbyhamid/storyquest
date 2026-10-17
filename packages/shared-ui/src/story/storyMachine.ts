@@ -67,6 +67,8 @@ export interface StoryState {
   reportNodeId: string | null;
   // The current scene was reported, so its frames stay covered.
   sceneHidden: boolean;
+  // A budget cap stops new scenes: only choices already filmed can be taken.
+  filmingPaused: boolean;
 }
 
 export type StoryEvent =
@@ -96,6 +98,7 @@ export type StoryEvent =
   | { type: 'OPEN_REPORT' }
   | { type: 'CLOSE_REPORT' }
   | { type: 'SCENE_REPORTED'; nodeId: string }
+  | { type: 'FILMING_PAUSED'; paused: boolean }
   | { type: 'RESET'; nodeId: string; posterUrl: string | null }
   | { type: 'NOTICE'; text: string }
   | { type: 'DISMISS_NOTICE'; id: number };
@@ -104,9 +107,15 @@ export interface StoryStart {
   nodeId: string;
   posterUrl?: string | null;
   hiddenNodes?: string[];
+  filmingPaused?: boolean;
 }
 
-export function createStoryState({ nodeId, posterUrl = null, hiddenNodes = [] }: StoryStart): StoryState {
+export function createStoryState({
+  nodeId,
+  posterUrl = null,
+  hiddenNodes = [],
+  filmingPaused = false,
+}: StoryStart): StoryState {
   return {
     phase: 'loadingScene',
     sparksPrompt: null,
@@ -135,6 +144,7 @@ export function createStoryState({ nodeId, posterUrl = null, hiddenNodes = [] }:
     hiddenNodes,
     reportNodeId: null,
     sceneHidden: false,
+    filmingPaused,
   };
 }
 
@@ -266,6 +276,7 @@ function onChoose(state: StoryState, index: number): StoryState {
   const choice = state.scene.choices.find((c) => c.index === index);
   if (!choice) return state;
   if (closedChoices(state).includes(index)) return withNotice(state, messages.pathClosed);
+  if (notFilmedChoices(state).includes(index)) return withNotice(state, messageForError('budget_exhausted', 'preset'));
 
   // The next scene is already on the device: play it now and tell the server in the background.
   // Paid scenes wait for the server to accept the choice, because that is when Sparks are charged.
@@ -297,8 +308,9 @@ function onChoiceAccepted(state: StoryState, seq: number, nextNodeId: string): S
   return accepted;
 }
 
-function onChoiceFailed(state: StoryState, seq: number, code: ApiErrorCode): StoryState {
-  if (state.phase !== 'waitingNext' || seq !== state.requestSeq) return state;
+function onChoiceFailed(current: StoryState, seq: number, code: ApiErrorCode): StoryState {
+  if (current.phase !== 'waitingNext' || seq !== current.requestSeq) return current;
+  const state = code === 'budget_exhausted' ? { ...current, filmingPaused: true } : current;
   if (code === 'payment_required') {
     if (state.waitKind === 'custom') {
       return { ...clearPending(state), phase: 'customInput', sparksPrompt: { kind: 'custom' } };
@@ -433,6 +445,7 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
 
     case 'OPEN_CUSTOM':
       if (state.phase !== 'choosing' || state.menuOpen) return state;
+      if (state.filmingPaused) return withNotice(state, messageForError('budget_exhausted', 'custom'));
       return { ...state, phase: 'customInput', customError: null, notice: null, sparksPrompt: null };
 
     case 'NEED_SPARKS':
@@ -501,12 +514,16 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
           nodeId: event.nodeId,
           posterUrl: event.posterUrl ?? state.still,
           hiddenNodes: state.hiddenNodes,
+          filmingPaused: state.filmingPaused,
         }),
         noticeSeq: state.noticeSeq,
         syncSeq: state.syncSeq,
         pollSeq: state.pollSeq + 1,
         requestSeq: state.requestSeq + 1,
       };
+
+    case 'FILMING_PAUSED':
+      return state.filmingPaused === event.paused ? state : { ...state, filmingPaused: event.paused };
 
     case 'NOTICE':
       return withNotice(state, event.text);
@@ -529,6 +546,16 @@ export function closedChoices(state: StoryState): number[] {
     .map((choice) => choice.index);
   if (hidden.length === 0) return state.disabledChoices;
   return [...state.disabledChoices, ...hidden.filter((index) => !state.disabledChoices.includes(index))];
+}
+
+// While filming is paused, choices nobody has filmed yet cannot be taken.
+export function notFilmedChoices(state: StoryState): number[] {
+  const scene = state.scene;
+  if (!state.filmingPaused || !scene) return [];
+  const closed = closedChoices(state);
+  return scene.choices
+    .filter((choice) => choice.nodeId === null && !choice.ready && !closed.includes(choice.index))
+    .map((choice) => choice.index);
 }
 
 export function isStillVisible(state: StoryState): boolean {

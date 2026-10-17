@@ -47,6 +47,8 @@ export interface ApiClientOptions {
   retries?: number;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   random?: () => number;
+  // Sees every error a call finally fails with, for app wide signals like a spent budget.
+  onError?: (error: ApiError) => void;
 }
 
 const DEFAULT_TIMEOUT_MS = 10000;
@@ -153,7 +155,10 @@ export function createApiClient(options: ApiClientOptions) {
         return await once(method, path, schema, body, opts.signal, timeoutMs);
       } catch (error) {
         const apiError = toApiError(error);
-        if (apiError.code === 'aborted' || attempt > retries || !isTransient(apiError)) throw apiError;
+        if (apiError.code === 'aborted' || attempt > retries || !isTransient(apiError)) {
+          if (apiError.code !== 'aborted') options.onError?.(apiError);
+          throw apiError;
+        }
         await sleep(backoffDelay(attempt, random), opts.signal);
       }
     }

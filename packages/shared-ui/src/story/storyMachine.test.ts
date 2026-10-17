@@ -5,6 +5,7 @@ import {
   StoryState,
   closedChoices,
   createStoryState,
+  notFilmedChoices,
   isPrivatePath,
   isPlayerPaused,
   isStillVisible,
@@ -272,7 +273,7 @@ describe('choices', () => {
     const failed = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'budget_exhausted' });
     expect(failed.phase).toBe('choosing');
     expect(failed.disabledChoices).toEqual([]);
-    expect(failed.notice?.text).toBe('New scenes are paused until tomorrow. Pick the other choice.');
+    expect(failed.notice?.text).toBe('This path has not been filmed yet. Pick another choice.');
   });
 
   it('returns to the choices when the next scene takes too long', () => {
@@ -528,7 +529,7 @@ describe('something else', () => {
     const sent = run(inputOpen(), { type: 'SUBMIT_CUSTOM' });
     const rejected = storyReducer(sent, { type: 'CHOICE_FAILED', seq: sent.requestSeq, code: 'budget_exhausted' });
     expect(rejected.phase).toBe('choosing');
-    expect(rejected.notice?.text).toBe('New scenes are paused until tomorrow. Pick one of the choices.');
+    expect(rejected.notice?.text).toBe('New scenes are paused right now. Pick one of the choices.');
   });
 
   it('returns to the choices when the custom scene fails', () => {
@@ -717,5 +718,76 @@ describe('closed paths', () => {
     expect(failed.phase).toBe('choosing');
     expect(closedChoices(failed)).toEqual([0]);
     expect(failed.notice?.text).toBe(messages.pathClosed);
+  });
+});
+
+describe('filming paused', () => {
+  // Budget mode: choice 0 was filmed, choice 1 never was.
+  const budgetRoot = makeScene({
+    id: 'root',
+    choices: [makeChoice(0), makeChoice(1, { nodeId: null, ready: false, posterUrl: null })],
+  });
+
+  function choosingBudget(filmingPaused: boolean): StoryState {
+    return run(
+      createStoryState({ nodeId: 'root', filmingPaused }),
+      { type: 'NODE_UPDATE', scene: budgetRoot },
+      { type: 'CLIP_ENDED', clipUrl: budgetRoot.clipUrl! },
+    );
+  }
+
+  it('lets an unfilmed choice be filmed while filming is on', () => {
+    const state = choosingBudget(false);
+    expect(notFilmedChoices(state)).toEqual([]);
+    const chosen = storyReducer(state, { type: 'CHOOSE', index: 1 });
+    expect(chosen.phase).toBe('waitingNext');
+    expect(chosen.pendingNodeId).toBeNull();
+    expect(waitingLabel(chosen)).toBe('Drawing the next scene');
+  });
+
+  it('explains instead of asking the server while filming is paused', () => {
+    const state = choosingBudget(true);
+    expect(notFilmedChoices(state)).toEqual([1]);
+    const refused = storyReducer(state, { type: 'CHOOSE', index: 1 });
+    expect(refused.phase).toBe('choosing');
+    expect(refused.requestSeq).toBe(state.requestSeq);
+    expect(refused.notice?.text).toBe('This path has not been filmed yet. Pick another choice.');
+
+    const filmed = storyReducer(state, { type: 'CHOOSE', index: 0 });
+    expect(filmed.phase).toBe('waitingNext');
+    expect(filmed.pendingNodeId).toBe('child-0');
+  });
+
+  it('keeps Something else closed while filming is paused', () => {
+    const state = storyReducer(choosingBudget(true), { type: 'OPEN_CUSTOM' });
+    expect(state.phase).toBe('choosing');
+    expect(state.notice?.text).toBe('New scenes are paused right now. Pick one of the choices.');
+    expect(storyReducer(choosingBudget(false), { type: 'OPEN_CUSTOM' }).phase).toBe('customInput');
+  });
+
+  it('pauses on a budget refusal and stays paused across a restart', () => {
+    const chosen = storyReducer(choosingBudget(false), { type: 'CHOOSE', index: 1 });
+    const refused = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'budget_exhausted' });
+    expect(refused.phase).toBe('choosing');
+    expect(refused.filmingPaused).toBe(true);
+    expect(notFilmedChoices(refused)).toEqual([1]);
+    const restarted = run(
+      refused,
+      { type: 'RESET', nodeId: 'root', posterUrl: null },
+      { type: 'NODE_UPDATE', scene: budgetRoot },
+    );
+    expect(restarted.filmingPaused).toBe(true);
+  });
+
+  it('follows the app wide signal and lets a closed path stay closed', () => {
+    const state = choosingBudget(false);
+    const paused = storyReducer(state, { type: 'FILMING_PAUSED', paused: true });
+    expect(notFilmedChoices(paused)).toEqual([1]);
+    expect(storyReducer(paused, { type: 'FILMING_PAUSED', paused: true })).toBe(paused);
+    expect(notFilmedChoices(storyReducer(paused, { type: 'FILMING_PAUSED', paused: false }))).toEqual([]);
+
+    const closed = { ...paused, disabledChoices: [1] };
+    expect(closedChoices(closed)).toEqual([1]);
+    expect(notFilmedChoices(closed)).toEqual([]);
   });
 });

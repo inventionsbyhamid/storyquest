@@ -171,7 +171,11 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   app.get('/v1/today', async () => {
     daily.kick();
     const { date, ideas } = daily.listForHome();
-    return parse(TodayResponse, { date, ideas: ideas.map((idea) => views.idea(idea)) });
+    return parse(TodayResponse, {
+      date,
+      ideas: ideas.map((idea) => views.idea(idea)),
+      filmingPaused: services.budget.exhausted() !== null,
+    });
   });
 
   app.post('/v1/stories', { config: { rateLimit: { max: 20, timeWindow: '1 minute', keyGenerator: rateKey } } }, async (request) => {
@@ -244,7 +248,10 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   app.get('/v1/wallet', async (request) => {
     const device = requireDevice(request);
-    return parse(WalletView, services.wallet.view({ deviceId: device, userId: iapUser(request) }));
+    return parse(WalletView, {
+      ...services.wallet.view({ deviceId: device, userId: iapUser(request) }),
+      filmingPaused: services.budget.exhausted() !== null,
+    });
   });
 
   app.post(

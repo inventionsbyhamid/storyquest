@@ -2,7 +2,7 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ChooseResponse, SceneView, StoryView, TodayResponse } from '@storyquest/contracts';
+import { ChooseResponse, SceneView, StoryView, TodayResponse, WalletView } from '@storyquest/contracts';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config';
@@ -360,6 +360,30 @@ describe('admin filming', () => {
     expect(done.error).toContain('new scenes are back tomorrow');
     expect(done.steps.map((step: { status: string }) => step.status)).toEqual(['ready', 'ready', 'failed']);
     expect(services.repo.getTotal('video_seconds')).toBe(2);
+  });
+});
+
+describe('filming paused', () => {
+  it('tells the TV once a cap stops new scenes', async () => {
+    const { app, services } = await boot({ AUTO_PREFETCH: 'false', TOTAL_VIDEO_SECONDS_CAP: '2' });
+    const headers = { 'x-device-id': DEVICE };
+    const home = async () => TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
+    const wallet = async () => WalletView.parse((await app.inject({ method: 'GET', url: '/v1/wallet', headers })).json());
+    expect((await home()).filmingPaused).toBe(false);
+    expect((await wallet()).filmingPaused).toBe(false);
+
+    const ideaId = (await home()).ideas[0]!.id;
+    const story = StoryView.parse((await app.inject({ method: 'POST', url: '/v1/stories', headers, payload: { kind: 'idea', ideaId } })).json());
+    const root = await scene(app, story.currentNodeId);
+    const chosen = ChooseResponse.parse(
+      (await app.inject({ method: 'POST', url: `/v1/stories/${story.id}/choose`, headers, payload: { kind: 'preset', fromNodeId: root.id, index: 0 } })).json(),
+    );
+    expect((await scene(app, chosen.nextNodeId)).status).toBe('ready');
+    await services.engine.idle();
+
+    expect(services.budget.exhausted()).toBe('total_video');
+    expect((await home()).filmingPaused).toBe(true);
+    expect((await wallet()).filmingPaused).toBe(true);
   });
 });
 

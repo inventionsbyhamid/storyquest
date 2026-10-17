@@ -111,6 +111,7 @@ describe('wallet view', () => {
         { sku: 'storyquest.sparks.25', sparks: 25 },
       ],
       purchasesEnabled: true,
+      filmingPaused: false,
     });
     expect((await app.inject({ method: 'GET', url: '/v1/wallet' })).statusCode).toBe(400);
     const odd = await app.inject({ method: 'GET', url: '/v1/wallet', headers: { 'x-device-id': DEVICE, 'x-iap-user-id': 'has spaces' } });

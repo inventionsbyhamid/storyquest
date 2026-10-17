@@ -2,6 +2,7 @@ import type { VerifyPurchaseRequest, VerifyPurchaseResponse, WalletView } from '
 import type { RequestOptions } from '../api/client';
 import { isTransient, toApiError } from '../api/errors';
 import { sleep as defaultSleep } from '../api/sleep';
+import { reportFilmingPaused } from '../budget/filming';
 import { messages } from '../story/messages';
 import type { IapKind, IapPurchaseResult, IapReceipt, IapService } from './types';
 
@@ -186,6 +187,7 @@ export class SparksStore {
   }
 
   private setWallet(wallet: WalletView): void {
+    reportFilmingPaused(wallet.filmingPaused);
     this.publish({ wallet });
   }
 

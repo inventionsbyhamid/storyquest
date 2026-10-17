@@ -1,9 +1,17 @@
+import { markBudgetExhausted } from '../budget/filming';
 import { getApiBaseUrl } from '../config';
 import { createApiClient } from './client';
 import { getDeviceId } from './deviceId';
 import { getIapUserId } from './identity';
 
-export const api = createApiClient({ getBaseUrl: getApiBaseUrl, getDeviceId, getIapUserId });
+export const api = createApiClient({
+  getBaseUrl: getApiBaseUrl,
+  getDeviceId,
+  getIapUserId,
+  onError: (error) => {
+    if (error.code === 'budget_exhausted') markBudgetExhausted();
+  },
+});
 
 export { createApiClient } from './client';
 export type { ApiClient } from './client';

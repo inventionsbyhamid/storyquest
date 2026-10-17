@@ -21,6 +21,8 @@ import { useLatest } from '../hooks/useLatest';
 import { canAfford, costLabel, sparks, useSparks } from '../purchases';
 import { createSerialQueue, sendChoice } from '../story/choiceSync';
 import { formatFolio, formatMadeIn } from '../story/format';
+import { isFilmingPaused } from '../budget/filming';
+import { useFilmingPaused } from '../budget/useFilmingPaused';
 import { confirmGrownUps, needsGrownUpsGate } from '../gate/grownUps';
 import { messageForError, messages } from '../story/messages';
 import { startRequestFor } from '../story/origin';
@@ -28,6 +30,7 @@ import { markReported, reportedNodeIds } from '../story/reports';
 import {
   closedChoices,
   createStoryState,
+  notFilmedChoices,
   isPlayerPaused,
   isPrivatePath,
   isStillVisible,
@@ -60,10 +63,14 @@ export default function StoryScreen() {
   });
   const [state, dispatch] = useReducer(
     storyReducer,
-    { nodeId: route.params.nodeId, posterUrl, hiddenNodes: reportedNodeIds() },
+    { nodeId: route.params.nodeId, posterUrl, hiddenNodes: reportedNodeIds(), filmingPaused: isFilmingPaused() },
     createStoryState,
   );
   const [gateOpen, setGateOpen] = useState(false);
+  const filmingPaused = useFilmingPaused();
+  useEffect(() => {
+    dispatch({ type: 'FILMING_PAUSED', paused: filmingPaused });
+  }, [filmingPaused]);
   const [report, setReport] = useState<{ sending: boolean; error: string | null }>({ sending: false, error: null });
   const probedChildren = useRef(new Set<string>());
   const [captionToken, setCaptionToken] = useState(0);
@@ -345,6 +352,11 @@ export default function StoryScreen() {
     (index: number) => {
       const current = latestState.current;
       const choice = current.scene?.choices.find((item) => item.index === index);
+      // Closed and unfilmed paths only explain themselves; the reducer shows the notice.
+      if (closedChoices(current).includes(index) || notFilmedChoices(current).includes(index)) {
+        dispatch({ type: 'CHOOSE', index });
+        return;
+      }
       if (choice && choice.sparks > 0 && !canAfford(latestWallet.current, choice.sparks)) {
         dispatch({ type: 'NEED_SPARKS', prompt: { kind: 'choice', index } });
         return;
@@ -364,9 +376,10 @@ export default function StoryScreen() {
     dispatch({ type: 'OPEN_CUSTOM' });
   }, [latestWallet]);
   const openCustom = useCallback(() => {
-    if (needsGrownUpsGate(session.audience)) setGateOpen(true);
+    if (latestState.current.filmingPaused) dispatch({ type: 'OPEN_CUSTOM' });
+    else if (needsGrownUpsGate(session.audience)) setGateOpen(true);
     else proceedCustom();
-  }, [session.audience, proceedCustom]);
+  }, [latestState, session.audience, proceedCustom]);
   const passGate = useCallback(() => {
     confirmGrownUps();
     setGateOpen(false);
@@ -413,7 +426,9 @@ export default function StoryScreen() {
         focusTimer.current = null;
         const current = latestState.current;
         const currentScene = current.scene;
-        if (!currentScene || current.phase !== 'choosing' || !isPrivatePath(currentScene)) return;
+        if (!currentScene || current.phase !== 'choosing' || current.filmingPaused || !isPrivatePath(currentScene)) {
+          return;
+        }
         const choice = currentScene.choices.find((item) => item.index === index);
         if (!choice || choice.ready || closedChoices(current).includes(index)) return;
         if (!canAfford(latestWallet.current, choice.sparks)) return;
@@ -493,6 +508,8 @@ export default function StoryScreen() {
         <ChoiceOverlay
           scene={scene}
           closedChoices={closedChoices(state)}
+          notFilmedChoices={notFilmedChoices(state)}
+          customPaused={state.filmingPaused}
           customCost={customCost}
           freeSparks={wallet?.freeSparks ?? 0}
           active={layersActive && phase === 'choosing'}

@@ -8,9 +8,11 @@ interface NoticeProps {
   text: string;
   onDismiss: (id: number) => void;
   durationMs?: number;
+  // On plain ink screens the scrim would vanish, so the card is raised instead.
+  raised?: boolean;
 }
 
-export const Notice = React.memo(({ id, text, onDismiss, durationMs = 4500 }: NoticeProps) => {
+export const Notice = React.memo(({ id, text, onDismiss, durationMs = 4500, raised }: NoticeProps) => {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -25,7 +27,11 @@ export const Notice = React.memo(({ id, text, onDismiss, durationMs = 4500 }: No
   }, [id, durationMs, opacity, onDismiss]);
 
   return (
-    <Animated.View pointerEvents="none" accessibilityLiveRegion="polite" style={[styles.card, { opacity }]}>
+    <Animated.View
+      pointerEvents="none"
+      accessibilityLiveRegion="polite"
+      style={[styles.card, raised && styles.raised, { opacity }]}
+    >
       <Text style={styles.text}>{text}</Text>
     </Animated.View>
   );
@@ -42,6 +48,11 @@ const styles = StyleSheet.create({
     borderRadius: radii.card,
     backgroundColor: colors.scrim,
     zIndex: 40,
+  },
+  raised: {
+    backgroundColor: colors.inkRaised,
+    borderWidth: scaledPixels(2),
+    borderColor: colors.inkLine,
   },
   text: {
     ...type.body,

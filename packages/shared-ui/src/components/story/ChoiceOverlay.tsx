@@ -21,22 +21,25 @@ const RISE = scaledPixels(24);
 interface ChoiceCardProps {
   choice: ChoiceView;
   closed: boolean;
+  notFilmed: boolean;
   freeSparks: number;
   onChoose: (index: number) => void;
   onFocusChoice: (index: number | null) => void;
 }
 
-function choiceHint(choice: ChoiceView, closed: boolean): string | undefined {
+function choiceHint(choice: ChoiceView, closed: boolean, notFilmed: boolean): string | undefined {
   if (closed) return 'Path closed. Pick another choice';
+  if (notFilmed) return 'Not filmed yet. Pick another choice';
   const parts: string[] = [];
   if (choice.sparks > 0) parts.push(`Uses ${formatSparks(choice.sparks)}`);
   if (!choice.ready && choice.nodeId) parts.push('Still being drawn. You can pick it and wait');
   return parts.length ? parts.join('. ') : undefined;
 }
 
-const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusChoice }: ChoiceCardProps) => {
-  const costs = choice.sparks > freeSparks;
-  const poster = closed ? null : resolveMediaUrl(choice.posterUrl);
+const ChoiceCard = React.memo(({ choice, closed, notFilmed, freeSparks, onChoose, onFocusChoice }: ChoiceCardProps) => {
+  const unavailable = closed || notFilmed;
+  const costs = !unavailable && choice.sparks > freeSparks;
+  const poster = unavailable ? null : resolveMediaUrl(choice.posterUrl);
   const source = useMemo(() => (poster ? { uri: poster } : null), [poster]);
   const select = useCallback(() => onChoose(choice.index), [choice.index, onChoose]);
   const focus = useCallback(() => onFocusChoice(choice.index), [choice.index, onFocusChoice]);
@@ -45,7 +48,7 @@ const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusCh
   return (
     <Focusable
       label={choice.label}
-      hint={choiceHint(choice, closed)}
+      hint={choiceHint(choice, closed, notFilmed)}
       position={choice.index + 1}
       onSelect={select}
       onFocus={focus}
@@ -53,30 +56,32 @@ const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusCh
     >
       {(focused) => (
         <FocusScale focused={focused}>
-          <View style={[styles.card, focused && styles.cardFocused, closed && styles.closed]}>
+          <View style={[styles.card, focused && styles.cardFocused]}>
             {focused && <FocusFrame radius={radii.card} />}
             <View style={styles.thumb}>
-              {source ? (
-                <Image source={source} style={styles.image} resizeMode="cover" fadeDuration={0} />
-              ) : (
-                <Placeholder style={styles.placeholder} />
-              )}
-              {closed ? (
+              <View style={[styles.fill, unavailable && styles.closed]}>
+                {source ? (
+                  <Image source={source} style={styles.image} resizeMode="cover" fadeDuration={0} />
+                ) : (
+                  <Placeholder style={styles.placeholder} />
+                )}
+              </View>
+              {unavailable ? (
                 <View style={[styles.status, styles.topRight]}>
-                  <Text style={styles.statusText}>Path closed</Text>
+                  <Text style={styles.statusText}>{closed ? 'Path closed' : 'Not filmed yet'}</Text>
                 </View>
               ) : !choice.ready && choice.nodeId ? (
                 <View style={[styles.status, styles.bottomLeft]}>
                   <Text style={styles.statusText}>Drawing</Text>
                 </View>
               ) : null}
-              {!closed && costs && (
+              {costs && (
                 <View style={styles.cost}>
                   <CostTag sparks={choice.sparks} />
                 </View>
               )}
             </View>
-            <View style={styles.text}>
+            <View style={[styles.text, unavailable && styles.closed]}>
               <Text style={styles.label} numberOfLines={2}>
                 {choice.label}
               </Text>
@@ -93,14 +98,20 @@ const ELSE_ALT_LABELS = ['My own idea', 'Something different', 'Type my idea'];
 interface SomethingElseProps {
   position: number;
   cost: number;
+  paused: boolean;
   onSelect: () => void;
   onFocusChoice: (index: number | null) => void;
 }
 
-const SomethingElseCard = React.memo(({ position, cost, onSelect, onFocusChoice }: SomethingElseProps) => (
+function somethingElseHint(cost: number, paused: boolean): string {
+  if (paused) return 'Paused. New scenes are paused right now';
+  return cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it';
+}
+
+const SomethingElseCard = React.memo(({ position, cost, paused, onSelect, onFocusChoice }: SomethingElseProps) => (
   <Focusable
     label="Something else"
-    hint={cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it'}
+    hint={somethingElseHint(cost, paused)}
     position={position}
     altLabels={ELSE_ALT_LABELS}
     onSelect={onSelect}
@@ -111,14 +122,20 @@ const SomethingElseCard = React.memo(({ position, cost, onSelect, onFocusChoice 
         <View style={[styles.card, focused && styles.cardFocused]}>
           {focused && <FocusFrame radius={radii.card} />}
           <View style={[styles.thumb, styles.elseThumb]}>
-            <Icon name="pen" size={56} />
-            {cost > 0 && (
+            <View style={paused && styles.closed}>
+              <Icon name="pen" size={56} />
+            </View>
+            {paused ? (
+              <View style={[styles.status, styles.topRight]}>
+                <Text style={styles.statusText}>Paused</Text>
+              </View>
+            ) : cost > 0 ? (
               <View style={styles.cost}>
                 <CostTag sparks={cost} />
               </View>
-            )}
+            ) : null}
           </View>
-          <View style={styles.text}>
+          <View style={[styles.text, paused && styles.closed]}>
             <Text style={styles.label} numberOfLines={1}>
               Something else
             </Text>
@@ -135,6 +152,8 @@ const SomethingElseCard = React.memo(({ position, cost, onSelect, onFocusChoice 
 interface ChoiceOverlayProps {
   scene: SceneView;
   closedChoices: number[];
+  notFilmedChoices: number[];
+  customPaused: boolean;
   customCost: number;
   freeSparks: number;
   active: boolean;
@@ -148,6 +167,8 @@ interface ChoiceOverlayProps {
 export function ChoiceOverlay({
   scene,
   closedChoices,
+  notFilmedChoices,
+  customPaused,
   customCost,
   freeSparks,
   active,
@@ -182,7 +203,9 @@ export function ChoiceOverlay({
     transform: [{ translateY: value.interpolate({ inputRange: [0, 1], outputRange: [RISE, 0] }) }],
   });
 
-  const firstOpen = scene.choices.find((choice) => !closedChoices.includes(choice.index))?.index ?? -1;
+  const firstOpen =
+    scene.choices.find((choice) => !closedChoices.includes(choice.index) && !notFilmedChoices.includes(choice.index))
+      ?.index ?? -1;
 
   return (
     <SpatialNavigationRoot isActive={active}>
@@ -198,6 +221,7 @@ export function ChoiceOverlay({
                 <ChoiceCard
                   choice={choice}
                   closed={closedChoices.includes(choice.index)}
+                  notFilmed={notFilmedChoices.includes(choice.index)}
                   freeSparks={freeSparks}
                   onChoose={onChoose}
                   onFocusChoice={onFocusChoice}
@@ -210,6 +234,7 @@ export function ChoiceOverlay({
               <SomethingElseCard
                 position={scene.choices.length + 1}
                 cost={customCost > freeSparks ? customCost : 0}
+                paused={customPaused}
                 onSelect={onSomethingElse}
                 onFocusChoice={onFocusChoice}
               />
@@ -256,6 +281,9 @@ const styles = StyleSheet.create({
   },
   closed: {
     opacity: 0.5,
+  },
+  fill: {
+    ...StyleSheet.absoluteFillObject,
   },
   thumb: {
     width: THUMB_WIDTH,
