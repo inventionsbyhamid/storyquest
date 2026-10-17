@@ -40,6 +40,6 @@ Made for families. Choose Kids, Family or Grown ups and every story is written f
 | storyquest.sparks.10 | 10 Sparks | Film 10 scenes made only for your family. |
 | storyquest.sparks.25 | 25 Sparks | Film 25 scenes made only for your family. Best value. |
 
-**Assets:** `assets/store/png/` (icons 114 and 512, Fire TV icon 1280x720, background 1920x1080). Screenshots: 1920x1080 captures from the app (home, a scene with caption, the choice screen, Something else with the keyboard, The End with the QR code).
+**Assets:** `assets/brand/png/` (icons 114 and 512, Fire TV icon 1280x720, background 1920x1080). Screenshots: 1920x1080 captures from the app (home, a scene with caption, the choice screen, Something else with the keyboard, The End with the QR code).
 
 **URLs:** website `https://<domain>/`, privacy policy `https://<domain>/privacy`, terms `https://<domain>/terms`, support `https://<domain>/support`.
