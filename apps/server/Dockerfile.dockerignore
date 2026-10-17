@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.expo
+**/.env
+**/.env.*
+!**/.env.example
+.git
+.yarn/cache
+.yarn/install-state.gz
+apps/server/data
+apps/vega/build
+apps/*/android
+apps/*/ios
+**/coverage

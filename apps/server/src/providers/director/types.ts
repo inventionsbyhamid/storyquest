@@ -1,0 +1,58 @@
+import type { Audience, Bible, Character, Mood } from '../../domain';
+
+export interface SceneHistoryItem {
+  sceneNumber: number;
+  summary: string;
+  caption: string;
+  /** The choice that led out of this scene, if any. */
+  choiceTaken: string | null;
+}
+
+export interface SceneRequest {
+  treeId: string;
+  /** Node ids from the root to this scene, used to seed deterministic fakes. */
+  pathKey: string;
+  bible: Bible;
+  /** Bible characters plus anyone introduced earlier on this path. */
+  cast: Character[];
+  history: SceneHistoryItem[];
+  choice: { kind: 'preset' | 'custom'; text: string } | null;
+  sceneNumber: number;
+  totalScenes: number;
+  sceneSeconds: number;
+  /** Set on the second try after the first draft failed the safety check. */
+  stricter?: boolean;
+}
+
+export interface Scene {
+  summary: string;
+  caption: string;
+  videoPrompt: string;
+  choices: string[];
+  isEnding: boolean;
+  newCharacters: Character[];
+}
+
+export interface BibleRequest {
+  prompt: string;
+  moods: Mood[];
+  audience: Audience;
+  totalScenes: number;
+}
+
+export interface Director {
+  readonly name: string;
+  writeScene(request: SceneRequest): Promise<Scene>;
+  createBible(request: BibleRequest): Promise<Bible>;
+  planIdeas(date: string, count: number, avoidTitles?: string[]): Promise<Bible[]>;
+}
+
+/** The model declined to write this. Treated like an unsafe draft. */
+export class DirectorRefusal extends Error {
+  override name = 'DirectorRefusal';
+}
+
+/** The model answered twice without producing valid JSON. */
+export class DirectorFormatError extends Error {
+  override name = 'DirectorFormatError';
+}

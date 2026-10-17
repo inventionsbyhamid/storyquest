@@ -1,0 +1,95 @@
+import { execFile } from 'node:child_process';
+import { rm, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
+
+export class MediaCommandError extends Error {
+  override name = 'MediaCommandError';
+}
+
+export async function runCommand(command: string, args: string[], timeoutMs: number): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(
+      command,
+      args,
+      { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+      (error, stdout, stderr) => {
+        if (error) {
+          const reason = error.killed ? `timed out after ${timeoutMs} ms` : stderr.trim().split('\n').slice(-3).join(' | ');
+          reject(new MediaCommandError(`${command} failed: ${reason || error.message}`));
+          return;
+        }
+        resolve(stdout);
+      },
+    );
+  });
+}
+
+const FFMPEG = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y'];
+
+export class Media {
+  constructor(private readonly timeoutMs = 60_000) {}
+
+  ffmpeg(args: string[], timeoutMs = this.timeoutMs): Promise<string> {
+    return runCommand('ffmpeg', [...FFMPEG, ...args], timeoutMs);
+  }
+
+  /** Moves the index to the front so playback can start before the whole file arrives. */
+  async faststart(input: string, output: string): Promise<void> {
+    await this.ffmpeg(['-i', input, '-map', '0', '-c', 'copy', '-movflags', '+faststart', output]);
+  }
+
+  async probeDurationMs(file: string): Promise<number> {
+    const out = await runCommand(
+      'ffprobe',
+      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'default=noprint_wrappers=1:nokey=1', file],
+      15_000,
+    );
+    const seconds = Number.parseFloat(out.trim());
+    if (!Number.isFinite(seconds) || seconds <= 0) throw new MediaCommandError(`could not read duration of ${file}`);
+    return Math.round(seconds * 1000);
+  }
+
+  async poster(input: string, output: string, atSeconds: number): Promise<void> {
+    await this.ffmpeg([
+      '-ss', atSeconds.toFixed(3),
+      '-i', input,
+      '-frames:v', '1',
+      '-vf', 'scale=640:-2',
+      '-q:v', '4',
+      output,
+    ]);
+  }
+
+  /**
+   * The true final frame: decode the last half second and keep overwriting the
+   * same image, so whatever frame comes last wins.
+   */
+  async lastFrame(input: string, output: string): Promise<void> {
+    await this.ffmpeg(['-sseof', '-0.5', '-i', input, '-an', '-update', '1', '-q:v', '2', output]);
+  }
+
+  async stitch(inputs: string[], output: string): Promise<void> {
+    const listFile = join(dirname(output), `.concat-${Date.now()}.txt`);
+    const list = inputs.map((file) => `file '${file.replace(/'/g, "'\\''")}'`).join('\n');
+    await writeFile(listFile, `${list}\n`);
+    try {
+      try {
+        await this.ffmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-movflags', '+faststart', output]);
+      } catch {
+        // Clips from different encoders can disagree on stream parameters; re-encode then.
+        await this.ffmpeg(
+          [
+            '-f', 'concat', '-safe', '0', '-i', listFile,
+            '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '22', '-pix_fmt', 'yuv420p',
+            '-c:a', 'aac', '-b:a', '128k',
+            '-movflags', '+faststart',
+            output,
+          ],
+          10 * 60_000,
+        );
+      }
+    } finally {
+      await rm(listFile, { force: true });
+    }
+  }
+}
