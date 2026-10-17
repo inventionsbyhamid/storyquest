@@ -69,7 +69,7 @@ export class FakeVideo implements VideoProvider {
     const showText = `enable='between(t,0.4,${Math.max(0.5, seconds - 0.6).toFixed(2)})'`;
     const px = (fraction: number) => Math.max(1, Math.round(height * fraction));
     const overlay = [
-      `drawtext=${font}textfile=${escapeFilterValue(textFile)}:fontcolor=white:fontsize=${px(1 / 18)}:line_spacing=${px(1 / 90)}:box=1:boxcolor=black@0.35:boxborderw=${px(1 / 40)}:x=(w-text_w)/2:y=h-text_h-h/10:${showText}`,
+      `drawtext=${font}textfile=${escapeFilterValue(textFile)}:fontcolor=white:fontsize=${px(1 / 18)}:line_spacing=${px(1 / 90)}:box=1:boxcolor=black@0.35:boxborderw=${px(1 / 40)}:x=(w-text_w)/2:y=h/8:${showText}`,
       `drawtext=${font}text=preview:fontcolor=white@0.85:fontsize=${px(1 / 30)}:box=1:boxcolor=black@0.4:boxborderw=${px(1 / 90)}:x=w-text_w-${px(1 / 30)}:y=${px(1 / 30)}:${showText}`,
     ].join(',');
 

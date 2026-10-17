@@ -1,0 +1,30 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq ffmpeg fonts-dejavu-core
+      - run: corepack enable
+      - run: yarn install --immutable
+      - name: Secret scan
+        run: node scripts/check-secrets.mjs
+      - name: Server
+        working-directory: apps/server
+        run: yarn typecheck && yarn test
+      - name: Shared UI
+        working-directory: packages/shared-ui
+        run: yarn typecheck && yarn test
+      - name: Vega app types
+        working-directory: apps/vega
+        run: yarn tsc --noEmit
