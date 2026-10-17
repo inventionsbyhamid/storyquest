@@ -18,6 +18,7 @@ Six new stories arrive every day. Every family starts from the same openings, ev
 * **Shared story trees.** Popular paths are made once and then play instantly for every family. Custom ideas grow a private branch.
 * **Share the ending.** The end screen shows a QR code to a web page with the whole story as one movie, plus stats like "Only 8% of families opened the moon door".
 * **Safe for everyone.** An audience setting (Kids, Family, Grown ups) shapes the writing, and every typed idea and every scene passes a safety check.
+* **Free to watch, Sparks to film your own.** Daily stories and their paths are free. Scenes filmed only for your family use Sparks, bought with Amazon In App Purchasing. No sign up: Sparks follow your Amazon account. Your first custom scene is free.
 
 ## Try it (judges)
 
@@ -56,6 +57,10 @@ More detail in [docs/design.md](docs/design.md).
 * Vega Media Controls, so Play, Pause and "Alexa, pause" work.
 * Built and tested with the Vega SDK 0.24 and the Vega Virtual Device.
 
+### Design
+
+The look is "picture book at night": flat inks, warm paper type, story titles in Fraunces, and AI scenes framed like illustrations. No gradients, no glows. The full system is in [docs/ui.md](docs/ui.md) and the logo, a Q whose tail forks into two paths, is in [assets/brand](assets/brand).
+
 ### AWS services used
 
 * **Amazon Bedrock (Claude in Amazon Bedrock):** the story director, the bible writer and the daily story planner. See `apps/server/src/providers/director`.
@@ -69,7 +74,8 @@ apps/expo-multi-tv/   the same UI for Android TV, Fire OS and web (development)
 apps/server/          API, story engine, providers, share page, Dockerfile
 packages/shared-ui/   screens, components, API client, story state machine
 packages/contracts/   request and response schemas shared by app and server
-docs/                 design, friction log, product feedback
+assets/brand/         logo, Fraunces font, store icons and background
+docs/                 design, UI system, economics, friction log, product feedback, store listing
 ```
 
 ## Run it yourself
@@ -123,9 +129,13 @@ yarn workspace @multi-tv/shared-ui test
 * Typed ideas and generated scenes pass Amazon Bedrock Guardrails, and the video model's own safety checker is on.
 * Family text is treated only as story material, never as instructions to the model.
 
-## Costs and limits
+## Costs and business model
 
-A six scene story uses about 48 seconds of video, plus the scenes made for choices nobody picked. Shared paths are made once and reused. A per device daily limit and a global daily video budget keep spending bounded. When the budget runs out, already made paths keep playing.
+Every filmed scene costs about $0.36 (8 seconds of video at $0.04 a second plus the story director). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
+
+## Website
+
+The server also serves the public site: a home page, privacy policy, terms and support at `/`, `/privacy`, `/terms` and `/support`, plus share pages at `/s/<code>`.
 
 ## Built during the hackathon
 
