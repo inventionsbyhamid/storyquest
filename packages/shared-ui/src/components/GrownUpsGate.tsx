@@ -1,19 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { Animated, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
-import RemoteControlManager from '../app/remote-control/RemoteControlManager';
-import { SupportedKeys } from '../app/remote-control/SupportedKeys';
-import { HOLD_MS, createHoldState, holdProgress, holdReducer } from '../gate/holdGate';
-import type { HoldEvent } from '../gate/holdGate';
+import { createGateState, gateReducer, makeQuestion, questionText } from '../gate/question';
+import type { GateAction } from '../gate/question';
 import { colors, radii, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { Button } from './Button';
-import { Focusable, FocusFrame } from './Focusable';
+import { Focusable, FocusFrame, FocusScale } from './Focusable';
 
-const INSTRUCTION = 'Press and hold Select for 3 seconds to continue';
-const TRACK_WIDTH = scaledPixels(672);
-
-type Stage = 'idle' | 'holding' | 'full';
+const DIGITS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
 
 interface GrownUpsGateProps {
   active: boolean;
@@ -21,15 +16,11 @@ interface GrownUpsGateProps {
   onCancel: () => void;
 }
 
-// A calm check before anyone types a new idea: Select has to be held down, which small
-// children rarely do on purpose.
+// A times table question before anyone types a new idea. Remotes cannot report a long press
+// everywhere, so the check is made of plain presses.
 export function GrownUpsGate({ active, onPass, onCancel }: GrownUpsGateProps) {
   const opacity = useRef(new Animated.Value(0)).current;
-  const fill = useRef(new Animated.Value(0)).current;
-  const hold = useRef(createHoldState(Date.now()));
-  const targetFocused = useRef(false);
-  const fullTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [stage, setStage] = useState<Stage>('idle');
+  const [state, setState] = useState(() => createGateState(makeQuestion()));
   const onPassRef = useRef(onPass);
   onPassRef.current = onPass;
 
@@ -39,104 +30,70 @@ export function GrownUpsGate({ active, onPass, onCancel }: GrownUpsGateProps) {
     return () => animation.stop();
   }, [opacity]);
 
-  const send = useCallback(
-    (event: HoldEvent) => {
-      const before = hold.current;
-      const next = holdReducer(before, event);
-      if (next === before) return;
-      hold.current = next;
-      if (fullTimer.current) clearTimeout(fullTimer.current);
-      fullTimer.current = null;
-      fill.stopAnimation();
-      if (next.passed) {
-        onPassRef.current();
-        return;
-      }
-      if (next.startedAt !== null) {
-        const remaining = HOLD_MS * (1 - holdProgress(next, Date.now()));
-        setStage('holding');
-        Animated.timing(fill, {
-          toValue: 1,
-          duration: remaining,
-          easing: Easing.linear,
-          useNativeDriver: true,
-        }).start();
-        fullTimer.current = setTimeout(() => setStage('full'), remaining);
-      } else {
-        setStage('idle');
-        Animated.timing(fill, { toValue: 0, duration: 150, useNativeDriver: true }).start();
-      }
-    },
-    [fill],
-  );
-
   useEffect(() => {
-    if (!active) {
-      send({ type: 'cancel' });
-      return;
-    }
-    const onDown = (key: SupportedKeys) => {
-      if (key === SupportedKeys.Enter && targetFocused.current) send({ type: 'down', at: Date.now() });
-    };
-    const onUp = (key: SupportedKeys) => {
-      if (key === SupportedKeys.Enter) send({ type: 'up', at: Date.now() });
-    };
-    RemoteControlManager.addKeydownListener(onDown);
-    RemoteControlManager.addKeyupListener(onUp);
-    return () => {
-      RemoteControlManager.removeKeydownListener(onDown);
-      RemoteControlManager.removeKeyupListener(onUp);
-    };
-  }, [active, send]);
+    if (state.passed) onPassRef.current();
+  }, [state.passed]);
 
-  useEffect(
-    () => () => {
-      if (fullTimer.current) clearTimeout(fullTimer.current);
-    },
-    [],
-  );
+  const send = useCallback((action: GateAction) => setState((current) => gateReducer(current, action)), []);
+  const press = useCallback((digit: number) => send({ type: 'digit', digit, next: makeQuestion() }), [send]);
+  const erase = useCallback(() => send({ type: 'erase' }), [send]);
 
-  const focusTarget = useCallback(() => {
-    targetFocused.current = true;
-  }, []);
-  const blurTarget = useCallback(() => {
-    targetFocused.current = false;
-    send({ type: 'cancel' });
-  }, [send]);
-
-  const fillStyle = {
-    transform: [{ translateX: fill.interpolate({ inputRange: [0, 1], outputRange: [-TRACK_WIDTH, 0] }) }],
-  };
+  const question = questionText(state.question);
+  const slots = String(state.question.answer).length;
 
   return (
     <SpatialNavigationRoot isActive={active}>
       <Animated.View style={[styles.cover, { opacity }]}>
         <View style={styles.sheet}>
           <Text style={styles.title}>Grown ups only</Text>
-          <Text style={styles.body}>{INSTRUCTION}</Text>
+          <Text style={styles.question} accessibilityLiveRegion="polite">
+            {question}
+          </Text>
+          <View style={styles.entry}>
+            {Array.from({ length: slots }, (_, i) => (
+              <View key={i} style={[styles.slot, i === state.entry.length && styles.slotNext]}>
+                <Text style={styles.slotText}>{state.entry[i] ?? ''}</Text>
+              </View>
+            ))}
+            <Text style={styles.note}>{state.missed ? 'That is not right. Try this one.' : 'Enter the answer'}</Text>
+          </View>
           <SpatialNavigationView direction="vertical">
-            <DefaultFocus>
-              <Focusable label={INSTRUCTION} onFocus={focusTarget} onBlur={blurTarget} style={styles.targetSlot}>
-                {(focused) => (
-                  <View style={styles.target}>
-                    {focused && <FocusFrame radius={radii.card} />}
-                    <View style={styles.track}>
-                      <Animated.View style={[styles.fill, fillStyle]} />
-                    </View>
-                    <Text style={styles.status}>
-                      {stage === 'full' ? 'Let go to continue' : stage === 'holding' ? 'Keep holding' : 'Hold Select'}
-                    </Text>
-                  </View>
-                )}
-              </Focusable>
-            </DefaultFocus>
-            <Button label="Cancel" onSelect={onCancel} style={styles.cancel} />
+            <SpatialNavigationView direction="horizontal" style={styles.keys}>
+              {DIGITS.map((digit) =>
+                digit === 1 ? (
+                  <DefaultFocus key={digit}>
+                    <DigitKey digit={digit} onPress={press} />
+                  </DefaultFocus>
+                ) : (
+                  <DigitKey key={digit} digit={digit} onPress={press} />
+                ),
+              )}
+            </SpatialNavigationView>
+            <SpatialNavigationView direction="horizontal" style={styles.actions}>
+              <Button label="Erase" onSelect={erase} />
+              <Button label="Cancel" onSelect={onCancel} plain style={styles.cancel} />
+            </SpatialNavigationView>
           </SpatialNavigationView>
         </View>
       </Animated.View>
     </SpatialNavigationRoot>
   );
 }
+
+const DigitKey = React.memo(({ digit, onPress }: { digit: number; onPress: (digit: number) => void }) => (
+  <Focusable label={String(digit)} onSelect={() => onPress(digit)} style={styles.keySlot}>
+    {(focused) => (
+      <FocusScale focused={focused}>
+        <View style={styles.key}>
+          {focused && <FocusFrame radius={radii.card} />}
+          <Text style={styles.keyText}>{digit}</Text>
+        </View>
+      </FocusScale>
+    )}
+  </Focusable>
+));
+
+const KEY = scaledPixels(80);
 
 const styles = StyleSheet.create({
   cover: {
@@ -147,7 +104,7 @@ const styles = StyleSheet.create({
     zIndex: 60,
   },
   sheet: {
-    width: scaledPixels(816),
+    width: scaledPixels(1040),
     paddingHorizontal: space.xl,
     paddingVertical: space.xl,
     borderRadius: radii.card,
@@ -157,37 +114,63 @@ const styles = StyleSheet.create({
     ...type.title,
     color: colors.paper,
   },
-  body: {
-    ...type.body,
+  question: {
+    ...type.heading,
     color: colors.paper,
-    marginTop: space.sm,
+    marginTop: space.md,
   },
-  targetSlot: {
+  entry: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: space.lg,
   },
-  target: {
-    paddingHorizontal: space.md,
-    paddingVertical: space.md,
+  slot: {
+    width: KEY,
+    height: scaledPixels(96),
+    marginRight: space.sm,
+    borderRadius: radii.card,
+    borderWidth: scaledPixels(2),
+    borderColor: colors.inkLine,
+    backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  slotNext: {
+    borderColor: colors.paperDim,
+  },
+  slotText: {
+    ...type.title,
+    color: colors.paper,
+  },
+  note: {
+    ...type.body,
+    color: colors.paperDim,
+    marginLeft: space.md,
+  },
+  keys: {
+    flexDirection: 'row',
+    marginTop: space.lg,
+  },
+  keySlot: {
+    marginRight: scaledPixels(12),
+  },
+  key: {
+    width: KEY,
+    height: scaledPixels(88),
     borderRadius: radii.card,
     backgroundColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  track: {
-    width: TRACK_WIDTH,
-    height: scaledPixels(16),
-    borderRadius: radii.round,
-    overflow: 'hidden',
-    backgroundColor: colors.inkLine,
+  keyText: {
+    ...type.heading,
+    color: colors.paper,
   },
-  fill: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.marigold,
-  },
-  status: {
-    ...type.small,
-    color: colors.paperDim,
-    marginTop: space.sm,
+  actions: {
+    flexDirection: 'row',
+    marginTop: space.lg,
   },
   cancel: {
-    marginTop: space.lg,
+    marginLeft: space.sm,
   },
 });

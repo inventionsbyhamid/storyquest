@@ -20,7 +20,7 @@ interface HWEvent {
 }
 
 class RemoteControlManager implements RemoteControlManagerInterface {
-  private eventEmitter = mitt<{ keyDown: SupportedKeys; keyUp: SupportedKeys }>();
+  private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
   private tvEventHandler: { enable: (component: unknown, cb: unknown) => void; disable: () => void };
 
   constructor() {
@@ -33,11 +33,9 @@ class RemoteControlManager implements RemoteControlManagerInterface {
 
   private handleHWEvent = (_component: unknown, event: HWEvent): void => {
     // eventKeyAction: 0 is key down, 1 is key up.
+    if (event.eventKeyAction !== 0 && event.eventKeyAction !== undefined) return;
     const mappedKey = EVENT_TYPE_MAPPING[event.eventType];
-    if (!mappedKey) return;
-    if (event.eventKeyAction === 1) this.eventEmitter.emit('keyUp', mappedKey);
-    else if (event.eventKeyAction === 0 || event.eventKeyAction === undefined)
-      this.eventEmitter.emit('keyDown', mappedKey);
+    if (mappedKey) this.eventEmitter.emit('keyDown', mappedKey);
   };
 
   addKeydownListener = (listener: (event: SupportedKeys) => void) => {
@@ -47,15 +45,6 @@ class RemoteControlManager implements RemoteControlManagerInterface {
 
   removeKeydownListener = (listener: (event: SupportedKeys) => void): void => {
     this.eventEmitter.off('keyDown', listener);
-  };
-
-  addKeyupListener = (listener: (event: SupportedKeys) => void) => {
-    this.eventEmitter.on('keyUp', listener);
-    return listener;
-  };
-
-  removeKeyupListener = (listener: (event: SupportedKeys) => void): void => {
-    this.eventEmitter.off('keyUp', listener);
   };
 
   emitKeyDown = (key: SupportedKeys): void => {

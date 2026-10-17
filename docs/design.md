@@ -71,7 +71,7 @@ No em dashes, en dashes or hyphens in any text a user sees. The director is told
 * Audience setting changes the director instructions.
 * Custom text and director output pass a safety checker (Amazon Bedrock Guardrails when configured, a local word list otherwise).
 * The video model's own safety checker stays on.
-* A grown up check (hold Select or press it three times) comes before custom ideas once per session, skipped for the Grown ups audience.
+* A grown up check, a times table question answered on a number pad, comes before custom ideas once per session, skipped for the Grown ups audience. The Vega Virtual Device turns a held key into a single press, so a press and hold check could not be used.
 * Report this scene in the pause menu. The first report hides the scene at once: a shared path closes for every family, a private scene only belonged to that story. Share pages drop the clip. Admins list reports, restore a scene or delete it with its media.
 * No accounts. Each TV has a random device id used only for rate limits and for its own story list.
 

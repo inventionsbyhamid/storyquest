@@ -29,16 +29,13 @@ function isEditable(target: unknown): boolean {
 }
 
 class RemoteControlManager implements RemoteControlManagerInterface {
-  private eventEmitter = mitt<{ keyDown: SupportedKeys; keyUp: SupportedKeys }>();
+  private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
 
   constructor() {
     if (Platform.OS === 'web') {
       (
         globalThis as unknown as { addEventListener: (type: string, cb: (e: WebKeyboardEvent) => void) => void }
       ).addEventListener('keydown', this.handleKeyDown);
-      (
-        globalThis as unknown as { addEventListener: (type: string, cb: (e: WebKeyboardEvent) => void) => void }
-      ).addEventListener('keyup', this.handleKeyUp);
     }
   }
 
@@ -48,12 +45,6 @@ class RemoteControlManager implements RemoteControlManagerInterface {
     if (mappedKey) this.eventEmitter.emit('keyDown', mappedKey);
   };
 
-  private handleKeyUp = (event: WebKeyboardEvent): void => {
-    if (isEditable(event.target)) return;
-    const mappedKey = KEY_MAPPING[event.code] || KEY_MAPPING[event.key];
-    if (mappedKey) this.eventEmitter.emit('keyUp', mappedKey);
-  };
-
   addKeydownListener = (listener: (event: SupportedKeys) => void) => {
     this.eventEmitter.on('keyDown', listener);
     return listener;
@@ -61,15 +52,6 @@ class RemoteControlManager implements RemoteControlManagerInterface {
 
   removeKeydownListener = (listener: (event: SupportedKeys) => void): void => {
     this.eventEmitter.off('keyDown', listener);
-  };
-
-  addKeyupListener = (listener: (event: SupportedKeys) => void) => {
-    this.eventEmitter.on('keyUp', listener);
-    return listener;
-  };
-
-  removeKeyupListener = (listener: (event: SupportedKeys) => void): void => {
-    this.eventEmitter.off('keyUp', listener);
   };
 
   emitKeyDown = (key: SupportedKeys): void => {
