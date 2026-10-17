@@ -118,3 +118,11 @@ Severity scale: High blocks progress, Medium costs more than an hour, Low is an 
 * Severity: Low.
 * Workaround: log fewer, denser lines and repeat runs.
 * Suggestion: document the rate limits and offer a developer mode setting that disables suppression for one app.
+
+## 13. One Back press arrives twice
+
+* Task: go back from a screen to the previous one with the remote's Back button.
+* Actual: on the Vega Virtual Device a single press arrives as a TVEventHandler key event and then as `hardwareBackPress`. Our screen handled the key event and navigated back, which removed its `hardwareBackPress` listener, so the second copy went unclaimed and the system sent the whole app to the background.
+* Severity: Medium (the app looked like it crashed on Back).
+* Workaround: an app wide `hardwareBackPress` listener that claims a press already handled as a key event in the last 700 ms.
+* Suggestion: deliver Back once, or document the order of the two events and how they relate.
