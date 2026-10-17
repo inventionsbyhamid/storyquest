@@ -100,3 +100,21 @@ Severity scale: High blocks progress, Medium costs more than an hour, Low is an 
 * Severity: Medium (it looked like a codec problem first).
 * Workaround: serve media over https (we used a tunnel in development). The same file then played with the hardware H.264 decoder.
 * Suggestion: document that media must be https, and surface a clear message for code 50004.
+
+## 11. The Vega port of expo-file-system needs expo-modules-core
+
+* Task: download the next story clips to the device cache so a choice plays from a local file.
+* Steps: added `@amazon-devices/expo-file-system` ~2.0.0 (listed as supported for React Native 0.72) and imported it.
+* Expected: the documented Expo FileSystem API.
+* Actual: the package entry requires `expo-modules-core`, which a plain React Native for Vega app does not ship. Its README says to add `expo` ~50 to the app, a heavy dependency just for file access.
+* Severity: Medium.
+* Workaround: load the Kepler module file inside the package (`build/ExponentFileSystem.kepler`) lazily, and turn caching off if the native module is missing. Downloads then worked and the W3C player played the local files.
+* Suggestion: ship a standalone entry point for Vega ports that do not need the Expo runtime, or list the expo requirement on the supported libraries page.
+
+## 12. App logs are suppressed under load
+
+* Task: measure how long a choice takes to play using timing logs from `vega device start-log-stream`.
+* Actual: some of our `console.info` lines never appeared, and the stream showed "Log suppression ended at level [info]. [319] logs were suppressed at this level."
+* Severity: Low.
+* Workaround: log fewer, denser lines and repeat runs.
+* Suggestion: document the rate limits and offer a developer mode setting that disables suppression for one app.
