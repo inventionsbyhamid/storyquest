@@ -153,6 +153,40 @@ export const ShareView = z.object({
 });
 export type ShareView = z.infer<typeof ShareView>;
 
+export const SparkProduct = z.object({
+  sku: z.string(),
+  sparks: z.number().int().positive(),
+});
+export type SparkProduct = z.infer<typeof SparkProduct>;
+
+export const WalletView = z.object({
+  sparks: z.number().int().min(0),
+  freeIdeasLeft: z.number().int().min(0),
+  freeStoriesLeft: z.number().int().min(0),
+  prices: z.object({
+    customChoice: z.number().int().min(0),
+    customStory: z.number().int().min(0),
+  }),
+  products: z.array(SparkProduct),
+  purchasesEnabled: z.boolean(),
+});
+export type WalletView = z.infer<typeof WalletView>;
+
+export const VerifyPurchaseRequest = z.object({
+  receiptId: z.string().min(1).max(512),
+  userId: z.string().min(1).max(256),
+  sku: z.string().min(1).max(128),
+  marketplace: z.string().max(16).optional(),
+});
+export type VerifyPurchaseRequest = z.infer<typeof VerifyPurchaseRequest>;
+
+export const VerifyPurchaseResponse = z.object({
+  wallet: WalletView,
+  credited: z.number().int().min(0),
+  alreadyProcessed: z.boolean(),
+});
+export type VerifyPurchaseResponse = z.infer<typeof VerifyPurchaseResponse>;
+
 export const ErrorCode = z.enum([
   'bad_request',
   'not_found',
@@ -161,6 +195,8 @@ export const ErrorCode = z.enum([
   'unsafe_input',
   'generation_failed',
   'not_ready',
+  'payment_required',
+  'purchase_invalid',
   'internal',
 ]);
 export type ErrorCode = z.infer<typeof ErrorCode>;
@@ -171,4 +207,5 @@ export const ErrorResponse = z.object({
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
 
 export const DEVICE_HEADER = 'x-device-id';
+export const IAP_USER_HEADER = 'x-iap-user-id';
 export const API_VERSION = 'v1';

@@ -77,6 +77,14 @@ No em dashes, en dashes or hyphens in any text a user sees. The director is told
 * Per device daily limit on new generations and a global daily cap.
 * When a cap is reached, cached paths still play and Something else explains it will be back tomorrow.
 
+## Sparks and purchases
+
+* Daily stories and preset choices are free, because shared paths are made once and reused.
+* Custom ideas cost real video, so they use Sparks: 1 for a Something else idea, 5 for a Make your own story. Each TV gets a free daily allowance first (5 ideas, 2 stories).
+* Sparks are bought with Amazon In App Purchasing on Vega: consumable packs of 10 and 30. No sign up: the wallet belongs to the Amazon account's IAP user id, so it follows the family to every TV on that account.
+* The app sends each receipt to the server, the server verifies it with the Amazon Receipt Verification Service, credits Sparks exactly once per receipt, and only then does the app mark the purchase fulfilled. Unfulfilled purchases are picked up again on the next launch.
+* Modes: fake for development and tests, sandbox for App Tester, production for the Appstore.
+
 ## Architecture
 
 ```
