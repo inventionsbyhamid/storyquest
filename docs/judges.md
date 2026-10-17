@@ -30,9 +30,15 @@ vega device launch-app -a com.storyquest.tv.main
 ## What to try
 
 1. On **Tonight's Stories**, move between the cards with the D pad and press Select on any story.
-2. Watch the first scene. When it ends, pick one of the two choices.
-3. At the next choice, pick **Something else**, press the microphone button on the remote (or type) and say an idea such as "the dragon is afraid of butterflies". The next scene is made from your idea.
-4. Press Back at any time for the pause menu. "Alexa, pause" also works.
-5. At the end, scan the QR code with a phone to watch your whole story as one movie.
+2. Watch the first scene. When it ends, pick one of the choices. Choices with a picture are filmed and play at once.
+3. Press Back at any time for the pause menu, where you can also report a scene. "Alexa, pause" also works.
+4. At the end, scan the QR code with a phone to watch your whole story as one movie.
 
-The first scene of each daily story is ready instantly. Preset choices are usually ready before the scene ends. A custom idea takes a few seconds while the scene is written and rendered.
+## About filming during judging
+
+Every new scene is filmed by AI video and costs us money, so the hosted server has a fixed budget. During judging it plays the scenes that are already filmed and does not film new ones:
+
+* Choices that were never filmed say "Not filmed yet". If none can play, the app offers Start over or Home.
+* Something else and Make your own say "Paused".
+
+The demo video shows live filming, including a custom idea. To try it yourself with no keys, run the server locally with its built in stand in story writer and clips (see "Run it yourself" in the README), point `apps/vega/src/config.ts` at it and build the app. Something else and Make your own then work end to end, after a short grown ups question.
