@@ -1,543 +1,139 @@
-# React Native Multi-TV App Sample
+# StoryQuest
 
-[![React Native](https://img.shields.io/badge/React%20Native-v0.81-blue.svg)](https://reactnative.dev/)
-[![License: MIT-0](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/AmazonAppDev/react-native-multi-tv-app-sample/blob/main/LICENSE)
+**Tonight's story is yours to choose.** StoryQuest is a Fire TV app where every scene of a family story is an AI generated video clip with sound. When a scene ends, the family picks what happens next with the remote, or presses the microphone button and says their own idea, and the next scene plays.
 
-A production-ready TV application template built with React Native, supporting Android TV, Apple TV, Fire TV (with Fire OS), Fire TV (with Vega OS) and Web TV platforms. This monorepo showcases best practices for building cross-platform TV applications with shared UI components, efficient focus management, and platform-specific optimizations.
+Six new stories arrive every day. Every family starts from the same openings, every family ends somewhere different, and every ending can be shared with a QR code.
 
-![Demo GIF](./tvdemo.gif)
+* Demo video: _link coming with the submission_
+* Built for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
+* Runs on Fire TV with Vega OS (React Native for Vega), with the same UI on Android TV and the web for development
 
-## Table of Contents
+## What it does
 
-- [Features](#features)
-- [Architecture](#architecture)
-- [Getting Started](#getting-started)
-- [Building and Running](#building-and-running)
-- [Development](#development)
-- [Project Structure](#project-structure)
-- [Technologies](#technologies)
-- [Contributing](#contributing)
-- [Troubleshooting](#troubleshooting)
-- [License](#license)
+* **Tonight's Stories.** Six fresh stories each day, planned by Claude on Amazon Bedrock with a seasonal touch.
+* **Every scene is video.** Each scene is an 8 second clip with music, sound effects and voices, made by MiniMax H3 Max Turbo.
+* **Choices with the D pad, ideas with your voice.** Two choices after every scene, plus Something else, where the remote microphone dictates any idea into the story.
+* **Seamless cuts.** Each clip starts on the exact last frame of the previous one, so the story flows like one film.
+* **Instant choices.** While a scene plays, both possible next scenes are already being made.
+* **Shared story trees.** Popular paths are made once and then play instantly for every family. Custom ideas grow a private branch.
+* **Share the ending.** The end screen shows a QR code to a web page with the whole story as one movie, plus stats like "Only 8% of families opened the moon door".
+* **Safe for everyone.** An audience setting (Kids, Family, Grown ups) shapes the writing, and every typed idea and every scene passes a safety check.
 
-## Features
+## Try it (judges)
 
-### Core Functionality
+1. **Watch the demo video** linked above.
+2. **Sideload on a Fire TV Stick with Vega OS:** download `StoryQuest_armv7.vpkg` from the latest GitHub release, then follow the steps in [docs/judges.md](docs/judges.md).
+3. **Run it in the Vega Virtual Device:** download `StoryQuest_x86_64.vpkg` (Intel Mac or Ubuntu) or `StoryQuest_aarch64.vpkg` (Apple Silicon) from the release and run `vega device install-app -p <file>` then `vega device launch-app -a com.storyquest.tv.main`.
 
-- **Multi-Platform Support**: Single codebase running on Android TV, Apple TV, Fire TV FOS, Fire TV Vega OS and Web
-- **Video Playback**: Integrated video player with [react-native-video](https://github.com/TheWidlarzGroup/react-native-video)
-- **Spatial Navigation**: TV-optimized focus management with [React TV Space Navigation](https://github.com/bamlab/react-tv-space-navigation)
-- **Remote Control Support**: Native remote control integration for all TV platforms
+The release build talks to our hosted server, so no keys or setup are needed. The server stays up until judging ends on November 20, 2026.
 
-### UI Components
-
-- **Drawer Navigation**: Customizable left-side drawer with menu items
-- **Grid Layouts**: Responsive content grids optimized for TV screens
-- **Dynamic Hero Banner**: Header image that updates based on focused content
-- **Detail Screens**: Rich content detail pages with metadata and actions
-
-### Video Player Features
-
-- **Overlay Controls**: Custom video controls with spatial navigation support
-  - Play/pause button with visual state
-  - Seek bar with current time and duration display
-  - Exit button to return to previous screen
-  - Auto-hide after 5 seconds of inactivity
-- **Buffering Indicators**: Visual feedback during video loading and seeking
-- **Remote Control Integration**: Full support for play/pause, seek forward/backward (10s intervals), and exit
-- **Platform Optimizations**:
-  - Native controls on iOS/tvOS
-  - Custom overlay on Android TV, Fire TV, and Web
-  - Hardware-accelerated rendering on Fire TV Vega with W3C Media APIs
-
-### Dynamic Content Loading
-
-- **External Catalog API**: Fetch movie content dynamically from remote JSON endpoint
-- **Rich Metadata Support**:
-  - Genres, ratings, and content ratings
-  - Release year and duration
-  - Trending flags
-  - Multiple video source formats
-- **Type-Safe Transforms**: Automatic conversion from catalog API format to UI-ready data structures
-- **Error Handling**: Graceful fallback and error states for failed API requests
-- **Extensible**: Easy to swap catalog endpoint or add new metadata fields
-
-### Architecture
-
-- **Monorepo Structure**: Yarn workspaces with apps and shared packages
-- **Shared UI Library**: Reusable components across all platforms
-- **Platform-Specific Code**: Automatic resolution of `.android.ts`, `.ios.ts`, `.kepler.ts` files
-- **Type Safety**: Full TypeScript support with shared configurations
-
-### App Variants
-
-**expo-multi-tv**
-
-- Universal application built with Expo and react-native-tvos
-- Supports Android TV, Apple TV, Fire TV Fire OS, and Web
-- Uses React Navigation for screen management
-- Cross-platform focus management
-
-**vega**
-
-- Fire TV with Vega OS optimized build using Amazon Vega SDK
-- Optimized performance for Fire TV devices
-- Native remote control support via TVEventHandler
-
-Both apps share components from the `@multi-tv/shared-ui` package.
-
-## Architecture
-
-This project uses a monorepo structure with Yarn workspaces to manage multiple packages and applications.
+## How it works
 
 ```
-react-native-multi-tv-app-sample/
-├── apps/
-│   ├── expo-multi-tv/       # Universal TV app (Android TV, Apple TV, Fire TV FOS, Web)
-│   └── vega/                # Fire TV Vega optimized app (Vega SDK)
-├── packages/
-│   └── shared-ui/           # Shared components, screens, and navigation
-├── package.json             # Workspace configuration
-└── tsconfig.base.json       # Shared TypeScript configuration
+Fire TV app (Vega OS, React Native)
+        │  HTTPS JSON and MP4
+        ▼
+StoryQuest server (Node 22, Fastify, SQLite)
+  ├─ story director   Claude on Amazon Bedrock
+  ├─ safety           Amazon Bedrock Guardrails
+  ├─ video            fal, MiniMax H3 Max Turbo (image to video)
+  └─ media            ffmpeg: posters, last frames, the shared movie
 ```
 
-### Architecture Overview
+1. **Story bible.** Each story has a fixed art style and a fixed description for every character. They are copied into every video prompt so characters stay recognisable.
+2. **Director.** For every new scene, Claude gets the bible, the story so far, the choice taken and where the scene sits in a six scene arc, and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
+3. **Video.** The video model renders the scene starting from the last frame of the previous clip.
+4. **Prefetch.** When a family arrives at a scene, both next scenes start generating at once, so a choice usually plays immediately.
+5. **Dedupe.** A unique constraint on (parent, choice) means two families picking the same new path at the same time share one generation.
+
+More detail in [docs/design.md](docs/design.md).
+
+### Fire TV and Vega features used
+
+* React Native for Vega with the Vega W3C media player for playback, one decoder reused for every clip.
+* Spatial focus navigation for the remote, with accessibility labels on every focusable card so Alexa voice navigation can select them.
+* Remote microphone dictation into the system keyboard for custom story ideas.
+* Vega Media Controls, so Play, Pause and "Alexa, pause" work.
+* Built and tested with the Vega SDK 0.24 and the Vega Virtual Device.
+
+### AWS services used
+
+* **Amazon Bedrock (Claude in Amazon Bedrock):** the story director, the bible writer and the daily story planner. See `apps/server/src/providers/director`.
+* **Amazon Bedrock Guardrails:** checks every custom idea and every generated scene. See `apps/server/src/providers/safety/guardrails.ts`.
+
+## Repository
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│       React Native Multi-TV Monorepo                    │
-├──────────────────────────┬──────────────────────────────┤
-│ Apps                     │ Packages                     │
-├──────────────────────────┼──────────────────────────────┤
-│ expo-multi-tv            │ shared-ui                    │
-│   ├─ Expo SDK 54         │   ├─ Components              │
-│   ├─ React Navigation    │   ├─ Screens                 │
-│   ├─ react-native-tvos   │   ├─ Navigation              │
-│   └─ Platforms:          │   ├─ Hooks                   │
-│       • Android TV       │   ├─ Theme                   │
-│       • Apple TV         │   └─ Remote Control          │
-│       • Fire TV          │       ├─ .android.ts         │
-│       • Web              │       ├─ .ios.ts             │
-│                          │       └─ .kepler.ts          │
-│ vega                     │                              │
-│   ├─ Vega SDK            │                              │
-│   ├─ @amazon-devices/*   │                              │
-│   └─ Platform: Vega OS   │                              │
-└──────────────────────────┴──────────────────────────────┘
+apps/vega/            Fire TV app for Vega OS
+apps/expo-multi-tv/   the same UI for Android TV, Fire OS and web (development)
+apps/server/          API, story engine, providers, share page, Dockerfile
+packages/shared-ui/   screens, components, API client, story state machine
+packages/contracts/   request and response schemas shared by app and server
+docs/                 design, friction log, product feedback
 ```
 
-The `@multi-tv/shared-ui` package contains all reusable UI components, screens, and navigation logic. Platform-specific implementations use file extensions (`.android.ts`, `.ios.ts`, `.kepler.ts`) that Metro bundler automatically resolves at build time.
-
-## Getting Started
+## Run it yourself
 
 ### Prerequisites
+* Node 22 and Yarn 4 (`corepack enable`)
+* ffmpeg (for the server)
+* Vega SDK 0.24 for the Fire TV app ([install guide](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html))
+* Optional for real AI: an AWS account with Claude enabled in Amazon Bedrock, and a fal API key
 
-Before you begin, ensure you have the following installed:
-
-- **Node.js**: v18 or higher
-- **Yarn**: v4.5.0 (configured via packageManager field)
-- **Platform-specific tools**:
-  - **Android TV**: Android Studio with Android SDK
-  - **Apple TV**: Xcode (macOS required) with tvOS SDK
-  - **Fire TV**: [Amazon Vega SDK](https://developer.amazon.com/docs/vega/0.21/install-vega-sdk.html)
-  - **Web**: Modern web browser
-
-### Installation
-
-Clone the repository and install dependencies:
+### Server
 
 ```bash
-# Clone the repository
-git clone https://github.com/AmazonAppDev/react-native-multi-tv-app-sample.git
-cd react-native-multi-tv-app-sample
-
-# Install all dependencies
 yarn install
+cp apps/server/.env.example apps/server/.env   # fill in keys only if you want real AI
+yarn dev:server                                # http://localhost:8080
 ```
 
-## Building and Running
+Without keys the server uses built in fakes: a scripted story writer and ffmpeg generated placeholder clips, so the whole app works offline. Set `DIRECTOR=bedrock`, `VIDEO=fal` and `SAFETY=guardrails` with the matching keys to use the real services. Every variable is described in [apps/server/.env.example](apps/server/.env.example).
 
-### Quick Start
-
-Run the universal app on different platforms:
+With Docker:
 
 ```bash
-# Android TV and Fire TV FOS
-yarn dev:android
-
-# Apple TV
-yarn dev:ios
-
-# Web
-yarn dev:web
-
+docker build -f apps/server/Dockerfile -t storyquest-api .
+docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data storyquest-api
 ```
 
-### Platform-Specific Instructions
+### Fire TV app
 
-#### Android TV
-
-1. Start Metro bundler:
-
-   ```bash
-   yarn dev
-   ```
-
-2. In a new terminal, run on Android TV:
-   ```bash
-   yarn dev:android
-   ```
-
-Or directly from the app directory:
+Point the app at your server in `apps/vega/src/config.ts`, then:
 
 ```bash
-cd apps/expo-multi-tv
-yarn android
-```
-
-#### Apple TV
-
-1. Start Metro bundler:
-
-   ```bash
-   yarn dev
-   ```
-
-2. In a new terminal, run on Apple TV:
-   ```bash
-   yarn dev:ios
-   ```
-
-Or directly from the app directory:
-
-```bash
-cd apps/expo-multi-tv
-yarn ios
-```
-
-#### Web - Useful for LG WebOS and Tizen
-
-Development server:
-
-```bash
-yarn dev:web
-```
-
-Or directly from the app directory:
-
-```bash
-cd apps/expo-multi-tv
-yarn web
-```
-
-Production build:
-
-```bash
-cd apps/expo-multi-tv
-npx expo export --platform web
-npx serve dist
-```
-
-#### Fire TV (Vega)
-
-For the Fire TV optimized build:
-
-```bash
-# Development build
-yarn dev:vega
-
-# Production build
 yarn build:vega
-
-# Debug build
-yarn build:vega:debug
+vega virtual-device start
+vega device install-app -p apps/vega/build/x86_64-release/vega_x86_64.vpkg
+vega device launch-app -a com.storyquest.tv.main
 ```
 
-Or directly from the app directory:
+For quick UI work the same screens run on Android TV or the web: `yarn dev:web`.
+
+### Tests
 
 ```bash
-cd apps/vega
-yarn build
+yarn workspace @storyquest/server test
+yarn workspace @multi-tv/shared-ui test
 ```
 
-### Available Commands
+## Safety and privacy
 
-#### Workspace Commands
+* No accounts and no personal data. Each TV gets a random device id, used only for rate limits.
+* Typed ideas and generated scenes pass Amazon Bedrock Guardrails, and the video model's own safety checker is on.
+* Family text is treated only as story material, never as instructions to the model.
 
-| Command            | Description                       |
-| ------------------ | --------------------------------- |
-| `yarn dev`         | Start expo-multi-tv Metro bundler |
-| `yarn dev:android` | Run on Android TV                 |
-| `yarn dev:ios`     | Run on Apple TV                   |
-| `yarn dev:web`     | Run on Web                        |
-| `yarn dev:vega`    | Start vega Metro bundler          |
-| `yarn build:vega`  | Build vega for Fire TV            |
-| `yarn format`      | Format code with Prettier         |
-| `yarn clean:all`   | Clean all node_modules            |
+## Costs and limits
 
-#### App-Specific Commands
+A six scene story uses about 48 seconds of video, plus the scenes made for choices nobody picked. Shared paths are made once and reused. A per device daily limit and a global daily video budget keep spending bounded. When the budget runs out, already made paths keep playing.
 
-Navigate to the app directory first:
+## Built during the hackathon
 
-```bash
-# expo-multi-tv
-cd apps/expo-multi-tv
-yarn start      # Start Metro bundler
-yarn android    # Run on Android TV
-yarn ios        # Run on Apple TV
-yarn web        # Run on Web
-yarn test       # Run tests
-yarn lint       # Lint code
+StoryQuest started from Amazon's open source [react-native-multi-tv-app-sample](https://github.com/AmazonAppDev/react-native-multi-tv-app-sample) (MIT-0, notice kept in [docs/LICENSE-amazon-sample-MIT-0.txt](docs/LICENSE-amazon-sample-MIT-0.txt)). We kept its monorepo layout, remote control plumbing and Vega media player integration. Everything else, the screens, the story engine, the server and the share page, was built during the hackathon.
 
-# vega
-cd apps/vega
-yarn start      # Start Metro bundler
-yarn build      # Build for Fire TV
-yarn test       # Run tests
-yarn lint       # Lint code
-```
-
-## Development
-
-### Project Structure
-
-The monorepo contains the following packages:
-
-#### `@multi-tv/expo-multi-tv`
-
-Universal TV application built with Expo, supporting Android TV, Apple TV, Fire TV, and Web.
-
-**Key Technologies:**
-
-- Expo SDK 54
-- React Navigation 7
-- react-native-tvos
-- React TV Space Navigation
-
-#### `@multi-tv/vega`
-
-Fire TV optimized application using Amazon's Vega SDK.
-
-**Key Technologies:**
-
-- Amazon Vega SDK
-- @amazon-devices packages
-- Native Fire TV remote integration
-- Custom navigation optimizations
-
-#### `@multi-tv/shared-ui`
-
-Shared component library used by both applications.
-
-**Exports:**
-
-- **Components**: `FocusablePressable`, `CustomDrawerContent`, `MenuContext`
-- **Screens**: `HomeScreen`, `DetailsScreen`, `PlayerScreen`, `ExploreScreen`, `TVScreen`
-- **Navigation**: `DrawerNavigator`, `RootNavigator`, `AppNavigator`
-- **Hooks**: `scaledPixels`, `useMenuContext`
-- **Theme**: Centralized theming configuration
-- **Remote Control**: Platform-specific remote control managers
-
-### Adding New Features
-
-1. Develop shared components in `packages/shared-ui/src/`
-2. Add platform-specific implementations using file extensions:
-   - `.android.ts` for Android TV
-   - `.ios.ts` for Apple TV
-   - `.kepler.ts` for Fire TV
-3. Export from `packages/shared-ui/src/index.ts`
-4. Import in apps via `@multi-tv/shared-ui`
-
-Example:
-
-```typescript
-// packages/shared-ui/src/components/MyComponent.tsx
-export const MyComponent = () => {
-  /* ... */
-};
-
-// packages/shared-ui/src/index.ts
-export { MyComponent } from './components/MyComponent';
-
-// apps/expo-multi-tv/App.tsx
-import { MyComponent } from '@multi-tv/shared-ui';
-```
-
-### Remote Control Implementation
-
-The project includes platform-specific remote control managers:
-
-| Platform               | Implementation                    | Technology            |
-| ---------------------- | --------------------------------- | --------------------- |
-| Android TV/Fire TV FOS | `RemoteControlManager.android.ts` | react-native-keyevent |
-| Apple TV               | `RemoteControlManager.ios.ts`     | Native tvOS events    |
-| Fire TV Vega OS        | `RemoteControlManager.kepler.ts`  | Kepler TVEventHandler |
-
-All managers implement `RemoteControlManagerInterface` and integrate with `react-tv-space-navigation`.
-
-#### Remote Control Key Mappings
-
-The following keys are supported across all platforms in the video player:
-
-| Key/Button   | Action                   | Platforms           |
-| ------------ | ------------------------ | ------------------- |
-| PlayPause    | Toggle play/pause        | All                 |
-| Select/Enter | Activate focused item    | All                 |
-| Back         | Exit player or go back   | All                 |
-| Left         | Seek backward 10 seconds | All (in player)     |
-| Right        | Seek forward 10 seconds  | All (in player)     |
-| FastForward  | Seek forward 10 seconds  | All (in player)     |
-| Rewind       | Seek backward 10 seconds | All (in player)     |
-| Up/Down      | Navigate menu items      | All (in navigation) |
-
-**Platform-Specific Notes:**
-
-- **iOS/tvOS**: Uses native video controls by default; custom overlay disabled
-- **Android TV/Fire TV**: Custom overlay with spatial navigation for all controls
-- **Web**: Keyboard support with arrow keys and spacebar for play/pause
-- **Fire TV Vega**: Hardware-accelerated video with W3C Media APIs
-
-## Technologies
-
-This project is built with modern React Native and TV development tools:
-
-| Technology                | Version | Purpose                    |
-| ------------------------- | ------- | -------------------------- |
-| React Native              | v0.81   | Core framework (tvOS fork) |
-| Expo                      | SDK 54  | Development platform       |
-| TypeScript                | v5.7    | Type safety                |
-| Yarn Workspaces           | v4.5    | Monorepo management        |
-| React Navigation          | v7      | Screen navigation          |
-| react-tv-space-navigation | v6.0.0-beta1   | TV focus management        |
-| react-native-video        | Latest  | Video playback             |
-| Amazon Vega SDK           | Latest  | Fire TV Vega OS            |
-
-## Contributing
-
-Contributions are welcome! This project is an open-source sample designed to help developers build TV applications.
-
-### How to Contribute
-
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Run tests and linting (`yarn test:all && yarn lint:all`)
-5. Commit your changes (`git commit -m 'Add amazing feature'`)
-6. Push to the branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-### Development Guidelines
-
-- Follow the existing code style
-- Write tests for new features
-- Update documentation as needed
-- Ensure all tests pass before submitting PR
-- Use conventional commit messages
-
-## Troubleshooting
-
-### iOS Build Issues
-
-**Error: "can't access lexical declaration 'X' before initialization"**
-
-- This typically occurs when functions are referenced before they're defined
-- Solution: Functions should be defined before useEffect hooks that reference them
-
-**Error: "No such file or directory: node"**
-
-- The Xcode build can't find the Node.js binary
-- Solution: Update `apps/expo-multi-tv/ios/.xcode.env.local` with correct Node path:
-  ```bash
-  export NODE_BINARY=/opt/homebrew/bin/node  # or your node path
-  ```
-- Find your node path with: `which node`
-- Note: `.xcode.env.local` is gitignored (machine-specific configuration)
-
-**Pods Installation Issues**
-
-- Clean and reinstall:
-  ```bash
-  cd apps/expo-multi-tv/ios
-  rm -rf Pods Podfile.lock
-  pod install
-  ```
-
-### Android TV Build Issues
-
-**Metro Bundler Port Conflicts**
-
-- If port 8081 is in use:
-  ```bash
-  yarn start --port 8082
-  ```
-
-**ADB Device Not Found**
-
-- Ensure Android TV/Fire TV is connected:
-  ```bash
-  adb devices
-  adb connect <device-ip>:5555
-  ```
-
-### Fire TV Vega Issues
-
-**Vega SDK Not Found**
-
-- Ensure Vega SDK is installed and in PATH
-- Check SDK path: `echo $KEPLER_SDK_HOME`
-- Download from: [Amazon Vega Developer Portal](https://developer.amazon.com/vega)
-
-### Web Platform Issues
-
-**Video Player White Screen**
-
-- Check browser console for JavaScript errors
-- Ensure catalog API is accessible
-- Verify video URLs are CORS-enabled
-
-**Spatial Navigation Not Working**
-
-- Use keyboard arrows for navigation on web
-- Focus management requires keyboard or gamepad input
-
-### Common Issues
-
-**"Module not found" Errors**
-
-- Clear cache and reinstall:
-  ```bash
-  yarn clean:all
-  yarn install
-  ```
-
-**TypeScript Errors**
-
-- Run type checking:
-  ```bash
-  yarn typecheck
-  ```
-
-**Video Playback Issues**
-
-- Verify video URLs are accessible
-- Check network connectivity
-- Ensure video format is supported (MP4 recommended)
+* [Friction log](docs/friction-log.md)
+* [Product feedback](docs/product-feedback.md)
 
 ## License
 
-This project is licensed under the MIT-0 License - see the [LICENSE](./LICENSE) file for details.
-
-## Resources
-
-- [React Native TV OS](https://github.com/react-native-tvos/react-native-tvos) - TV platform support
-- [React TV Space Navigation](https://github.com/bamlab/react-tv-space-navigation) - Spatial navigation library
-- [Amazon Kepler Developer Portal](https://developer.amazon.com/vega) - Fire TV development resources
-- [Expo Documentation](https://expo.dev) - Expo SDK documentation
-
-## Support
-
-For questions, issues, or feature requests, please open an issue on GitHub.
-
----
-
-Made for TV app developers
+MIT, see [LICENSE](LICENSE).
