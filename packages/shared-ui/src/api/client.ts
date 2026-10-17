@@ -5,6 +5,7 @@ import {
   ErrorResponse,
   FinishResponse,
   IAP_USER_HEADER,
+  ReportResponse,
   SceneView,
   ShareView,
   StoryView,
@@ -12,7 +13,13 @@ import {
   VerifyPurchaseResponse,
   WalletView,
 } from '@storyquest/contracts';
-import type { ChooseRequest, PrefetchRequest, StartStoryRequest, VerifyPurchaseRequest } from '@storyquest/contracts';
+import type {
+  ChooseRequest,
+  PrefetchRequest,
+  ReportRequest,
+  StartStoryRequest,
+  VerifyPurchaseRequest,
+} from '@storyquest/contracts';
 import { ApiError, codeForStatus, isApiError, isTransient, toApiError } from './errors';
 import { resolveMediaUrl } from './media';
 import { sleep as defaultSleep } from './sleep';
@@ -104,7 +111,10 @@ export function createApiClient(options: ApiClientOptions) {
       if (!response.ok) {
         const parsedError = ErrorResponse.safeParse(json);
         if (parsedError.success) {
-          throw new ApiError(parsedError.data.error.code, parsedError.data.error.message, response.status);
+          const { code, message } = parsedError.data.error;
+          // The server answers 409 not_found for a path whose scene was taken down.
+          const closed = response.status === 409 && code === 'not_found';
+          throw new ApiError(closed ? 'path_closed' : code, message, response.status);
         }
         throw new ApiError(
           codeForStatus(response.status),
@@ -190,6 +200,9 @@ export function createApiClient(options: ApiClientOptions) {
 
     prefetchChild: (nodeId: string, input: PrefetchRequest, opts?: RequestOptions) =>
       request('POST', `/nodes/${id(nodeId)}/prefetch`, SceneView, input, opts).then(withSceneMedia),
+
+    reportNode: (nodeId: string, input: ReportRequest, opts?: RequestOptions) =>
+      request('POST', `/nodes/${id(nodeId)}/report`, ReportResponse, input, opts),
 
     choose: (storyId: string, input: ChooseRequest, opts?: RequestOptions) =>
       request('POST', `/stories/${id(storyId)}/choose`, ChooseResponse, input, opts),

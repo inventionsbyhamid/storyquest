@@ -1,6 +1,7 @@
 import type { ErrorCode } from '@storyquest/contracts';
 
-export type ClientErrorCode = 'network' | 'timeout' | 'aborted' | 'invalid_response';
+// path_closed: the server refused a choice whose scene is hidden (HTTP 409).
+export type ClientErrorCode = 'network' | 'timeout' | 'aborted' | 'invalid_response' | 'path_closed';
 export type ApiErrorCode = ErrorCode | ClientErrorCode;
 
 export class ApiError extends Error {

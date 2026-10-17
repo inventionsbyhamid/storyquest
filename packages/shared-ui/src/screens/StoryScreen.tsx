@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
-import type { ChooseRequest } from '@storyquest/contracts';
+import type { Audience, ChooseRequest, ReportReason } from '@storyquest/contracts';
 import { api, areChoicesSettled, isAbortError, toApiError, waitForNode } from '../api';
 import { sleep } from '../api/sleep';
 import { SupportedKeys } from '../app/remote-control/SupportedKeys';
@@ -9,7 +9,8 @@ import ClipPlayer from '../components/player/ClipPlayer';
 import type { MediaCommand } from '../components/player/types';
 import { CaptionBar } from '../components/story/CaptionBar';
 import { ChoiceOverlay } from '../components/story/ChoiceOverlay';
-import { CustomChoiceSheet, PausedBadge, PauseMenu, StoryErrorPanel } from '../components/story/Panels';
+import { CustomChoiceSheet, PausedBadge, PauseMenu, ReportSheet, StoryErrorPanel } from '../components/story/Panels';
+import { GrownUpsGate } from '../components/GrownUpsGate';
 import { SparksSheet } from '../components/sparks/SparksSheet';
 import { StillFrame } from '../components/story/StillFrame';
 import { WaitingCard } from '../components/story/WaitingCard';
@@ -20,9 +21,12 @@ import { useLatest } from '../hooks/useLatest';
 import { canAfford, costLabel, sparks, useSparks } from '../purchases';
 import { createSerialQueue, sendChoice } from '../story/choiceSync';
 import { formatFolio, formatMadeIn } from '../story/format';
-import { messageForError } from '../story/messages';
+import { confirmGrownUps, needsGrownUpsGate } from '../gate/grownUps';
+import { messageForError, messages } from '../story/messages';
 import { startRequestFor } from '../story/origin';
+import { markReported, reportedNodeIds } from '../story/reports';
 import {
+  closedChoices,
   createStoryState,
   isPlayerPaused,
   isPrivatePath,
@@ -49,8 +53,19 @@ export default function StoryScreen() {
   const isFocused = useIsFocused();
   const appActive = useAppActive();
 
-  const [session, setSession] = useState({ storyId: route.params.storyId, title: route.params.title });
-  const [state, dispatch] = useReducer(storyReducer, { nodeId: route.params.nodeId, posterUrl }, createStoryState);
+  const [session, setSession] = useState<{ storyId: string; title: string; audience: Audience | null }>({
+    storyId: route.params.storyId,
+    title: route.params.title,
+    audience: route.params.audience ?? origin.audience ?? null,
+  });
+  const [state, dispatch] = useReducer(
+    storyReducer,
+    { nodeId: route.params.nodeId, posterUrl, hiddenNodes: reportedNodeIds() },
+    createStoryState,
+  );
+  const [gateOpen, setGateOpen] = useState(false);
+  const [report, setReport] = useState<{ sending: boolean; error: string | null }>({ sending: false, error: null });
+  const probedChildren = useRef(new Set<string>());
   const [captionToken, setCaptionToken] = useState(0);
   const [restarting, setRestarting] = useState(false);
   const restartingRef = useRef(false);
@@ -196,6 +211,20 @@ export default function StoryScreen() {
     }
   }, [scene, state.childScenes, lifetime]);
 
+  // A choice that stays unready may lead to a scene that failed or was taken down: ask once, and close it if so.
+  useEffect(() => {
+    if (!scene || scene.isEnding) return;
+    for (const choice of scene.choices) {
+      const id = choice.nodeId;
+      if (choice.ready || !id || probedChildren.current.has(id)) continue;
+      probedChildren.current.add(id);
+      api
+        .getNode(id, { signal: lifetime.signal })
+        .then((child) => dispatch({ type: 'CHILD_SCENE', scene: child }))
+        .catch(() => undefined);
+    }
+  }, [scene, lifetime]);
+
   // Download the candidate clips once the current one is playing, so they do not fight for bandwidth.
   useEffect(() => {
     if (!state.clipStarted && phase !== 'choosing') return;
@@ -259,7 +288,7 @@ export default function StoryScreen() {
     setRestarting(true);
     try {
       const story = await api.startStory(request);
-      setSession({ storyId: story.id, title: story.title });
+      setSession({ storyId: story.id, title: story.title, audience: story.audience });
       dispatch({ type: 'RESET', nodeId: story.currentNodeId, posterUrl });
     } catch (error) {
       dispatch({ type: 'NOTICE', text: messageForError(toApiError(error).code, 'start') });
@@ -270,12 +299,14 @@ export default function StoryScreen() {
   }, [origin, posterUrl, navigation]);
 
   const retry = useCallback(() => {
-    if (state.error?.code === 'node_failed') startOver();
+    if (state.error?.code === 'path_closed') exitHome();
+    else if (state.error?.code === 'node_failed') startOver();
     else dispatch({ type: 'RETRY' });
-  }, [state.error, startOver]);
+  }, [state.error, startOver, exitHome]);
 
   useBackHandler(() => {
-    if (phase === 'error') exitHome();
+    if (gateOpen) setGateOpen(false);
+    else if (phase === 'error') exitHome();
     else dispatch({ type: 'BACK' });
   }, isFocused);
 
@@ -324,7 +355,7 @@ export default function StoryScreen() {
     },
     [latestState, latestWallet],
   );
-  const openCustom = useCallback(() => {
+  const proceedCustom = useCallback(() => {
     const current = latestWallet.current;
     if (!canAfford(current, current?.sceneCost ?? 1)) {
       dispatch({ type: 'NEED_SPARKS', prompt: { kind: 'openCustom' } });
@@ -332,6 +363,19 @@ export default function StoryScreen() {
     }
     dispatch({ type: 'OPEN_CUSTOM' });
   }, [latestWallet]);
+  const openCustom = useCallback(() => {
+    if (needsGrownUpsGate(session.audience)) setGateOpen(true);
+    else proceedCustom();
+  }, [session.audience, proceedCustom]);
+  const passGate = useCallback(() => {
+    confirmGrownUps();
+    setGateOpen(false);
+    proceedCustom();
+  }, [proceedCustom]);
+  const cancelGate = useCallback(() => setGateOpen(false), []);
+  useEffect(() => {
+    if (phase !== 'choosing') setGateOpen(false);
+  }, [phase]);
   const changeCustom = useCallback((text: string) => dispatch({ type: 'CUSTOM_TEXT', text }), []);
   const submitCustom = useCallback(() => {
     const current = latestWallet.current;
@@ -350,8 +394,8 @@ export default function StoryScreen() {
     dispatch({ type: 'SPARKS_DISMISSED' });
     if (prompt?.kind === 'choice') choose(prompt.index);
     else if (prompt?.kind === 'custom') submitCustom();
-    else if (prompt?.kind === 'openCustom') openCustom();
-  }, [latestState, choose, submitCustom, openCustom]);
+    else if (prompt?.kind === 'openCustom') proceedCustom();
+  }, [latestState, choose, submitCustom, proceedCustom]);
 
   // On private paths nothing is filmed ahead, so prepare the choice a family lingers on.
   useEffect(
@@ -371,7 +415,7 @@ export default function StoryScreen() {
         const currentScene = current.scene;
         if (!currentScene || current.phase !== 'choosing' || !isPrivatePath(currentScene)) return;
         const choice = currentScene.choices.find((item) => item.index === index);
-        if (!choice || choice.ready || current.disabledChoices.includes(index)) return;
+        if (!choice || choice.ready || closedChoices(current).includes(index)) return;
         if (!canAfford(latestWallet.current, choice.sparks)) return;
         const key = `${currentScene.id}:${index}`;
         if (prefetchedChoices.current.has(key)) return;
@@ -389,10 +433,38 @@ export default function StoryScreen() {
   );
   const cancelCustom = useCallback(() => dispatch({ type: 'CANCEL_CUSTOM' }), []);
   const resume = useCallback(() => dispatch({ type: 'CLOSE_MENU' }), []);
+
+  const openReport = useCallback(() => {
+    setReport({ sending: false, error: null });
+    dispatch({ type: 'OPEN_REPORT' });
+  }, []);
+  const cancelReport = useCallback(() => dispatch({ type: 'CLOSE_REPORT' }), []);
+  const reporting = useRef(false);
+  const sendReport = useCallback(
+    async (reason: ReportReason) => {
+      const nodeId = latestState.current.reportNodeId;
+      if (!nodeId || reporting.current) return;
+      reporting.current = true;
+      setReport({ sending: true, error: null });
+      try {
+        await api.reportNode(nodeId, { reason, storyId: session.storyId }, { signal: lifetime.signal });
+        markReported(nodeId);
+        probedChildren.current.clear();
+        setReport({ sending: false, error: null });
+        dispatch({ type: 'SCENE_REPORTED', nodeId });
+      } catch (error) {
+        if (!isAbortError(error)) setReport({ sending: false, error: messages.reportFailed });
+      } finally {
+        reporting.current = false;
+      }
+    },
+    [latestState, session.storyId, lifetime],
+  );
   const dismissNotice = useCallback((id: number) => dispatch({ type: 'DISMISS_NOTICE', id }), []);
 
   const waiting = waitingLabel(state);
-  const layersActive = isFocused && !state.menuOpen && !state.sparksPrompt;
+  const layersActive = isFocused && !state.menuOpen && !state.sparksPrompt && !gateOpen;
+  const canReport = !!scene && phase !== 'loadingScene' && phase !== 'error' && phase !== 'finished';
   const customCost = wallet?.sceneCost ?? 1;
 
   return (
@@ -420,7 +492,7 @@ export default function StoryScreen() {
       {scene && phase === 'choosing' && (
         <ChoiceOverlay
           scene={scene}
-          closedChoices={state.disabledChoices}
+          closedChoices={closedChoices(state)}
           customCost={customCost}
           freeSparks={wallet?.freeSparks ?? 0}
           active={layersActive && phase === 'choosing'}
@@ -458,14 +530,24 @@ export default function StoryScreen() {
       {state.notice && <Notice id={state.notice.id} text={state.notice.text} onDismiss={dismissNotice} />}
 
       {phase === 'error' && state.error && (
-        <StoryErrorPanel message={state.error.message} active={isFocused} onRetry={retry} />
+        <StoryErrorPanel
+          message={state.error.message}
+          active={isFocused}
+          onRetry={retry}
+          actionLabel={state.error.code === 'path_closed' ? 'Home' : undefined}
+          actionIcon={state.error.code === 'path_closed' ? 'home' : undefined}
+        />
+      )}
+
+      {gateOpen && phase === 'choosing' && !state.menuOpen && (
+        <GrownUpsGate active={isFocused && !state.sparksPrompt} onPass={passGate} onCancel={cancelGate} />
       )}
 
       {state.sparksPrompt && !state.menuOpen && (
         <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />
       )}
 
-      {state.menuOpen && (
+      {state.menuOpen && !state.reportNodeId && (
         <PauseMenu
           title={session.title}
           active={isFocused}
@@ -473,6 +555,17 @@ export default function StoryScreen() {
           onResume={resume}
           onStartOver={startOver}
           onExit={exitHome}
+          onReport={canReport ? openReport : undefined}
+        />
+      )}
+
+      {state.menuOpen && state.reportNodeId && (
+        <ReportSheet
+          active={isFocused}
+          sending={report.sending}
+          error={report.error}
+          onPick={sendReport}
+          onCancel={cancelReport}
         />
       )}
     </View>

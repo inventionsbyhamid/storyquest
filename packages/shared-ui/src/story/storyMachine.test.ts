@@ -3,6 +3,7 @@ import { makeChoice, makeScene } from '../test/fixtures';
 import {
   StoryEvent,
   StoryState,
+  closedChoices,
   createStoryState,
   isPrivatePath,
   isPlayerPaused,
@@ -595,5 +596,126 @@ describe('menu and notices', () => {
     const id = failed.notice!.id;
     expect(storyReducer(failed, { type: 'DISMISS_NOTICE', id: id + 1 })).toBe(failed);
     expect(storyReducer(failed, { type: 'DISMISS_NOTICE', id }).notice).toBeNull();
+  });
+});
+
+describe('reporting a scene', () => {
+  // Playing child-0, reached from root.
+  function playingChild(): StoryState {
+    const chosen = storyReducer(choosing(), { type: 'CHOOSE', index: 0 });
+    return run(
+      chosen,
+      { type: 'CHOICE_ACCEPTED', seq: chosen.requestSeq, nextNodeId: 'child-0' },
+      { type: 'NODE_UPDATE', scene: child0 },
+      { type: 'CLIP_PLAYING', clipUrl: child0.clipUrl! },
+    );
+  }
+
+  it('opens from the pause menu and backs out one layer at a time', () => {
+    const open = run(playingChild(), { type: 'OPEN_MENU' }, { type: 'OPEN_REPORT' });
+    expect(open.reportNodeId).toBe('child-0');
+    expect(isPlayerPaused(open)).toBe(true);
+    expect(storyReducer(open, { type: 'TOGGLE_PAUSE' })).toBe(open);
+    const back = storyReducer(open, { type: 'BACK' });
+    expect(back.reportNodeId).toBeNull();
+    expect(back.menuOpen).toBe(true);
+    expect(storyReducer(back, { type: 'BACK' }).menuOpen).toBe(false);
+    expect(storyReducer(playingChild(), { type: 'OPEN_REPORT' }).reportNodeId).toBeNull();
+  });
+
+  it('goes back to the choice before a reported scene with that path closed', () => {
+    const state = run(
+      playingChild(),
+      { type: 'OPEN_MENU' },
+      { type: 'OPEN_REPORT' },
+      { type: 'SCENE_REPORTED', nodeId: 'child-0' },
+    );
+    expect(state.phase).toBe('choosing');
+    expect(state.scene?.id).toBe('root');
+    expect(state.menuOpen).toBe(false);
+    expect(state.reportNodeId).toBeNull();
+    expect(state.still).toBe(root.lastFrameUrl);
+    expect(isStillVisible(state)).toBe(true);
+    expect(isPlayerPaused(state)).toBe(true);
+    expect(state.notice?.text).toBe(messages.reportThanks);
+    expect(closedChoices(state)).toEqual([0]);
+
+    const again = storyReducer(state, { type: 'CHOOSE', index: 0 });
+    expect(again.phase).toBe('choosing');
+    expect(again.notice?.text).toBe(messages.pathClosed);
+    expect(storyReducer(state, { type: 'CHOOSE', index: 1 }).phase).toBe('waitingNext');
+  });
+
+  it('drops a choice in flight when its starting scene is reported', () => {
+    const waiting = run(playingChild(), { type: 'CLIP_ENDED', clipUrl: child0.clipUrl! }, { type: 'CHOOSE', index: 1 });
+    expect(waiting.phase).toBe('waitingNext');
+    const reported = run(
+      waiting,
+      { type: 'OPEN_MENU' },
+      { type: 'OPEN_REPORT' },
+      { type: 'SCENE_REPORTED', nodeId: 'child-0' },
+    );
+    expect(reported.phase).toBe('choosing');
+    expect(reported.scene?.id).toBe('root');
+    expect(reported.pendingNodeId).toBeNull();
+    expect(storyReducer(reported, { type: 'CHOICE_ACCEPTED', seq: waiting.requestSeq, nextNodeId: 'x' })).toBe(
+      reported,
+    );
+  });
+
+  it('stops on a covered screen when the first scene is reported', () => {
+    const state = run(
+      playing(),
+      { type: 'OPEN_MENU' },
+      { type: 'OPEN_REPORT' },
+      { type: 'SCENE_REPORTED', nodeId: 'root' },
+    );
+    expect(state.phase).toBe('error');
+    expect(state.error?.code).toBe('path_closed');
+    expect(state.error?.message).toBe(messages.storyRemoved);
+    expect(state.still).toBeNull();
+    expect(isStillVisible(state)).toBe(true);
+  });
+
+  it('keeps reported scenes closed across a restart', () => {
+    const reported = run(choosing(), { type: 'SCENE_REPORTED', nodeId: 'child-1' });
+    expect(reported.phase).toBe('choosing');
+    expect(closedChoices(reported)).toEqual([1]);
+    const restarted = run(
+      reported,
+      { type: 'RESET', nodeId: 'root', posterUrl: null },
+      { type: 'NODE_UPDATE', scene: root },
+    );
+    expect(closedChoices(restarted)).toEqual([1]);
+    const fresh = run(createStoryState({ nodeId: 'root', hiddenNodes: ['child-0'] }), {
+      type: 'NODE_UPDATE',
+      scene: root,
+    });
+    expect(closedChoices(fresh)).toEqual([0]);
+  });
+});
+
+describe('closed paths', () => {
+  it('closes a choice whose scene failed or was taken down', () => {
+    const scene = makeScene({ id: 'root', choices: [makeChoice(0, { ready: false }), makeChoice(1)] });
+    const state = run(createStoryState({ nodeId: 'root' }), { type: 'NODE_UPDATE', scene });
+    const generating = storyReducer(state, {
+      type: 'CHILD_SCENE',
+      scene: makeScene({ id: 'child-0', status: 'generating', clipUrl: null }),
+    });
+    expect(closedChoices(generating)).toEqual([]);
+    const removed = storyReducer(state, {
+      type: 'CHILD_SCENE',
+      scene: makeScene({ id: 'child-0', status: 'failed', clipUrl: null, choices: [] }),
+    });
+    expect(closedChoices(removed)).toEqual([0]);
+  });
+
+  it('closes a choice the server refuses as closed', () => {
+    const chosen = storyReducer(choosing(), { type: 'CHOOSE', index: 0 });
+    const failed = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'path_closed' });
+    expect(failed.phase).toBe('choosing');
+    expect(closedChoices(failed)).toEqual([0]);
+    expect(failed.notice?.text).toBe(messages.pathClosed);
   });
 });

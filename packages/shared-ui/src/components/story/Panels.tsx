@@ -1,13 +1,16 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
+import type { ReportReason } from '@storyquest/contracts';
 import { CUSTOM_CHOICE_LIMITS } from '../../story/format';
+import { REPORT_REASONS } from '../../story/reports';
 import { colors, radii, screen, space, type } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { Button } from '../Button';
-import { Icon } from '../Icons';
+import { Icon, IconName } from '../Icons';
 import { MicHint, PromptField } from '../PromptField';
 import { WalletText } from '../sparks/WalletText';
+import { WaitingDots } from '../WaitingDots';
 
 function useFadeIn(): Animated.Value {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -26,9 +29,11 @@ interface PauseMenuProps {
   onResume: () => void;
   onStartOver: () => void;
   onExit: () => void;
+  // Missing while there is no scene on screen to report.
+  onReport?: () => void;
 }
 
-export function PauseMenu({ title, active, restarting, onResume, onStartOver, onExit }: PauseMenuProps) {
+export function PauseMenu({ title, active, restarting, onResume, onStartOver, onExit, onReport }: PauseMenuProps) {
   const opacity = useFadeIn();
   return (
     <SpatialNavigationRoot isActive={active}>
@@ -50,6 +55,9 @@ export function PauseMenu({ title, active, restarting, onResume, onStartOver, on
               style={styles.button}
             />
             <Button label="Home" icon="home" onSelect={onExit} block style={styles.button} />
+            {onReport ? (
+              <Button label="Report this scene" plain onSelect={onReport} block style={styles.reportAction} />
+            ) : null}
           </SpatialNavigationView>
         </View>
       </Animated.View>
@@ -114,13 +122,58 @@ export function CustomChoiceSheet({
   );
 }
 
+interface ReportSheetProps {
+  active: boolean;
+  sending: boolean;
+  error: string | null;
+  onPick: (reason: ReportReason) => void;
+  onCancel: () => void;
+}
+
+export function ReportSheet({ active, sending, error, onPick, onCancel }: ReportSheetProps) {
+  const opacity = useFadeIn();
+  return (
+    <SpatialNavigationRoot isActive={active}>
+      <Animated.View style={[styles.cover, { opacity }]}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>Report this scene</Text>
+          <SpatialNavigationView direction="vertical" style={styles.buttons}>
+            {REPORT_REASONS.map(({ reason, label }, i) => (
+              <DefaultFocus key={reason} enable={i === 0}>
+                <Button label={label} onSelect={() => onPick(reason)} block style={styles.button} />
+              </DefaultFocus>
+            ))}
+            <Button label="Cancel" plain onSelect={onCancel} block style={styles.reportAction} />
+          </SpatialNavigationView>
+          {sending ? (
+            <View style={styles.sending}>
+              <WaitingDots />
+              <Text style={styles.sendingText}>Sending your report</Text>
+            </View>
+          ) : error ? (
+            <Text style={styles.reportError}>{error}</Text>
+          ) : null}
+        </View>
+      </Animated.View>
+    </SpatialNavigationRoot>
+  );
+}
+
 interface StoryErrorPanelProps {
   message: string;
   active: boolean;
   onRetry: () => void;
+  actionLabel?: string;
+  actionIcon?: IconName;
 }
 
-export function StoryErrorPanel({ message, active, onRetry }: StoryErrorPanelProps) {
+export function StoryErrorPanel({
+  message,
+  active,
+  onRetry,
+  actionLabel = 'Try again',
+  actionIcon = 'restart',
+}: StoryErrorPanelProps) {
   const opacity = useFadeIn();
   return (
     <SpatialNavigationRoot isActive={active}>
@@ -130,7 +183,7 @@ export function StoryErrorPanel({ message, active, onRetry }: StoryErrorPanelPro
           <Text style={styles.body}>{message}</Text>
           <View style={styles.buttons}>
             <DefaultFocus>
-              <Button label="Try again" primary icon="restart" onSelect={onRetry} block style={styles.button} />
+              <Button label={actionLabel} primary icon={actionIcon} onSelect={onRetry} block style={styles.button} />
             </DefaultFocus>
           </View>
         </View>
@@ -183,6 +236,24 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: space.sm,
+  },
+  reportAction: {
+    marginTop: space.md,
+  },
+  sending: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: space.md,
+  },
+  sendingText: {
+    ...type.small,
+    color: colors.paperDim,
+    marginLeft: space.sm,
+  },
+  reportError: {
+    ...type.body,
+    color: colors.paper,
+    marginTop: space.md,
   },
   panel: {
     position: 'absolute',

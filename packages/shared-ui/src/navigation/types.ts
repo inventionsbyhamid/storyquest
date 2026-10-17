@@ -18,6 +18,7 @@ export type RootStackParamList = {
     nodeId: string;
     posterUrl: string | null;
     origin: StoryOrigin;
+    audience?: Audience;
   };
   End: {
     storyId: string;

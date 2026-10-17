@@ -170,6 +170,7 @@ export default function HomeScreen() {
           nodeId: story.currentNodeId,
           posterUrl: resolveMediaUrl(idea.posterUrl),
           origin: { ideaId: idea.id },
+          audience: story.audience,
         });
       } catch (error) {
         setNotice({ id: Date.now(), text: messageForError(toApiError(error).code, 'start') });

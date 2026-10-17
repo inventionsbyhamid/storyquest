@@ -156,6 +156,22 @@ describe('api client', () => {
     expect(error.status).toBe(400);
   });
 
+  it('reports a scene and reads a closed path', async () => {
+    const { client, calls } = setup([
+      jsonResponse({ ok: true }),
+      jsonResponse({ error: { code: 'not_found', message: 'That path is closed.' } }, 409),
+      jsonResponse({ error: { code: 'bad_request', message: 'stale' } }, 409),
+    ]);
+    await expect(client.reportNode('n/1', { reason: 'scary', storyId: 'story-1' })).resolves.toEqual({ ok: true });
+    expect(calls[0][0]).toBe('https://api.example.test/v1/nodes/n%2F1/report');
+    expect(calls[0][1].method).toBe('POST');
+    expect(JSON.parse(calls[0][1].body as string)).toEqual({ reason: 'scary', storyId: 'story-1' });
+
+    const preset = { kind: 'preset' as const, fromNodeId: 'root', index: 0 };
+    await expect(client.choose('story-1', preset)).rejects.toMatchObject({ code: 'path_closed', status: 409 });
+    await expect(client.choose('story-1', preset)).rejects.toMatchObject({ code: 'bad_request', status: 409 });
+  });
+
   it('maps unknown error bodies by status', async () => {
     const { client } = setup([jsonResponse(undefined, 404)]);
     await expect(client.getStory('missing')).rejects.toMatchObject({ code: 'not_found', status: 404 });

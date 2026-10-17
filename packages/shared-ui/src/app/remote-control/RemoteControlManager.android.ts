@@ -17,15 +17,21 @@ const KEY_CODE_MAPPING: Record<number, SupportedKeys> = {
 };
 
 class RemoteControlManager implements RemoteControlManagerInterface {
-  private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
+  private eventEmitter = mitt<{ keyDown: SupportedKeys; keyUp: SupportedKeys }>();
 
   constructor() {
     KeyEvent.onKeyDownListener(this.handleKeyDown);
+    KeyEvent.onKeyUpListener(this.handleKeyUp);
   }
 
   private handleKeyDown = (keyEvent: { keyCode: number }): void => {
     const mappedKey = KEY_CODE_MAPPING[keyEvent.keyCode];
     if (mappedKey) this.eventEmitter.emit('keyDown', mappedKey);
+  };
+
+  private handleKeyUp = (keyEvent: { keyCode: number }): void => {
+    const mappedKey = KEY_CODE_MAPPING[keyEvent.keyCode];
+    if (mappedKey) this.eventEmitter.emit('keyUp', mappedKey);
   };
 
   addKeydownListener = (listener: (event: SupportedKeys) => void) => {
@@ -37,12 +43,22 @@ class RemoteControlManager implements RemoteControlManagerInterface {
     this.eventEmitter.off('keyDown', listener);
   };
 
+  addKeyupListener = (listener: (event: SupportedKeys) => void) => {
+    this.eventEmitter.on('keyUp', listener);
+    return listener;
+  };
+
+  removeKeyupListener = (listener: (event: SupportedKeys) => void): void => {
+    this.eventEmitter.off('keyUp', listener);
+  };
+
   emitKeyDown = (key: SupportedKeys): void => {
     this.eventEmitter.emit('keyDown', key);
   };
 
   cleanup = (): void => {
     KeyEvent.removeKeyDownListener();
+    KeyEvent.removeKeyUpListener();
   };
 }
 

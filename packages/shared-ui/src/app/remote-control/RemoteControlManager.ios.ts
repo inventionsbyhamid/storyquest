@@ -16,7 +16,7 @@ const KEY_MAPPING: Record<string, SupportedKeys> = {
 };
 
 class RemoteControlManager implements RemoteControlManagerInterface {
-  private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
+  private eventEmitter = mitt<{ keyDown: SupportedKeys; keyUp: SupportedKeys }>();
   private tvEventSubscription?: EventSubscription;
 
   constructor() {
@@ -27,9 +27,9 @@ class RemoteControlManager implements RemoteControlManagerInterface {
     if (!evt) return;
 
     const mappedKey = KEY_MAPPING[evt.eventType];
-    if (mappedKey) {
-      this.eventEmitter.emit('keyDown', mappedKey);
-    }
+    if (!mappedKey) return;
+    this.eventEmitter.emit('keyDown', mappedKey);
+    if (evt.eventKeyAction === 1) this.eventEmitter.emit('keyUp', mappedKey);
   };
 
   addKeydownListener = (listener: (event: SupportedKeys) => void) => {
@@ -39,6 +39,15 @@ class RemoteControlManager implements RemoteControlManagerInterface {
 
   removeKeydownListener = (listener: (event: SupportedKeys) => void): void => {
     this.eventEmitter.off('keyDown', listener);
+  };
+
+  addKeyupListener = (listener: (event: SupportedKeys) => void) => {
+    this.eventEmitter.on('keyUp', listener);
+    return listener;
+  };
+
+  removeKeyupListener = (listener: (event: SupportedKeys) => void): void => {
+    this.eventEmitter.off('keyUp', listener);
   };
 
   emitKeyDown = (key: SupportedKeys): void => {

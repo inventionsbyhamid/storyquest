@@ -18,6 +18,9 @@ export const messages = {
   purchaseInvalid: 'Amazon could not confirm that purchase, so no Sparks were added.',
   sparksPending: 'Your purchase went through. Your Sparks will show up shortly.',
   purchaseStillOpen: 'A purchase is still being finished. Try again in a moment.',
+  reportThanks: 'Thanks. We removed this scene for your family and will review it.',
+  reportFailed: 'The report could not be sent. Try again.',
+  storyRemoved: 'This story was taken down. Pick another one from home.',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {
@@ -44,6 +47,9 @@ export function messageForError(code: ApiErrorCode | 'node_failed', context: Mes
       return context === 'preset' || context === 'custom'
         ? messages.slowScene
         : 'StoryQuest is slow to answer. Try again.';
+    case 'path_closed':
+      if (context === 'start') return 'That story is not available. Pick another one.';
+      return context === 'custom' ? messages.customFailed : messages.pathClosed;
     case 'generation_failed':
     case 'node_failed':
       if (context === 'preset') return messages.pathClosed;

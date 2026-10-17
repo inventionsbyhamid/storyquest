@@ -20,6 +20,8 @@ import { useBackHandler } from '../hooks/useBackHandler';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
+import { GrownUpsGate } from '../components/GrownUpsGate';
+import { confirmGrownUps, needsGrownUpsGate } from '../gate/grownUps';
 import { MicHint, PromptField } from '../components/PromptField';
 import { SparksSheet } from '../components/sparks/SparksSheet';
 import { WalletText } from '../components/sparks/WalletText';
@@ -37,6 +39,8 @@ export default function CreateScreen() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [needsSparks, setNeedsSparks] = useState(false);
+  // Asked on the way in, before anything can be typed.
+  const [gateOpen, setGateOpen] = useState(() => needsGrownUpsGate());
   const busy = useRef(false);
   const { wallet } = useSparks();
   const storyCost = wallet?.sceneCost ?? 1;
@@ -45,6 +49,12 @@ export default function CreateScreen() {
     if (needsSparks) setNeedsSparks(false);
     else navigation.goBack();
   }, isFocused);
+
+  const passGate = useCallback(() => {
+    confirmGrownUps();
+    setGateOpen(false);
+  }, []);
+  const leave = useCallback(() => navigation.goBack(), [navigation]);
 
   const changePrompt = useCallback((text: string) => {
     setPrompt(text);
@@ -82,6 +92,7 @@ export default function CreateScreen() {
         nodeId: story.currentNodeId,
         posterUrl: null,
         origin: { ideaId: null, prompt: check.text, moods, audience },
+        audience: story.audience,
       });
     } catch (e) {
       const code = toApiError(e).code;
@@ -103,7 +114,7 @@ export default function CreateScreen() {
 
   return (
     <>
-      <SpatialNavigationRoot isActive={isFocused && !needsSparks}>
+      <SpatialNavigationRoot isActive={isFocused && !needsSparks && !gateOpen}>
         <View style={styles.screen}>
           <View style={styles.header}>
             <Brand />
@@ -181,6 +192,7 @@ export default function CreateScreen() {
         </View>
       </SpatialNavigationRoot>
       {needsSparks && <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />}
+      {gateOpen && <GrownUpsGate active={isFocused} onPass={passGate} onCancel={leave} />}
     </>
   );
 }

@@ -39,6 +39,8 @@ export interface StoryState {
   phase: StoryPhase;
   sparksPrompt: SparksPrompt | null;
   scene: SceneView | null;
+  // The scene before this one, where the family can choose again if this one is reported.
+  previousScene: SceneView | null;
   childScenes: Record<string, SceneView>;
   syncs: ChoiceSync[];
   syncSeq: number;
@@ -59,6 +61,12 @@ export interface StoryState {
   error: StoryError | null;
   menuOpen: boolean;
   userPaused: boolean;
+  // Scenes this family reported. Choices leading to them are closed.
+  hiddenNodes: string[];
+  // The scene the report sheet is about, while it is open.
+  reportNodeId: string | null;
+  // The current scene was reported, so its frames stay covered.
+  sceneHidden: boolean;
 }
 
 export type StoryEvent =
@@ -85,6 +93,9 @@ export type StoryEvent =
   | { type: 'TOGGLE_PAUSE' }
   | { type: 'SET_PAUSED'; paused: boolean }
   | { type: 'RETRY' }
+  | { type: 'OPEN_REPORT' }
+  | { type: 'CLOSE_REPORT' }
+  | { type: 'SCENE_REPORTED'; nodeId: string }
   | { type: 'RESET'; nodeId: string; posterUrl: string | null }
   | { type: 'NOTICE'; text: string }
   | { type: 'DISMISS_NOTICE'; id: number };
@@ -92,13 +103,15 @@ export type StoryEvent =
 export interface StoryStart {
   nodeId: string;
   posterUrl?: string | null;
+  hiddenNodes?: string[];
 }
 
-export function createStoryState({ nodeId, posterUrl = null }: StoryStart): StoryState {
+export function createStoryState({ nodeId, posterUrl = null, hiddenNodes = [] }: StoryStart): StoryState {
   return {
     phase: 'loadingScene',
     sparksPrompt: null,
     scene: null,
+    previousScene: null,
     childScenes: {},
     syncs: [],
     syncSeq: 0,
@@ -119,6 +132,9 @@ export function createStoryState({ nodeId, posterUrl = null }: StoryStart): Stor
     error: null,
     menuOpen: false,
     userPaused: false,
+    hiddenNodes,
+    reportNodeId: null,
+    sceneHidden: false,
   };
 }
 
@@ -157,6 +173,7 @@ function startScene(state: StoryState, scene: SceneView): StoryState {
     phase: scene.isEnding ? 'ending' : 'playing',
     sparksPrompt: null,
     scene,
+    previousScene: state.scene && state.scene.id !== scene.id ? state.scene : state.previousScene,
     childScenes: {},
     still: state.still ?? scene.posterUrl,
     clipStarted: false,
@@ -166,6 +183,7 @@ function startScene(state: StoryState, scene: SceneView): StoryState {
     notice: null,
     error: null,
     userPaused: false,
+    sceneHidden: false,
   };
 }
 
@@ -176,7 +194,7 @@ function failPending(state: StoryState, code: ApiErrorCode | 'node_failed'): Sto
   if (state.phase !== 'waitingNext') return state;
 
   const kind = state.waitKind ?? 'preset';
-  const pathFailed = code === 'node_failed' || code === 'generation_failed';
+  const pathFailed = code === 'node_failed' || code === 'generation_failed' || code === 'path_closed';
   let next: StoryState = { ...clearPending(state), phase: 'choosing' };
   if (kind === 'preset' && pathFailed && state.pendingChoice !== null) {
     next = { ...next, disabledChoices: [...state.disabledChoices, state.pendingChoice] };
@@ -230,8 +248,15 @@ export function isPlayable(scene: SceneView | undefined): scene is SceneView {
 
 function onChildScene(state: StoryState, child: SceneView): StoryState {
   const current = state.scene;
-  if (!current || !isPlayable(child)) return state;
-  if (!current.choices.some((choice) => choice.nodeId === child.id)) return state;
+  if (!current) return state;
+  const choice = current.choices.find((item) => item.nodeId === child.id);
+  if (!choice) return state;
+  // A child that failed or was taken down cannot be played: close that path.
+  if (child.status === 'failed') {
+    if (state.disabledChoices.includes(choice.index)) return state;
+    return { ...state, disabledChoices: [...state.disabledChoices, choice.index] };
+  }
+  if (!isPlayable(child)) return state;
   if (state.childScenes[child.id]?.clipUrl === child.clipUrl) return state;
   return { ...state, childScenes: { ...state.childScenes, [child.id]: child } };
 }
@@ -240,7 +265,7 @@ function onChoose(state: StoryState, index: number): StoryState {
   if (state.phase !== 'choosing' || state.menuOpen || !state.scene) return state;
   const choice = state.scene.choices.find((c) => c.index === index);
   if (!choice) return state;
-  if (state.disabledChoices.includes(index)) return withNotice(state, messages.pathClosed);
+  if (closedChoices(state).includes(index)) return withNotice(state, messages.pathClosed);
 
   // The next scene is already on the device: play it now and tell the server in the background.
   // Paid scenes wait for the server to accept the choice, because that is when Sparks are charged.
@@ -289,6 +314,59 @@ function onChoiceFailed(state: StoryState, seq: number, code: ApiErrorCode): Sto
     };
   }
   return failPending(state, code);
+}
+
+// The family reported a scene: hide it for them, close the menu and carry on. If it is the scene
+// on screen, cover it and go straight to what happens next.
+function onSceneReported(state: StoryState, nodeId: string): StoryState {
+  const childScenes = { ...state.childScenes };
+  delete childScenes[nodeId];
+  let next: StoryState = {
+    ...state,
+    hiddenNodes: state.hiddenNodes.includes(nodeId) ? state.hiddenNodes : [...state.hiddenNodes, nodeId],
+    childScenes,
+    reportNodeId: null,
+    menuOpen: false,
+    userPaused: false,
+  };
+  if (!state.scene || state.scene.id !== nodeId) return withNotice(next, messages.reportThanks);
+
+  // The reported scene is gone for everyone, so the story picks up at the choice before it.
+  const back = state.previousScene;
+  const cleared: StoryState = {
+    ...clearPending(next),
+    sparksPrompt: null,
+    childScenes: {},
+    clipStarted: true,
+    customText: '',
+    customError: null,
+    requestSeq: state.requestSeq + 1,
+  };
+  if (back && !back.isEnding && back.choices.length > 0) {
+    const still = back.lastFrameUrl ?? back.posterUrl ?? null;
+    return withNotice(
+      {
+        ...cleared,
+        phase: 'choosing',
+        scene: back,
+        previousScene: null,
+        still,
+        sceneHidden: !still,
+        disabledChoices: [],
+      },
+      messages.reportThanks,
+    );
+  }
+  return withNotice(
+    {
+      ...cleared,
+      phase: 'error',
+      still: null,
+      sceneHidden: true,
+      error: { code: 'path_closed', message: messages.storyRemoved },
+    },
+    messages.reportThanks,
+  );
 }
 
 function onSubmitCustom(state: StoryState): StoryState {
@@ -377,6 +455,7 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
 
     case 'BACK':
       if (state.sparksPrompt) return { ...state, sparksPrompt: null };
+      if (state.reportNodeId) return { ...state, reportNodeId: null };
       if (state.menuOpen) return { ...state, menuOpen: false };
       if (state.phase === 'customInput') return { ...state, phase: 'choosing', customError: null };
       if (state.phase === 'finished') return state;
@@ -388,9 +467,20 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
 
     case 'CLOSE_MENU':
       if (!state.menuOpen) return state;
-      return { ...state, menuOpen: false, userPaused: false };
+      return { ...state, menuOpen: false, reportNodeId: null, userPaused: false };
+
+    case 'OPEN_REPORT':
+      if (!state.menuOpen || !state.scene || state.reportNodeId) return state;
+      return { ...state, reportNodeId: state.scene.id };
+
+    case 'CLOSE_REPORT':
+      return state.reportNodeId ? { ...state, reportNodeId: null } : state;
+
+    case 'SCENE_REPORTED':
+      return onSceneReported(state, event.nodeId);
 
     case 'TOGGLE_PAUSE':
+      if (state.reportNodeId) return state;
       if (state.menuOpen) return { ...state, menuOpen: false, userPaused: false };
       if (!isPlaybackPhase(state.phase)) return state;
       return { ...state, userPaused: !state.userPaused };
@@ -398,6 +488,7 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
     case 'SET_PAUSED':
       if (!isPlaybackPhase(state.phase)) return state;
       if (event.paused) return state.userPaused || state.menuOpen ? state : { ...state, userPaused: true };
+      if (state.reportNodeId) return state;
       return state.userPaused || state.menuOpen ? { ...state, userPaused: false, menuOpen: false } : state;
 
     case 'RETRY':
@@ -406,7 +497,11 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
 
     case 'RESET':
       return {
-        ...createStoryState({ nodeId: event.nodeId, posterUrl: event.posterUrl ?? state.still }),
+        ...createStoryState({
+          nodeId: event.nodeId,
+          posterUrl: event.posterUrl ?? state.still,
+          hiddenNodes: state.hiddenNodes,
+        }),
         noticeSeq: state.noticeSeq,
         syncSeq: state.syncSeq,
         pollSeq: state.pollSeq + 1,
@@ -425,7 +520,19 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
   }
 }
 
+// Choices the family cannot take: paths that failed and paths to scenes they reported.
+export function closedChoices(state: StoryState): number[] {
+  const scene = state.scene;
+  if (!scene) return state.disabledChoices;
+  const hidden = scene.choices
+    .filter((choice) => choice.nodeId !== null && state.hiddenNodes.includes(choice.nodeId))
+    .map((choice) => choice.index);
+  if (hidden.length === 0) return state.disabledChoices;
+  return [...state.disabledChoices, ...hidden.filter((index) => !state.disabledChoices.includes(index))];
+}
+
 export function isStillVisible(state: StoryState): boolean {
+  if (state.sceneHidden) return true;
   if (!state.still) return false;
   return !(isPlaybackPhase(state.phase) && state.clipStarted);
 }

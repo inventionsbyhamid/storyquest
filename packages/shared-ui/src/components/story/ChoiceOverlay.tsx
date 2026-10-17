@@ -27,7 +27,7 @@ interface ChoiceCardProps {
 }
 
 function choiceHint(choice: ChoiceView, closed: boolean): string | undefined {
-  if (closed) return 'This path could not be made';
+  if (closed) return 'Path closed. Pick another choice';
   const parts: string[] = [];
   if (choice.sparks > 0) parts.push(`Uses ${formatSparks(choice.sparks)}`);
   if (!choice.ready && choice.nodeId) parts.push('Still being drawn. You can pick it and wait');
@@ -36,7 +36,7 @@ function choiceHint(choice: ChoiceView, closed: boolean): string | undefined {
 
 const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusChoice }: ChoiceCardProps) => {
   const costs = choice.sparks > freeSparks;
-  const poster = resolveMediaUrl(choice.posterUrl);
+  const poster = closed ? null : resolveMediaUrl(choice.posterUrl);
   const source = useMemo(() => (poster ? { uri: poster } : null), [poster]);
   const select = useCallback(() => onChoose(choice.index), [choice.index, onChoose]);
   const focus = useCallback(() => onFocusChoice(choice.index), [choice.index, onFocusChoice]);
@@ -62,11 +62,11 @@ const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusCh
                 <Placeholder style={styles.placeholder} />
               )}
               {closed ? (
-                <View style={styles.status}>
-                  <Text style={styles.statusText}>Closed</Text>
+                <View style={[styles.status, styles.topRight]}>
+                  <Text style={styles.statusText}>Path closed</Text>
                 </View>
               ) : !choice.ready && choice.nodeId ? (
-                <View style={styles.status}>
+                <View style={[styles.status, styles.bottomLeft]}>
                   <Text style={styles.statusText}>Drawing</Text>
                 </View>
               ) : null}
@@ -281,8 +281,6 @@ const styles = StyleSheet.create({
   },
   status: {
     position: 'absolute',
-    left: space.xs,
-    bottom: space.xs,
     paddingHorizontal: space.sm,
     paddingVertical: scaledPixels(4),
     borderRadius: radii.image,
@@ -291,6 +289,14 @@ const styles = StyleSheet.create({
   statusText: {
     ...type.small,
     color: colors.paperDim,
+  },
+  bottomLeft: {
+    left: space.xs,
+    bottom: space.xs,
+  },
+  topRight: {
+    top: space.xs,
+    right: space.xs,
   },
   cost: {
     position: 'absolute',
