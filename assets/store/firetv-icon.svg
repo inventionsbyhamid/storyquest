@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 720" width="1280" height="720">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#2b2156"/>
+      <stop offset="0.6" stop-color="#14122b"/>
+      <stop offset="1" stop-color="#0b0d1a"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#ffb547" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#ffb547" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1280" height="720" fill="url(#bg)"/>
+  <g fill="#ffffff" opacity="0.8">
+    <circle cx="120" cy="90" r="4"/><circle cx="1160" cy="110" r="3"/><circle cx="1040" cy="60" r="2.5"/>
+    <circle cx="80" cy="600" r="3"/><circle cx="1200" cy="560" r="4"/><circle cx="640" cy="60" r="2.5"/>
+  </g>
+  <circle cx="300" cy="360" r="300" fill="url(#halo)"/>
+  <svg x="90" y="160" width="400" height="400" viewBox="0 0 512 512" overflow="visible">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2b2156"/>
+      <stop offset="1" stop-color="#0b0d1a"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.55" r="0.5">
+      <stop offset="0" stop-color="#ffb547" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#ffb547" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="page" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fff6e6"/>
+      <stop offset="1" stop-color="#f2dfc0"/>
+    </linearGradient>
+  </defs>
+    <circle cx="256" cy="300" r="230" fill="url(#glow)"/>
+  <path d="M256 92 C266 168 288 190 364 200 C288 210 266 232 256 308 C246 232 224 210 148 200 C224 190 246 168 256 92 Z" fill="#ffb547"/>
+  <path d="M370 96 C374 120 382 128 406 132 C382 136 374 144 370 168 C366 144 358 136 334 132 C358 128 366 120 370 96 Z" fill="#ffd28a"/>
+  <path d="M84 336 C140 312 206 312 252 344 L252 430 C206 402 140 400 84 420 Z" fill="url(#page)"/>
+  <path d="M428 336 C372 312 306 312 260 344 L260 430 C306 402 372 400 428 420 Z" fill="url(#page)"/>
+  <path d="M84 420 C140 400 206 402 252 430 L260 430 C306 402 372 400 428 420 L428 432 C372 414 306 416 256 444 C206 416 140 414 84 432 Z" fill="#c98f3a"/>
+  <g fill="none" stroke="#c9a878" stroke-width="5" stroke-linecap="round" opacity="0.9">
+    <path d="M118 352 C154 342 190 344 222 360"/><path d="M118 376 C154 366 190 368 222 384"/>
+    <path d="M394 352 C358 342 322 344 290 360"/><path d="M394 376 C358 366 322 368 290 384"/>
+  </g>
+</svg>
+  <text x="510" y="392" font-family="Fredoka" font-weight="700" font-size="128" fill="#f7f1e6">Story<tspan fill="#ffb547">Quest</tspan></text>
+  <text x="516" y="458" font-family="Fredoka" font-weight="500" font-size="38" fill="#c9c2dc">Your family's story, filmed by AI</text>
+</svg>
