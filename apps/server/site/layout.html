@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{title}}</title>
+<meta name="description" content="{{description}}">
+<style>
+  :root { --ink: #0b0d1a; --panel: #151a2e; --text: #f4efe6; --muted: #b9b4c8; --amber: #ffb547; --violet: #8c7bff; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 80% -10%, #2a2050 0%, var(--ink) 55%); color: var(--text); font: 18px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100vh; }
+  a { color: var(--amber); }
+  header, main, footer { max-width: 880px; margin: 0 auto; padding: 24px 20px; }
+  header { display: flex; align-items: center; justify-content: space-between; }
+  .brand { font-weight: 800; font-size: 22px; text-decoration: none; color: var(--text); }
+  .brand span { color: var(--amber); }
+  nav a { margin-left: 18px; color: var(--muted); text-decoration: none; }
+  nav a:hover { color: var(--text); }
+  h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1.1; margin: 24px 0 12px; }
+  h2 { margin-top: 36px; }
+  .lead { font-size: 20px; color: var(--muted); max-width: 640px; }
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 32px 0; }
+  .card { background: var(--panel); border-radius: 16px; padding: 20px; border: 1px solid #252b45; }
+  .card b { color: var(--amber); display: block; margin-bottom: 6px; }
+  footer { color: var(--muted); font-size: 15px; border-top: 1px solid #252b45; margin-top: 48px; }
+  .updated { color: var(--muted); font-size: 15px; }
+</style>
+</head>
+<body>
+<header>
+  <a class="brand" href="/">✦ Story<span>Quest</span></a>
+  <nav><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
+</header>
+<main>
+{{content}}
+</main>
+<footer>
+  © {{year}} {{company}}. StoryQuest is available on Amazon Fire TV. Questions? <a href="mailto:{{email}}">{{email}}</a>
+</footer>
+</body>
+</html>

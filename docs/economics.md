@@ -35,3 +35,17 @@ Private scenes are prepared ahead only for the choice a family focuses on, so we
 * Price at about 150% markup: packs of 10 for $11.99 and 25 for $24.99.
 * Few shared stories that live for a week (for example 2 new a day, each available for 7 days) instead of many one day stories.
 * Because shared trees are a fixed cost, profit grows faster than the audience.
+
+## Growth simulation: 1000 new signups a day
+
+Packs: 70% buy 10 Sparks for $11.99, 30% buy 25 for $24.99 (average $15.89 for 14.5 Sparks, about $5.90 profit per purchase after Amazon's share and video cost, assuming every Spark gets used). Shared stories about $1,400 a month, VPS $50.
+
+| Scenario | Month 1 profit | Month 6 revenue | Month 6 profit | 6 month total |
+| --- | --- | --- | --- | --- |
+| 2% buy once, 60% use the free scene, no repeat buys | minus $4,300 | $9,500 | minus $4,300 | minus $26,000 |
+| 2% buy, 60% use the free scene, buyers buy 1 pack a month, 60% stay each month | minus $4,300 | $22,700 | plus $600 | minus $6,700 |
+| 1.8% buy, same as above | minus $4,700 | $20,500 | minus $300 | minus $10,800 |
+| 2% buy, free scene unlocked after 3 watched scenes (30% use it), 1 pack a month, 60% stay | minus $1,100 | $22,700 | plus $3,800 | plus $12,700 |
+| Same, 1.5 packs a month, 70% stay | minus $1,100 | $37,300 | plus $9,300 | plus $31,500 |
+
+The free scene is the largest cost at this signup rate (about $6,500 a month at 60% use). Offering it only after a family has watched a few scenes, plus repeat purchases, is what makes the model profitable.
