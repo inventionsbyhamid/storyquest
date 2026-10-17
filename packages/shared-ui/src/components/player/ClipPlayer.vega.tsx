@@ -4,6 +4,7 @@ import { IComponentInstance, useKeplerAppStateManager } from '@amazon-devices/re
 import { KeplerVideoSurfaceView, VideoPlayer } from '@amazon-devices/react-native-w3cmedia';
 import { AppOverrideMediaControlHandler } from '../../utils/AppOverrideMediaControlHandler.kepler';
 import { useLatest } from '../../hooks/useLatest';
+import { logTiming } from '../../utils/timing';
 import type { ClipPlayerProps } from './types';
 
 const DEINIT_TIMEOUT_MS = 1500;
@@ -87,6 +88,7 @@ class ClipController {
       player.src = src;
       player.load();
       this.hasLoadedBefore = true;
+      logTiming('player src set', src.startsWith('file:') ? 'local' : 'stream');
     } catch (error) {
       console.error('[ClipPlayer] load failed', error);
       this.onError();
@@ -166,6 +168,7 @@ class ClipController {
     const firstTime = !this.metadataLoaded;
     this.metadataLoaded = true;
     if (firstTime) {
+      logTiming('metadata loaded');
       this.props().onReady?.(this.source);
       this.onFirstMetadata();
     }
@@ -195,7 +198,8 @@ class ClipController {
   private onError = () => {
     const src = this.source;
     if (!src) return;
-    if (this.retriedSource !== src && !this.destroyed) {
+    // A local file that fails is handed back at once so the screen can stream it instead.
+    if (this.retriedSource !== src && !this.destroyed && !src.startsWith('file:')) {
       this.retriedSource = src;
       this.rebuild(src);
       return;

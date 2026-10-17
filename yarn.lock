@@ -17,6 +17,18 @@ __metadata:
   languageName: node
   linkType: hard
 
+"@amazon-devices/expo-file-system@npm:~2.0.0":
+  version: 2.0.9000000001
+  resolution: "@amazon-devices/expo-file-system@npm:2.0.9000000001"
+  dependencies:
+    "@amazon-devices/keplerscript-turbomodule-api": "npm:^1.0.0"
+    uuid: "npm:^3.4.0"
+  peerDependencies:
+    expo: ^50.0.0-alpha.1
+  checksum: 10c0/9313f6e7f48d2c38d0a2317c6135a47e6fb73a81063a6d22cfdfbf8d9bdb5c7bac39aad26eea9ba63ae49a40c5abac276da7e7f6884478af3b68b0e0d770395e
+  languageName: node
+  linkType: hard
+
 "@amazon-devices/js-bundle-system-allow-list@npm:*, @amazon-devices/js-bundle-system-allow-list@npm:^0":
   version: 0.0.21
   resolution: "@amazon-devices/js-bundle-system-allow-list@npm:0.0.21"
@@ -4698,6 +4710,7 @@ __metadata:
   version: 0.0.0-use.local
   resolution: "@multi-tv/vega@workspace:apps/vega"
   dependencies:
+    "@amazon-devices/expo-file-system": "npm:~2.0.0"
     "@amazon-devices/kepler-cli-platform": "npm:^0"
     "@amazon-devices/kepler-media-controls": "npm:^1.0.0"
     "@amazon-devices/kepler-media-types": "npm:^1.0.0"
@@ -22583,7 +22596,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"uuid@npm:^3.3.2":
+"uuid@npm:^3.3.2, uuid@npm:^3.4.0":
   version: 3.4.0
   resolution: "uuid@npm:3.4.0"
   bin:

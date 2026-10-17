@@ -1,8 +1,9 @@
-import React, { useCallback, useEffect, useReducer, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import type { ChooseRequest } from '@storyquest/contracts';
 import { api, areChoicesSettled, isAbortError, toApiError, waitForNode } from '../api';
+import { sleep } from '../api/sleep';
 import { SupportedKeys } from '../app/remote-control/SupportedKeys';
 import ClipPlayer from '../components/player/ClipPlayer';
 import type { MediaCommand } from '../components/player/types';
@@ -14,6 +15,8 @@ import { WaitingCard } from '../components/story/WaitingCard';
 import { Notice } from '../components/Notice';
 import { useAppActive } from '../hooks/useAppActive';
 import { useBackHandler, useRemoteKey } from '../hooks/useBackHandler';
+import { useLatest } from '../hooks/useLatest';
+import { createSerialQueue, sendChoice } from '../story/choiceSync';
 import { formatMadeIn, formatSceneProgress } from '../story/format';
 import { messageForError } from '../story/messages';
 import { startRequestFor } from '../story/origin';
@@ -26,10 +29,14 @@ import {
   waitingLabel,
 } from '../story/storyMachine';
 import { colors } from '../theme';
+import { createClipCache } from '../utils/clipCache';
 import { prefetchImage } from '../utils/prefetch';
+import { endChoiceTiming, logTiming, markChoice } from '../utils/timing';
 import type { ScreenNavigation, ScreenRoute } from '../navigation/types';
 
 const TOGGLE_DEBOUNCE_MS = 600;
+const SYNC_FLUSH_MS = 3000;
+const LOCAL_START_TIMEOUT_MS = 4000;
 
 export default function StoryScreen() {
   const route = useRoute<ScreenRoute<'Story'>>();
@@ -44,10 +51,44 @@ export default function StoryScreen() {
   const [restarting, setRestarting] = useState(false);
   const restartingRef = useRef(false);
   const lastToggleAt = useRef(0);
-  const choiceAt = useRef<number | null>(null);
+  const [lifetime] = useState(() => new AbortController());
+  const [syncQueue] = useState(createSerialQueue);
+  const [clipCache] = useState(createClipCache);
+  const [streamOnly, setStreamOnly] = useState(false);
+  const sentSyncs = useRef(new Set<number>());
+  const childFetches = useRef(new Set<string>());
+  const latestState = useLatest(state);
 
   const { phase, scene } = state;
   const inPlayback = phase === 'playing' || phase === 'ending';
+  const paused = isPlayerPaused(state) || !isFocused || !appActive;
+
+  useEffect(
+    () => () => {
+      lifetime.abort();
+      clipCache.clear();
+    },
+    [lifetime, clipCache],
+  );
+
+  const clipUrl = scene?.clipUrl ?? null;
+  // Chosen once per scene, so a download finishing mid clip never reloads the player.
+  const playSource = useMemo(
+    () => (clipUrl ? (streamOnly ? clipUrl : clipCache.resolve(clipUrl)) : null),
+    [clipUrl, streamOnly, clipCache],
+  );
+  const latestSource = useLatest({ playSource, clipUrl });
+  const toClipUrl = useCallback(
+    (source: string) =>
+      source === latestSource.current.playSource ? (latestSource.current.clipUrl ?? source) : source,
+    [latestSource],
+  );
+
+  useEffect(() => {
+    if (scene)
+      logTiming('scene became current', `${scene.id}${playSource && playSource !== scene.clipUrl ? ' local' : ''}`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scene?.id]);
 
   // Wait for the scene we are heading to.
   useEffect(() => {
@@ -71,8 +112,8 @@ export default function StoryScreen() {
         ? { kind: 'custom', fromNodeId: state.scene.id, text: state.customText }
         : { kind: 'preset', fromNodeId: state.scene.id, index: state.pendingChoice ?? 0 };
     const controller = new AbortController();
-    api
-      .choose(session.storyId, body, { signal: controller.signal })
+    syncQueue
+      .run(() => api.choose(session.storyId, body, { signal: controller.signal }))
       .then((result) => dispatch({ type: 'CHOICE_ACCEPTED', seq, nextNodeId: result.nextNodeId }))
       .catch((error) => {
         if (!isAbortError(error)) dispatch({ type: 'CHOICE_FAILED', seq, code: toApiError(error).code });
@@ -96,11 +137,65 @@ export default function StoryScreen() {
     return () => controller.abort();
   }, [watchId]);
 
+  // Choices the app already played: tell the server in order, quietly.
+  useEffect(() => {
+    const storyId = session.storyId;
+    for (const sync of state.syncs) {
+      if (sentSyncs.current.has(sync.id)) continue;
+      sentSyncs.current.add(sync.id);
+      const request: ChooseRequest = { kind: 'preset', fromNodeId: sync.fromNodeId, index: sync.index };
+      syncQueue
+        .run(() => sendChoice(api, storyId, request, sync.nodeId))
+        .then(() => {
+          logTiming('choice saved', sync.nodeId);
+          dispatch({ type: 'SYNC_DONE', id: sync.id });
+        })
+        .catch((error) => {
+          console.warn('[Story] choice not saved', error);
+          dispatch({ type: 'SYNC_FAILED', id: sync.id });
+        });
+    }
+  }, [state.syncs, session.storyId, syncQueue]);
+
   useEffect(() => {
     if (!scene) return;
     prefetchImage(scene.lastFrameUrl);
     scene.choices.forEach((choice) => prefetchImage(choice.posterUrl));
   }, [scene]);
+
+  // Fetch each ready child scene ahead of time so picking it can start the clip at once.
+  useEffect(() => {
+    if (!scene || scene.isEnding) return;
+    for (const choice of scene.choices) {
+      const id = choice.nodeId;
+      if (!choice.ready || !id || state.childScenes[id] || childFetches.current.has(id)) continue;
+      childFetches.current.add(id);
+      api
+        .getNode(id, { signal: lifetime.signal, retries: 1 })
+        .then((child) => {
+          dispatch({ type: 'CHILD_SCENE', scene: child });
+          prefetchImage(child.lastFrameUrl);
+          prefetchImage(child.posterUrl);
+        })
+        .catch(() => undefined)
+        .finally(() => childFetches.current.delete(id));
+    }
+  }, [scene, state.childScenes, lifetime]);
+
+  // Download the candidate clips once the current one is playing, so they do not fight for bandwidth.
+  useEffect(() => {
+    if (!state.clipStarted && phase !== 'choosing') return;
+    Object.values(state.childScenes).forEach((child) => clipCache.prefetch(child.clipUrl));
+  }, [state.childScenes, state.clipStarted, phase, clipCache]);
+
+  // If a downloaded clip does not start, stream it rather than leave the family on a still.
+  const localPending = !!playSource && playSource !== clipUrl && inPlayback && !state.clipStarted && !paused;
+  useEffect(() => {
+    if (!localPending || !playSource) return;
+    const timer = setTimeout(() => onClipError(playSource, 'local clip did not start'), LOCAL_START_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPending, playSource]);
 
   useEffect(() => {
     if (inPlayback && state.clipStarted) setCaptionToken(Date.now());
@@ -109,7 +204,16 @@ export default function StoryScreen() {
 
   useEffect(() => {
     if (phase !== 'finished') return;
-    navigation.replace('End', { storyId: session.storyId, title: session.title, stillUrl: state.still, origin });
+    let cancelled = false;
+    // The end screen asks the server to finish the story, so let pending choices land first.
+    Promise.race([syncQueue.idle(), sleep(SYNC_FLUSH_MS)]).then(() => {
+      if (!cancelled) {
+        navigation.replace('End', { storyId: session.storyId, title: session.title, stillUrl: state.still, origin });
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);
 
@@ -166,40 +270,58 @@ export default function StoryScreen() {
     else if (key === SupportedKeys.Enter && inPlayback && !state.menuOpen) setCaptionToken(Date.now());
   }, isFocused);
 
-  const onPlaying = useCallback((clipUrl: string) => {
-    if (choiceAt.current !== null) {
-      console.info('[Story] choice to playing ms', Date.now() - choiceAt.current);
-      choiceAt.current = null;
-    }
-    dispatch({ type: 'CLIP_PLAYING', clipUrl });
-  }, []);
-  const onEnded = useCallback((clipUrl: string) => dispatch({ type: 'CLIP_ENDED', clipUrl }), []);
-  const onClipError = useCallback((clipUrl: string, message: string) => {
-    console.warn('[Story] clip failed', clipUrl, message);
-    dispatch({ type: 'CLIP_FAILED', clipUrl });
-  }, []);
-  const choose = useCallback((index: number) => {
-    choiceAt.current = Date.now();
-    dispatch({ type: 'CHOOSE', index });
-  }, []);
+  const onPlaying = useCallback(
+    (source: string) => {
+      logTiming('playing event', clipCache.isLocal(source) ? 'local' : 'stream');
+      const elapsed = endChoiceTiming();
+      if (elapsed !== null) console.info('[Story] choice to playing ms', elapsed);
+      dispatch({ type: 'CLIP_PLAYING', clipUrl: toClipUrl(source) });
+    },
+    [clipCache, toClipUrl],
+  );
+  const onEnded = useCallback(
+    (source: string) => dispatch({ type: 'CLIP_ENDED', clipUrl: toClipUrl(source) }),
+    [toClipUrl],
+  );
+  const onClipError = useCallback(
+    (source: string, message: string) => {
+      if (clipCache.isLocal(source)) {
+        logTiming('local clip failed, streaming instead', message);
+        clipCache.disableLocalPlayback();
+        setStreamOnly(true);
+        return;
+      }
+      console.warn('[Story] clip failed', source, message);
+      dispatch({ type: 'CLIP_FAILED', clipUrl: toClipUrl(source) });
+    },
+    [clipCache, toClipUrl],
+  );
+  const choose = useCallback(
+    (index: number) => {
+      const current = latestState.current;
+      const nodeId = current.scene?.choices.find((choice) => choice.index === index)?.nodeId;
+      markChoice(`${index}${nodeId && current.childScenes[nodeId] ? ' scene cached' : ' waiting'}`);
+      dispatch({ type: 'CHOOSE', index });
+    },
+    [latestState],
+  );
   const openCustom = useCallback(() => dispatch({ type: 'OPEN_CUSTOM' }), []);
   const changeCustom = useCallback((text: string) => dispatch({ type: 'CUSTOM_TEXT', text }), []);
   const submitCustom = useCallback(() => {
-    choiceAt.current = Date.now();
+    markChoice('custom');
     dispatch({ type: 'SUBMIT_CUSTOM' });
   }, []);
   const cancelCustom = useCallback(() => dispatch({ type: 'CANCEL_CUSTOM' }), []);
   const resume = useCallback(() => dispatch({ type: 'CLOSE_MENU' }), []);
   const dismissNotice = useCallback((id: number) => dispatch({ type: 'DISMISS_NOTICE', id }), []);
 
-  const paused = isPlayerPaused(state) || !isFocused || !appActive;
   const waiting = waitingLabel(state);
   const layersActive = isFocused && !state.menuOpen;
 
   return (
     <View style={styles.screen}>
       <ClipPlayer
-        source={scene?.clipUrl ?? null}
+        source={playSource}
         paused={paused}
         style={StyleSheet.absoluteFill}
         onPlaying={onPlaying}

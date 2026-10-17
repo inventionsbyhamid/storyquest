@@ -319,6 +319,106 @@ describe('choices', () => {
   });
 });
 
+describe('instant choices', () => {
+  const child1 = makeScene({ id: 'child-1', sceneNumber: 2, depth: 1 });
+
+  function cached(): StoryState {
+    return run(choosing(), { type: 'CHILD_SCENE', scene: child0 }, { type: 'CHILD_SCENE', scene: child1 });
+  }
+
+  it('keeps prefetched children of the current scene only', () => {
+    const state = cached();
+    expect(Object.keys(state.childScenes).sort()).toEqual(['child-0', 'child-1']);
+    expect(storyReducer(state, { type: 'CHILD_SCENE', scene: child0 })).toBe(state);
+    expect(storyReducer(state, { type: 'CHILD_SCENE', scene: makeScene({ id: 'stranger' }) })).toBe(state);
+    const pending = makeScene({ id: 'child-0', status: 'generating', clipUrl: null });
+    expect(storyReducer(choosing(), { type: 'CHILD_SCENE', scene: pending }).childScenes).toEqual({});
+  });
+
+  it('plays a cached child at once and queues the choice for the server', () => {
+    const before = cached();
+    const state = storyReducer(before, { type: 'CHOOSE', index: 1 });
+    expect(state.phase).toBe('playing');
+    expect(state.scene?.id).toBe('child-1');
+    expect(state.pendingNodeId).toBeNull();
+    expect(state.still).toBe(root.lastFrameUrl);
+    expect(state.clipStarted).toBe(false);
+    expect(isStillVisible(state)).toBe(true);
+    expect(state.childScenes).toEqual({});
+    expect(state.requestSeq).toBe(before.requestSeq);
+    expect(state.syncs).toEqual([{ id: 1, fromNodeId: 'root', index: 1, nodeId: 'child-1' }]);
+    expect(waitingLabel(state)).toBeNull();
+  });
+
+  it('plays a cached ending straight into the ending phase', () => {
+    const endingChild = makeScene({ id: 'child-0', isEnding: true, choices: [] });
+    const state = run(choosing(), { type: 'CHILD_SCENE', scene: endingChild }, { type: 'CHOOSE', index: 0 });
+    expect(state.phase).toBe('ending');
+  });
+
+  it('falls back to waiting when the child is not cached or not ready', () => {
+    const uncached = storyReducer(choosing(), { type: 'CHOOSE', index: 0 });
+    expect(uncached.phase).toBe('waitingNext');
+    expect(uncached.syncs).toEqual([]);
+
+    const scene = makeScene({ id: 'root', choices: [makeChoice(0, { ready: false }), makeChoice(1)] });
+    const notReady = run(
+      createStoryState({ nodeId: 'root' }),
+      { type: 'NODE_UPDATE', scene },
+      { type: 'CLIP_ENDED', clipUrl: scene.clipUrl! },
+      { type: 'CHILD_SCENE', scene: child0 },
+      { type: 'CHOOSE', index: 0 },
+    );
+    expect(notReady.phase).toBe('waitingNext');
+  });
+
+  it('still refuses a closed path even when cached', () => {
+    const closed = { ...cached(), disabledChoices: [0] };
+    const state = storyReducer(closed, { type: 'CHOOSE', index: 0 });
+    expect(state.phase).toBe('choosing');
+    expect(state.notice?.text).toBe(messages.pathClosed);
+    expect(state.syncs).toEqual([]);
+  });
+
+  it('clears synced choices and gently notes failed ones', () => {
+    const state = run(cached(), { type: 'CHOOSE', index: 0 });
+    const done = storyReducer(state, { type: 'SYNC_DONE', id: 1 });
+    expect(done.syncs).toEqual([]);
+    expect(done.notice).toBeNull();
+    expect(storyReducer(done, { type: 'SYNC_DONE', id: 1 })).toBe(done);
+
+    const failed = storyReducer(state, { type: 'SYNC_FAILED', id: 1 });
+    expect(failed.syncs).toEqual([]);
+    expect(failed.phase).toBe('playing');
+    expect(failed.scene?.id).toBe('child-0');
+    expect(failed.notice?.text).toBe(messages.choiceNotSaved);
+    expect(storyReducer(failed, { type: 'SYNC_FAILED', id: 9 })).toBe(failed);
+  });
+
+  it('numbers syncs across scenes and resets', () => {
+    const first = run(cached(), { type: 'CHOOSE', index: 0 });
+    const grandchild = makeScene({ id: 'child-00', sceneNumber: 3, depth: 2 });
+    const scene2 = makeScene({
+      id: 'child-0',
+      sceneNumber: 2,
+      choices: [makeChoice(0, { nodeId: 'child-00' }), makeChoice(1)],
+    });
+    const second = run(
+      { ...first, scene: scene2 },
+      { type: 'CLIP_ENDED', clipUrl: scene2.clipUrl! },
+      { type: 'CHILD_SCENE', scene: grandchild },
+      { type: 'CHOOSE', index: 0 },
+    );
+    expect(second.syncs.map((sync) => sync.id)).toEqual([1, 2]);
+    expect(second.syncs[1]).toEqual({ id: 2, fromNodeId: 'child-0', index: 0, nodeId: 'child-00' });
+
+    const reset = storyReducer(second, { type: 'RESET', nodeId: 'root', posterUrl: null });
+    expect(reset.syncs).toEqual([]);
+    expect(reset.syncSeq).toBe(2);
+    expect(reset.childScenes).toEqual({});
+  });
+});
+
 describe('something else', () => {
   function inputOpen(text = 'The fox finds a tiny dragon'): StoryState {
     return run(choosing(), { type: 'OPEN_CUSTOM' }, { type: 'CUSTOM_TEXT', text });

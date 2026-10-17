@@ -1,8 +1,9 @@
-import React, { useCallback, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View } from 'react-native';
 import Video from 'react-native-video';
 import type { OnLoadData, OnPlaybackStateChangedData, OnProgressData, OnVideoErrorData } from 'react-native-video';
 import { useLatest } from '../../hooks/useLatest';
+import { logTiming } from '../../utils/timing';
 import type { ClipPlayerProps } from './types';
 
 function ClipPlayer(props: ClipPlayerProps) {
@@ -10,6 +11,10 @@ function ClipPlayer(props: ClipPlayerProps) {
   const latest = useLatest(props);
   const startedFor = useRef<string | null>(null);
   const videoSource = useMemo(() => (source ? { uri: source } : null), [source]);
+
+  useEffect(() => {
+    if (source) logTiming('player src set', 'stream');
+  }, [source]);
 
   const markPlaying = useCallback(() => {
     const current = latest.current.source;
@@ -21,6 +26,7 @@ function ClipPlayer(props: ClipPlayerProps) {
   const handleLoad = useCallback(
     (_data: OnLoadData) => {
       const current = latest.current.source;
+      logTiming('metadata loaded');
       if (current) latest.current.onReady?.(current);
     },
     [latest],

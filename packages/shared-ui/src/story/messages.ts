@@ -12,6 +12,7 @@ export const messages = {
   promptTooLong: 'That is a lot of story! Try something shorter.',
   movieAlmostReady: 'Your movie is almost ready.',
   movieFailed: 'We could not make the movie this time.',
+  choiceNotSaved: 'We could not save that choice, but your story keeps going.',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {

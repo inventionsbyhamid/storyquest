@@ -25,9 +25,19 @@ export interface StoryError {
   message: string;
 }
 
+export interface ChoiceSync {
+  id: number;
+  fromNodeId: string;
+  index: number;
+  nodeId: string;
+}
+
 export interface StoryState {
   phase: StoryPhase;
   scene: SceneView | null;
+  childScenes: Record<string, SceneView>;
+  syncs: ChoiceSync[];
+  syncSeq: number;
   pendingNodeId: string | null;
   waitKind: WaitKind | null;
   pendingChoice: number | null;
@@ -50,6 +60,9 @@ export interface StoryState {
 export type StoryEvent =
   | { type: 'NODE_UPDATE'; scene: SceneView }
   | { type: 'NODE_WAIT_FAILED'; nodeId: string; code: ApiErrorCode }
+  | { type: 'CHILD_SCENE'; scene: SceneView }
+  | { type: 'SYNC_DONE'; id: number }
+  | { type: 'SYNC_FAILED'; id: number }
   | { type: 'CLIP_PLAYING'; clipUrl: string }
   | { type: 'CLIP_ENDED'; clipUrl: string }
   | { type: 'CLIP_FAILED'; clipUrl: string }
@@ -79,6 +92,9 @@ export function createStoryState({ nodeId, posterUrl = null }: StoryStart): Stor
   return {
     phase: 'loadingScene',
     scene: null,
+    childScenes: {},
+    syncs: [],
+    syncSeq: 0,
     pendingNodeId: nodeId,
     waitKind: null,
     pendingChoice: null,
@@ -133,6 +149,7 @@ function startScene(state: StoryState, scene: SceneView): StoryState {
     ...clearPending(state),
     phase: scene.isEnding ? 'ending' : 'playing',
     scene,
+    childScenes: {},
     still: state.still ?? scene.posterUrl,
     clipStarted: false,
     disabledChoices: [],
@@ -194,11 +211,31 @@ function onClipFinished(state: StoryState, clipUrl: string, failed: boolean): St
   return failed ? withNotice(next, messages.sceneWouldNotPlay) : next;
 }
 
+export function isPlayable(scene: SceneView | undefined): scene is SceneView {
+  return !!scene && scene.status === 'ready' && !!scene.clipUrl;
+}
+
+function onChildScene(state: StoryState, child: SceneView): StoryState {
+  const current = state.scene;
+  if (!current || !isPlayable(child)) return state;
+  if (!current.choices.some((choice) => choice.nodeId === child.id)) return state;
+  if (state.childScenes[child.id]?.clipUrl === child.clipUrl) return state;
+  return { ...state, childScenes: { ...state.childScenes, [child.id]: child } };
+}
+
 function onChoose(state: StoryState, index: number): StoryState {
   if (state.phase !== 'choosing' || state.menuOpen || !state.scene) return state;
   const choice = state.scene.choices.find((c) => c.index === index);
   if (!choice) return state;
   if (state.disabledChoices.includes(index)) return withNotice(state, messages.pathClosed);
+
+  // The next scene is already on the device: play it now and tell the server in the background.
+  const cached = choice.nodeId ? state.childScenes[choice.nodeId] : undefined;
+  if (choice.ready && isPlayable(cached)) {
+    const id = state.syncSeq + 1;
+    const sync: ChoiceSync = { id, fromNodeId: state.scene.id, index, nodeId: cached.id };
+    return { ...startScene(state, cached), syncs: [...state.syncs, sync], syncSeq: id };
+  }
 
   return {
     ...state,
@@ -256,6 +293,20 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
   switch (event.type) {
     case 'NODE_UPDATE':
       return onNodeUpdate(state, event.scene);
+
+    case 'CHILD_SCENE':
+      return onChildScene(state, event.scene);
+
+    case 'SYNC_DONE':
+      if (!state.syncs.some((sync) => sync.id === event.id)) return state;
+      return { ...state, syncs: state.syncs.filter((sync) => sync.id !== event.id) };
+
+    case 'SYNC_FAILED':
+      if (!state.syncs.some((sync) => sync.id === event.id)) return state;
+      return withNotice(
+        { ...state, syncs: state.syncs.filter((sync) => sync.id !== event.id) },
+        messages.choiceNotSaved,
+      );
 
     case 'NODE_WAIT_FAILED':
       if (event.nodeId !== state.pendingNodeId) return state;
@@ -328,6 +379,7 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
       return {
         ...createStoryState({ nodeId: event.nodeId, posterUrl: event.posterUrl ?? state.still }),
         noticeSeq: state.noticeSeq,
+        syncSeq: state.syncSeq,
         pollSeq: state.pollSeq + 1,
         requestSeq: state.requestSeq + 1,
       };
