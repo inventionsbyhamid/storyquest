@@ -44,6 +44,7 @@ export default function StoryScreen() {
   const [restarting, setRestarting] = useState(false);
   const restartingRef = useRef(false);
   const lastToggleAt = useRef(0);
+  const choiceAt = useRef<number | null>(null);
 
   const { phase, scene } = state;
   const inPlayback = phase === 'playing' || phase === 'ending';
@@ -165,16 +166,28 @@ export default function StoryScreen() {
     else if (key === SupportedKeys.Enter && inPlayback && !state.menuOpen) setCaptionToken(Date.now());
   }, isFocused);
 
-  const onPlaying = useCallback((clipUrl: string) => dispatch({ type: 'CLIP_PLAYING', clipUrl }), []);
+  const onPlaying = useCallback((clipUrl: string) => {
+    if (choiceAt.current !== null) {
+      console.info('[Story] choice to playing ms', Date.now() - choiceAt.current);
+      choiceAt.current = null;
+    }
+    dispatch({ type: 'CLIP_PLAYING', clipUrl });
+  }, []);
   const onEnded = useCallback((clipUrl: string) => dispatch({ type: 'CLIP_ENDED', clipUrl }), []);
   const onClipError = useCallback((clipUrl: string, message: string) => {
     console.warn('[Story] clip failed', clipUrl, message);
     dispatch({ type: 'CLIP_FAILED', clipUrl });
   }, []);
-  const choose = useCallback((index: number) => dispatch({ type: 'CHOOSE', index }), []);
+  const choose = useCallback((index: number) => {
+    choiceAt.current = Date.now();
+    dispatch({ type: 'CHOOSE', index });
+  }, []);
   const openCustom = useCallback(() => dispatch({ type: 'OPEN_CUSTOM' }), []);
   const changeCustom = useCallback((text: string) => dispatch({ type: 'CUSTOM_TEXT', text }), []);
-  const submitCustom = useCallback(() => dispatch({ type: 'SUBMIT_CUSTOM' }), []);
+  const submitCustom = useCallback(() => {
+    choiceAt.current = Date.now();
+    dispatch({ type: 'SUBMIT_CUSTOM' });
+  }, []);
   const cancelCustom = useCallback(() => dispatch({ type: 'CANCEL_CUSTOM' }), []);
   const resume = useCallback(() => dispatch({ type: 'CLOSE_MENU' }), []);
   const dismissNotice = useCallback((id: number) => dispatch({ type: 'DISMISS_NOTICE', id }), []);
