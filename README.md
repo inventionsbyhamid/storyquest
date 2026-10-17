@@ -125,7 +125,7 @@ yarn workspace @multi-tv/shared-ui test
 
 ## Safety and privacy
 
-* No accounts and no personal data. Each TV gets a random device id, used only for rate limits.
+* No sign up and no personal data. Each TV gets a random device id, used for rate limits and to keep a family's private scenes together. Purchases use the anonymous user id that Amazon In App Purchasing provides, never a name or email.
 * Typed ideas and generated scenes pass Amazon Bedrock Guardrails, and the video model's own safety checker is on.
 * Family text is treated only as story material, never as instructions to the model.
 
