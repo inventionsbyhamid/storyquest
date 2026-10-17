@@ -54,7 +54,7 @@ const ConfigSchema = z
     MAX_PARALLEL_JOBS: int(6, 1, 64),
     WARM_DEPTH: int(1, 0, 4),
     DEVICE_DAILY_CUSTOM_LIMIT: int(12, 0, 10_000),
-    DAILY_VIDEO_SECONDS_CAP: int(2400, 0, 100_000_000),
+    DAILY_VIDEO_SECONDS_CAP: int(900, 0, 100_000_000),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .superRefine((env, ctx) => {

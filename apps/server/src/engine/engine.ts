@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ChoiceStat, StoryStats } from '@storyquest/contracts';
-import { utcDay, type Audience, type Mood, type NodeRecord, type StoryRecord } from '../domain';
+import { utcDay, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
 import { newFileTag, newId, newShareSlug } from '../ids';
 import { errorDetails } from '../log';
 import { clipText, provisionalTitle, sanitizeUserText } from '../text';
@@ -18,7 +18,7 @@ import {
   unsafeInput,
 } from './errors';
 import { JobQueue, type Priority } from './queue';
-import { choiceLabel, SceneGenerator, type SceneGeneratorDeps } from './scenes';
+import { choiceLabel, forcedWarm, SceneGenerator, type SceneGeneratorDeps } from './scenes';
 
 export type StartStory =
   | { kind: 'idea'; ideaId: string }
@@ -27,6 +27,18 @@ export type StartStory =
 export type Choose =
   | { kind: 'preset'; fromNodeId: string; index: number }
   | { kind: 'custom'; fromNodeId: string; text: string };
+
+export interface WarmProgress {
+  ideaId: string;
+  treeId: string;
+  depth: number;
+  force: boolean;
+  /** Scenes in a full tree of this depth: two choices per scene, endings only on the last scene. */
+  expected: number;
+  counts: Record<NodeStatus, number>;
+  complete: boolean;
+  budgetExhausted: boolean;
+}
 
 const SHUTDOWN = Symbol('shutdown');
 const RETRY_DELAY_MS = 500;
@@ -226,6 +238,52 @@ export class StoryEngine {
     };
   }
 
+  // Warming
+
+  /**
+   * Generates every shared preset path of an idea down to `depth` scenes, one
+   * level at a time as parents become ready. Jobs run at low priority so
+   * families playing right now still go first.
+   */
+  warmTree(ideaId: string, depth: number | undefined, force: boolean): WarmProgress {
+    const { repo, log } = this.deps;
+    const idea = repo.getIdea(ideaId);
+    if (!idea) throw notFound();
+    const tree = repo.getTree(idea.treeId)!;
+    const target = Math.min(Math.max(1, Math.floor(depth ?? tree.totalScenes)), tree.totalScenes);
+    repo.setTreeWarm(tree.id, target, force);
+
+    for (const node of repo.listSharedNodes(tree.id, target)) {
+      if (node.status === 'pending') this.enqueue(node.id, 'low');
+      else if (node.status === 'ready') this.prefetch(node.id);
+      else if (node.status === 'failed' && (force || !this.budgetExhausted()) && repo.resetFailed(node.id)) {
+        this.enqueue(node.id, 'low');
+      }
+    }
+    log.info({ ideaId, treeId: tree.id, depth: target, force }, 'warming tree');
+    return this.warmProgress(ideaId);
+  }
+
+  warmProgress(ideaId: string): WarmProgress {
+    const { repo } = this.deps;
+    const idea = repo.getIdea(ideaId);
+    if (!idea) throw notFound();
+    const tree = repo.getTree(idea.treeId)!;
+    const depth = tree.warmDepth || tree.totalScenes;
+    const counts = repo.countSharedByStatus(tree.id, depth);
+    const expected = 2 ** depth - 1;
+    return {
+      ideaId,
+      treeId: tree.id,
+      depth,
+      force: tree.warmForce,
+      expected,
+      counts,
+      complete: counts.ready >= expected,
+      budgetExhausted: this.budgetExhausted(),
+    };
+  }
+
   // Scenes
 
   /** Resolves when the node is ready or failed, or when the timeout passes. */
@@ -271,7 +329,8 @@ export class StoryEngine {
     if (!node || node.status !== 'ready' || node.isEnding) return;
     if (!node.wantChildren && node.warm <= 0) return;
     const tree = repo.getTree(node.treeId)!;
-    if (node.depth + 1 >= tree.totalScenes || this.budgetExhausted()) return;
+    if (node.depth + 1 >= tree.totalScenes) return;
+    if (!forcedWarm(tree, node.depth + 1, node.ownerStoryId) && this.budgetExhausted()) return;
 
     node.choices.forEach((_label, index) => {
       const { node: child } = repo.getOrCreatePresetChild(node, index, Math.max(0, node.warm - 1));

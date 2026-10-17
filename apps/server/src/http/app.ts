@@ -148,18 +148,8 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   }));
 
   app.get('/v1/today', async () => {
-    const today = daily.today();
-    let date = today;
-    let ideas = repo.listIdeas(today);
-    if (ideas.length < config.DAILY_IDEAS) daily.kick();
-    if (ideas.length === 0) {
-      // Around midnight UTC, keep showing yesterday's stories until today's exist.
-      const latest = repo.latestIdeaDate();
-      if (latest) {
-        date = latest;
-        ideas = repo.listIdeas(latest);
-      }
-    }
+    daily.kick();
+    const { date, ideas } = daily.listForHome();
     return parse(TodayResponse, { date, ideas: ideas.map((idea) => views.idea(idea)) });
   });
 
@@ -227,11 +217,17 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     if (!safeEqual(token, config.ADMIN_TOKEN)) throw new AppError('bad_request', 401, MESSAGES.unauthorized);
   };
 
-  app.post('/v1/admin/daily', async (request) => {
+  app.post('/v1/admin/daily', async (request, reply) => {
     requireAdmin(request);
-    const created = await daily.ensure();
     const date = daily.today();
-    return { date, created, ideas: repo.listIdeas(date).map((idea) => views.idea(idea)) };
+    try {
+      const created = await daily.ensure(date);
+      return { date, created, ideas: repo.listIdeas(date).map((idea) => views.idea(idea)) };
+    } catch {
+      return reply
+        .code(503)
+        .send(errorBody('generation_failed', "Today's stories could not be created yet. The server keeps retrying on its own."));
+    }
   });
 
   app.get('/v1/admin/stats', async (request) => {
@@ -242,9 +238,39 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
       date,
       ...stats,
       videoSecondsCap: config.DAILY_VIDEO_SECONDS_CAP,
+      capUsedPercent: config.DAILY_VIDEO_SECONDS_CAP
+        ? Math.round((stats.videoSecondsToday / config.DAILY_VIDEO_SECONDS_CAP) * 100)
+        : 100,
       estimatedVideoCostUsd: Math.round(stats.videoSecondsToday * config.VIDEO_PRICE_PER_SECOND * 100) / 100,
       queue: engine.queueSize,
+      daily: daily.retryState,
+      featured: repo.listFeatured().map((idea) => idea.id),
       providers: { director: services.director.name, video: services.video.name, safety: services.safety.name },
     };
+  });
+
+  const setFeatured = (request: FastifyRequest<{ Params: { id: string } }>, featured: boolean) => {
+    requireAdmin(request);
+    const id = idParam(request.params.id);
+    if (!repo.setFeatured(id, featured)) throw notFound();
+    return { featured, idea: views.idea(repo.getIdea(id)!) };
+  };
+  app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/feature', async (request) => setFeatured(request, true));
+  app.delete<{ Params: { id: string } }>('/v1/admin/ideas/:id/feature', async (request) => setFeatured(request, false));
+
+  app.post<{ Params: { id: string }; Querystring: { depth?: string; force?: string } }>(
+    '/v1/admin/ideas/:id/warm',
+    async (request, reply) => {
+      requireAdmin(request);
+      const depth = request.query.depth === undefined ? undefined : Number(request.query.depth);
+      if (depth !== undefined && !Number.isInteger(depth)) throw badRequest(`${MESSAGES.badRequest} depth must be a whole number.`);
+      const force = request.query.force === 'true' || request.query.force === '1';
+      return reply.code(202).send(engine.warmTree(idParam(request.params.id), depth, force));
+    },
+  );
+
+  app.get<{ Params: { id: string } }>('/v1/admin/ideas/:id/warm', async (request) => {
+    requireAdmin(request);
+    return engine.warmProgress(idParam(request.params.id));
   });
 }

@@ -17,16 +17,24 @@ export interface DailyIdeasDeps {
   now: () => Date;
 }
 
+const CHECK_MS = 60_000;
 const REFRESH_MS = 10 * 60_000;
+const RETRY_MIN_MS = 10 * 60_000;
+const RETRY_MAX_MS = 60 * 60_000;
+const FEATURED_EXTRA = 3;
 
 /**
- * Makes sure today's shared stories exist. Safe to call as often as you like:
- * concurrent calls share one run, and each (date, position) slot is filled once.
+ * Makes sure today's shared stories exist. Concurrent calls share one run and
+ * each (date, position) slot is filled once. When a run comes up short the
+ * next one waits 10 minutes, doubling up to an hour, and requests never wait
+ * on any of it.
  */
 export class DailyIdeas {
   private readonly inflight = new Map<string, Promise<number>>();
   private timer: NodeJS.Timeout | null = null;
-  private lastKick = 0;
+  private nextAttemptAt = 0;
+  private failures = 0;
+  private lastHealthyDate: string | null = null;
 
   constructor(private readonly deps: DailyIdeasDeps) {}
 
@@ -34,27 +42,36 @@ export class DailyIdeas {
     return utcDay(this.deps.now());
   }
 
+  get retryState() {
+    return {
+      failures: this.failures,
+      nextAttemptAt: this.nextAttemptAt ? new Date(this.nextAttemptAt).toISOString() : null,
+    };
+  }
+
+  /** Runs now, ignoring the schedule. Used at boot, by the admin endpoint and by tests. */
   ensure(date: string = this.today()): Promise<number> {
     const running = this.inflight.get(date);
     if (running) return running;
-    const run = this.fill(date).finally(() => this.inflight.delete(date));
+    const run = this.attempt(date).finally(() => this.inflight.delete(date));
     this.inflight.set(date, run);
     return run;
   }
 
-  /** A cheap nudge from request handlers, at most once a minute. */
+  /** A cheap nudge that only starts a run when the schedule allows one. Never awaited by requests. */
   kick(): void {
-    if (Date.now() - this.lastKick < 60_000) return;
-    this.lastKick = Date.now();
-    this.ensure().catch((err: unknown) => this.deps.log.error(errorDetails(err), 'daily ideas run failed'));
+    const date = this.today();
+    if (this.inflight.has(date)) return;
+    const newDay = this.failures === 0 && this.lastHealthyDate !== date;
+    if (!newDay && this.deps.now().getTime() < this.nextAttemptAt) return;
+    this.ensure(date).catch(() => {
+      // Already logged and scheduled for a retry by attempt().
+    });
   }
 
   start(): void {
-    const tick = () => {
-      this.ensure().catch((err: unknown) => this.deps.log.error(errorDetails(err), 'daily ideas run failed'));
-    };
-    tick();
-    this.timer = setInterval(tick, REFRESH_MS);
+    this.kick();
+    this.timer = setInterval(() => this.kick(), CHECK_MS);
     this.timer.unref();
   }
 
@@ -63,14 +80,63 @@ export class DailyIdeas {
     this.timer = null;
   }
 
-  private async fill(date: string): Promise<number> {
+  /**
+   * What Home shows: today's ideas, or the latest day that has playable ones
+   * while today's are not ready, followed by featured ideas from earlier days.
+   */
+  listForHome(): { date: string; ideas: IdeaRecord[] } {
+    const { repo, config } = this.deps;
+    const today = this.today();
+    const ready = (idea: IdeaRecord) => repo.getNode(idea.rootNodeId)?.status === 'ready';
+
+    let date = today;
+    let ideas = repo.listIdeas(today);
+    if (!ideas.some(ready)) {
+      const fallback = repo.latestDateWithReadyIdeas();
+      if (fallback && fallback !== today) {
+        date = fallback;
+        ideas = repo.listIdeas(fallback).filter(ready);
+      }
+    }
+
+    const listed = new Set(ideas.map((idea) => idea.id));
+    const featured = repo.listFeatured().filter((idea) => idea.date < today && !listed.has(idea.id) && ready(idea));
+    return { date, ideas: [...ideas, ...featured].slice(0, config.DAILY_IDEAS + FEATURED_EXTRA) };
+  }
+
+  private async attempt(date: string): Promise<number> {
+    try {
+      const { created, problems } = await this.fill(date);
+      if (problems.length) this.scheduleRetry(date, problems.join('; '));
+      else {
+        this.failures = 0;
+        this.lastHealthyDate = date;
+        this.nextAttemptAt = this.deps.now().getTime() + REFRESH_MS;
+      }
+      return created;
+    } catch (err) {
+      this.scheduleRetry(date, errorDetails(err).message);
+      throw err;
+    }
+  }
+
+  private scheduleRetry(date: string, reason: string): void {
+    this.failures++;
+    const delay = Math.min(RETRY_MIN_MS * 2 ** (this.failures - 1), RETRY_MAX_MS);
+    this.nextAttemptAt = this.deps.now().getTime() + delay;
+    this.deps.log.warn({ date, reason, failures: this.failures, retryInMs: delay }, 'daily ideas incomplete, will retry');
+  }
+
+  private async fill(date: string): Promise<{ created: number; problems: string[] }> {
     const { config, repo, director, safety, engine, log } = this.deps;
+    const problems: string[] = [];
     const existing = repo.listIdeas(date);
-    this.retryRoots(existing);
+    const failedRoots = this.retryRoots(existing);
+    if (failedRoots) problems.push(`${failedRoots} opening scenes failed`);
 
     const taken = new Set(existing.map((idea) => idea.position));
     const missing = Array.from({ length: config.DAILY_IDEAS }, (_, i) => i).filter((position) => !taken.has(position));
-    if (missing.length === 0) return 0;
+    if (missing.length === 0) return { created: 0, problems };
 
     const started = Date.now();
     const plans = await director.planIdeas(
@@ -101,19 +167,24 @@ export class DailyIdeas {
       created++;
       engine.enqueue(idea.rootNodeId, 'high');
     }
+    if (created < missing.length) problems.push(`${missing.length - created} ideas missing`);
     log.info({ date, created, ms: Date.now() - started }, 'daily ideas created');
-    return created;
+    return { created, problems };
   }
 
-  private retryRoots(ideas: IdeaRecord[]): void {
+  /** Requeues opening scenes that failed last time. Returns how many had failed. */
+  private retryRoots(ideas: IdeaRecord[]): number {
     const { repo, engine } = this.deps;
+    let failed = 0;
     for (const idea of ideas) {
       const root = repo.getNode(idea.rootNodeId);
       if (!root) continue;
       if (root.status === 'pending') engine.enqueue(root.id, 'high');
-      else if (root.status === 'failed' && !engine.budgetExhausted() && repo.resetFailed(root.id)) {
-        engine.enqueue(root.id, 'high');
+      else if (root.status === 'failed') {
+        failed++;
+        if (!engine.budgetExhausted() && repo.resetFailed(root.id)) engine.enqueue(root.id, 'high');
       }
     }
+    return failed;
   }
 }

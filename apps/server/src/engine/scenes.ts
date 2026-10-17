@@ -29,6 +29,7 @@ export interface SceneGeneratorDeps {
 export type GenerateOutcome = 'ready' | 'failed' | 'retry' | 'skipped';
 
 const MAX_ATTEMPTS = 2;
+const BUDGET_WARNING_SHARE = 0.8;
 const FALLBACK_CHOICES = ['Follow the glowing trail', 'Ask a new friend for help'];
 
 const clean = (text: string) => sanitizeUserText(text);
@@ -72,6 +73,11 @@ export function sanitizeScene(scene: Scene, sceneNumber: number, totalScenes: nu
   };
 }
 
+/** Shared nodes inside an admin's forced warm request may go past the daily cap. */
+export function forcedWarm(tree: TreeRecord, depth: number, ownerStoryId: string | null): boolean {
+  return tree.warmForce && ownerStoryId === null && depth < tree.warmDepth;
+}
+
 /** Runs the pipeline for one node: director, safety, budget, video, media. */
 export class SceneGenerator {
   constructor(private readonly deps: SceneGeneratorDeps) {}
@@ -95,16 +101,13 @@ export class SceneGenerator {
       if (parent && (parent.status !== 'ready' || !parent.lastFramePath)) {
         throw new Error(`parent ${parent.id} is not ready`);
       }
-
-      const directorStarted = performance.now();
-      const scene = await this.writeSafeScene(this.sceneRequest(tree, bible, lineage), tree.audience);
-      timings.directorMs = Math.round(performance.now() - directorStarted);
-
+      const request = this.sceneRequest(tree, bible, lineage);
+      const forced = forcedWarm(tree, node.depth, node.ownerStoryId);
       const seconds = config.SCENE_SECONDS;
-      if (!repo.reserveVideoSeconds(day, seconds, config.DAILY_VIDEO_SECONDS_CAP)) {
-        throw new GenerationError('budget_exhausted', MESSAGES.budget);
-      }
-      reservedSeconds = seconds;
+
+      let directorStarted = performance.now();
+      let draft = await this.writeSafeScene(request, tree.audience, false);
+      timings.directorMs = Math.round(performance.now() - directorStarted);
 
       const dir = this.deps.store.nodeDir(node.id);
       await mkdir(dir, { recursive: true });
@@ -115,17 +118,35 @@ export class SceneGenerator {
       const lastFramePath = join(dir, `last-${tag}.jpg`);
       partialFiles = [rawPath, clipPath, posterPath, lastFramePath];
 
+      const render = async (scene: Scene) => {
+        if (!this.reserve(day, seconds, forced)) throw new GenerationError('budget_exhausted', MESSAGES.budget);
+        reservedSeconds += seconds;
+        return this.deps.video.render({
+          prompt: scene.videoPrompt,
+          caption: scene.caption,
+          seconds,
+          startFramePath: parent?.lastFramePath ? this.deps.store.absolute(parent.lastFramePath) : null,
+          outPath: rawPath,
+        });
+      };
+
       const videoStarted = performance.now();
-      const render = await this.deps.video.render({
-        prompt: scene.videoPrompt,
-        caption: scene.caption,
-        seconds,
-        startFramePath: parent?.lastFramePath ? this.deps.store.absolute(parent.lastFramePath) : null,
-        outPath: rawPath,
-      });
+      let rendered;
+      try {
+        rendered = await render(draft.scene);
+      } catch (err) {
+        // The video model's own safety check said no. Ask the director for a gentler scene once.
+        if (!(err instanceof VideoRejected) || draft.stricter) throw err;
+        log.warn({ nodeId, error: err.message }, 'video provider rejected the scene, asking for a gentler one');
+        directorStarted = performance.now();
+        draft = await this.writeSafeScene(request, tree.audience, true);
+        timings.directorMs += Math.round(performance.now() - directorStarted);
+        rendered = await render(draft.scene);
+      }
+      const scene = draft.scene;
       timings.videoMs = Math.round(performance.now() - videoStarted);
-      if (render.inferenceMs !== null) timings.inferenceMs = render.inferenceMs;
-      if (render.billedSeconds !== seconds) repo.addVideoSeconds(day, render.billedSeconds - seconds);
+      if (rendered.inferenceMs !== null) timings.inferenceMs = rendered.inferenceMs;
+      if (rendered.billedSeconds !== seconds) repo.addVideoSeconds(day, rendered.billedSeconds - seconds);
       reservedSeconds = 0;
 
       const mediaStarted = performance.now();
@@ -146,7 +167,7 @@ export class SceneGenerator {
         lastFramePath: store.relative(lastFramePath),
         durationMs,
         timings,
-        costSeconds: render.billedSeconds,
+        costSeconds: rendered.billedSeconds,
       });
       log.info({ nodeId, treeId: node.treeId, depth: node.depth, timings }, 'scene ready');
       return 'ready';
@@ -157,6 +178,19 @@ export class SceneGenerator {
     }
   }
 
+  /** Books video seconds against today's cap and warns once spend crosses 80% of it. */
+  private reserve(day: string, seconds: number, forced: boolean): boolean {
+    const { repo, config, log } = this.deps;
+    const cap = config.DAILY_VIDEO_SECONDS_CAP;
+    const before = repo.spendSeconds(day);
+    if (!repo.reserveVideoSeconds(day, seconds, forced ? Number.POSITIVE_INFINITY : cap)) return false;
+    const warnAt = cap * BUDGET_WARNING_SHARE;
+    if (before < warnAt && before + seconds >= warnAt) {
+      log.warn({ day, spentSeconds: before + seconds, capSeconds: cap }, 'daily video spend passed 80% of the cap');
+    }
+    return true;
+  }
+
   private handleFailure(nodeId: string, err: unknown): GenerateOutcome {
     const { repo, log } = this.deps;
     if (err instanceof GenerationError) {
@@ -165,8 +199,8 @@ export class SceneGenerator {
       return 'failed';
     }
     if (err instanceof VideoRejected) {
-      log.warn({ nodeId, error: err.message }, 'video provider rejected the scene');
-      repo.markFailed(nodeId, 'generation_failed', MESSAGES.sceneFailed);
+      log.warn({ nodeId, error: err.message }, 'video provider rejected the gentler scene too');
+      repo.markFailed(nodeId, 'generation_failed', MESSAGES.sceneUnsafe);
       return 'failed';
     }
     const outcome = repo.recordFailure(nodeId, MAX_ATTEMPTS, 'generation_failed', MESSAGES.sceneFailed);
@@ -227,9 +261,13 @@ export class SceneGenerator {
     };
   }
 
-  private async writeSafeScene(request: SceneRequest, audience: Audience): Promise<Scene> {
+  private async writeSafeScene(
+    request: SceneRequest,
+    audience: Audience,
+    startStricter: boolean,
+  ): Promise<{ scene: Scene; stricter: boolean }> {
     const { director, safety, log } = this.deps;
-    for (const stricter of [false, true]) {
+    for (const stricter of startStricter ? [true] : [false, true]) {
       let draft: Scene;
       try {
         draft = await director.writeScene({ ...request, stricter });
@@ -243,7 +281,7 @@ export class SceneGenerator {
       const scene = sanitizeScene(draft, request.sceneNumber, request.totalScenes);
       const text = [scene.caption, scene.summary, ...scene.choices, scene.videoPrompt].join('\n');
       const verdict = await safety.check(text, { source: 'output', audience });
-      if (verdict.ok) return scene;
+      if (verdict.ok) return { scene, stricter };
       log.warn({ treeId: request.treeId, sceneNumber: request.sceneNumber, stricter, reason: verdict.reason }, 'scene failed the safety check');
     }
     throw new GenerationError('unsafe_output', MESSAGES.sceneUnsafe);

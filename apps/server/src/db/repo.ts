@@ -27,6 +27,8 @@ interface TreeRow {
   prompt: string | null;
   total_scenes: number;
   is_private: number;
+  warm_depth: number;
+  warm_force: number;
   created_at: string;
 }
 
@@ -41,6 +43,7 @@ interface IdeaRow {
   audience: string;
   moods: string;
   plays: number;
+  featured_at: string | null;
   created_at: string;
 }
 
@@ -100,6 +103,8 @@ const toTree = (row: TreeRow): TreeRecord => ({
   prompt: row.prompt,
   totalScenes: row.total_scenes,
   isPrivate: row.is_private === 1,
+  warmDepth: row.warm_depth,
+  warmForce: row.warm_force === 1,
   createdAt: row.created_at,
 });
 
@@ -114,6 +119,7 @@ const toIdea = (row: IdeaRow): IdeaRecord => ({
   audience: row.audience as Audience,
   moods: JSON.parse(row.moods) as Mood[],
   plays: row.plays,
+  featuredAt: row.featured_at,
   createdAt: row.created_at,
 });
 
@@ -337,6 +343,29 @@ export class Repository {
     this.stmt('UPDATE ideas SET plays = plays + 1 WHERE id = ?').run(id);
   }
 
+  /** The most recent date with at least one idea whose opening scene is ready. */
+  latestDateWithReadyIdeas(): string | null {
+    const row = this.stmt(
+      `SELECT ideas.date FROM ideas JOIN nodes ON nodes.id = ideas.root_node_id
+       WHERE nodes.status = 'ready' ORDER BY ideas.date DESC LIMIT 1`,
+    ).get() as { date: string } | undefined;
+    return row?.date ?? null;
+  }
+
+  setFeatured(id: string, featured: boolean): boolean {
+    const info = this.stmt(
+      'UPDATE ideas SET featured_at = CASE WHEN ? THEN COALESCE(featured_at, ?) ELSE NULL END WHERE id = ?',
+    ).run(featured ? 1 : 0, this.timestamp(), id);
+    return info.changes === 1;
+  }
+
+  listFeatured(): IdeaRecord[] {
+    const rows = this.stmt(
+      'SELECT * FROM ideas WHERE featured_at IS NOT NULL ORDER BY featured_at DESC, date DESC',
+    ).all() as IdeaRow[];
+    return rows.map(toIdea);
+  }
+
   // Nodes
 
   insertNode(input: NewNode): NodeRecord {
@@ -497,6 +526,38 @@ export class Repository {
        SELECT nodes.* FROM nodes JOIN chain ON chain.id = nodes.id ORDER BY nodes.depth`,
     ).all(id) as NodeRow[];
     return rows.map(toNode);
+  }
+
+  /** Records an admin warm request. Depth only grows, so a shallower request never undoes a deeper one. */
+  setTreeWarm(treeId: string, depth: number, force: boolean): void {
+    this.transaction(() => {
+      this.stmt('UPDATE trees SET warm_depth = MAX(warm_depth, ?), warm_force = ? WHERE id = ?').run(
+        depth,
+        force ? 1 : 0,
+        treeId,
+      );
+      // A node's warm value is how many levels below it should be generated.
+      this.stmt(
+        'UPDATE nodes SET warm = MAX(warm, ? - 1 - depth) WHERE tree_id = ? AND owner_story_id IS NULL AND depth < ?',
+      ).run(depth, treeId, depth);
+    });
+  }
+
+  /** Shared nodes of a tree above the given depth, the root first. Private custom branches are left out. */
+  listSharedNodes(treeId: string, maxDepth: number): NodeRecord[] {
+    const rows = this.stmt(
+      'SELECT * FROM nodes WHERE tree_id = ? AND owner_story_id IS NULL AND depth < ? ORDER BY depth, created_at',
+    ).all(treeId, maxDepth) as NodeRow[];
+    return rows.map(toNode);
+  }
+
+  countSharedByStatus(treeId: string, maxDepth: number): Record<NodeStatus, number> {
+    const counts: Record<NodeStatus, number> = { pending: 0, generating: 0, ready: 0, failed: 0 };
+    const rows = this.stmt(
+      'SELECT status, COUNT(*) AS n FROM nodes WHERE tree_id = ? AND owner_story_id IS NULL AND depth < ? GROUP BY status',
+    ).all(treeId, maxDepth) as { status: NodeStatus; n: number }[];
+    for (const row of rows) counts[row.status] = row.n;
+    return counts;
   }
 
   countReadyEndings(treeId: string): number {

@@ -97,6 +97,12 @@ const MIGRATIONS: string[] = [
     video_seconds REAL NOT NULL DEFAULT 0
   );
   `,
+  `
+  ALTER TABLE ideas ADD COLUMN featured_at TEXT;
+  CREATE INDEX ideas_featured ON ideas(featured_at) WHERE featured_at IS NOT NULL;
+  ALTER TABLE trees ADD COLUMN warm_depth INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE trees ADD COLUMN warm_force INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(file: string): Db {

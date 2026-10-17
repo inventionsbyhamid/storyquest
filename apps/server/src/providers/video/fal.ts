@@ -14,6 +14,7 @@ export interface FalVideoOptions {
   imageToVideoModel: string;
   resolution: string;
   promptExpansion: string;
+  retryDelayMs?: number;
 }
 
 interface FalVideoOutput {
@@ -33,13 +34,14 @@ function isRetryable(err: unknown): boolean {
 
 export class FalVideo implements VideoProvider {
   readonly name = 'fal';
-  private readonly client: FalClient;
+  private readonly client: Pick<FalClient, 'subscribe'>;
 
   constructor(
     private readonly options: FalVideoOptions,
     private readonly log: Logger,
+    client?: Pick<FalClient, 'subscribe'>,
   ) {
-    this.client = createFalClient({ credentials: options.key });
+    this.client = client ?? createFalClient({ credentials: options.key });
   }
 
   async render(request: RenderRequest): Promise<RenderResult> {
@@ -80,11 +82,12 @@ export class FalVideo implements VideoProvider {
         lastError = err;
         const status = err instanceof ApiError ? err.status : undefined;
         this.log.warn({ endpoint, attempt, status, error: (err as Error).message }, 'video render failed');
+        // fal answers 422 when its safety checker or input validation turns a prompt down.
         if (status === 422 || status === 400) {
           throw new VideoRejected(`video request rejected: ${(err as Error).message}`);
         }
         if (!isRetryable(err) || attempt === ATTEMPTS) break;
-        await sleep(1_500 * attempt);
+        await sleep((this.options.retryDelayMs ?? 1_500) * attempt);
       }
     }
     throw lastError instanceof Error ? lastError : new Error('video render failed');

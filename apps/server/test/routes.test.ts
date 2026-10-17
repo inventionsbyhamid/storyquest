@@ -265,7 +265,7 @@ describe('HTTP API', () => {
       headers: { authorization: 'Bearer a_long_enough_admin_token' },
     });
     expect(stats.statusCode).toBe(200);
-    expect(stats.json()).toMatchObject({ ideasToday: 1, videoSecondsCap: 2400 });
+    expect(stats.json()).toMatchObject({ ideasToday: 1, videoSecondsCap: 900 });
     const daily = await app.inject({
       method: 'POST',
       url: '/v1/admin/daily',

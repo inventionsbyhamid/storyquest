@@ -2,10 +2,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { loadConfig, type Config } from '../src/config';
-import { silentLogger } from '../src/log';
+import { silentLogger, type Logger } from '../src/log';
 import { Media } from '../src/media';
 import { FakeVideo } from '../src/providers/video/fake';
-import type { RenderRequest, RenderResult, VideoProvider } from '../src/providers/video/types';
+import { VideoRejected, type RenderRequest, type RenderResult, type VideoProvider } from '../src/providers/video/types';
 import { createServices, type ServiceOverrides, type Services } from '../src/services';
 
 export function testConfig(dataDir: string, env: Record<string, string> = {}): Config {
@@ -30,12 +30,18 @@ export class SpyVideo implements VideoProvider {
   readonly name = 'spy';
   readonly calls: RenderRequest[] = [];
   failWith: Error | null = null;
+  /** How many upcoming renders the provider's safety checker should turn down. */
+  rejectNext = 0;
 
   constructor(private readonly inner: VideoProvider) {}
 
   async render(request: RenderRequest): Promise<RenderResult> {
     this.calls.push(request);
     if (this.failWith) throw this.failWith;
+    if (this.rejectNext > 0) {
+      this.rejectNext--;
+      throw new VideoRejected('video request rejected: content policy');
+    }
     return this.inner.render(request);
   }
 }
@@ -48,7 +54,11 @@ export interface TestRig {
   close(): Promise<void>;
 }
 
-export function createRig(env: Record<string, string> = {}, overrides: ServiceOverrides = {}): TestRig {
+export function createRig(
+  env: Record<string, string> = {},
+  overrides: ServiceOverrides = {},
+  log: Logger = silentLogger,
+): TestRig {
   const dir = mkdtempSync(join(tmpdir(), 'storyquest-test-'));
   const config = testConfig(dir, env);
   const video = new SpyVideo(
@@ -59,7 +69,7 @@ export function createRig(env: Record<string, string> = {}, overrides: ServiceOv
       fontFile: config.FONT_FILE,
     }),
   );
-  const services = createServices(config, silentLogger, { video, ...overrides });
+  const services = createServices(config, log, { video, ...overrides });
   return {
     dir,
     config,
@@ -82,4 +92,36 @@ export function visibleText(html: string): string {
     .replace(/<script[\s\S]*?<\/script>/g, ' ')
     .replace(/<[^>]+>/g, ' ')
     .replace(/&[a-z#0-9]+;/gi, ' ');
+}
+
+export interface LogEntry {
+  level: 'debug' | 'info' | 'warn' | 'error';
+  msg: string | undefined;
+  obj: object;
+}
+
+export function captureLogger(): { logger: Logger; entries: LogEntry[] } {
+  const entries: LogEntry[] = [];
+  const record = (level: LogEntry['level']) => (obj: object, msg?: string) => {
+    entries.push({ level, msg, obj });
+  };
+  const logger: Logger = {
+    debug: record('debug'),
+    info: record('info'),
+    warn: record('warn'),
+    error: record('error'),
+    child: () => logger,
+  };
+  return { logger, entries };
+}
+
+/** A clock tests can move by hand. */
+export function manualClock(start: string) {
+  let now = new Date(start).getTime();
+  return {
+    now: () => new Date(now),
+    advance(ms: number) {
+      now += ms;
+    },
+  };
 }

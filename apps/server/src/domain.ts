@@ -29,6 +29,9 @@ export interface TreeRecord {
   prompt: string | null;
   totalScenes: number;
   isPrivate: boolean;
+  /** Scenes deep that an admin asked to pre generate, and whether that may exceed the daily cap. */
+  warmDepth: number;
+  warmForce: boolean;
   createdAt: string;
 }
 
@@ -43,6 +46,7 @@ export interface IdeaRecord {
   audience: Audience;
   moods: Mood[];
   plays: number;
+  featuredAt: string | null;
   createdAt: string;
 }
 
