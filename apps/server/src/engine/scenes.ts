@@ -3,20 +3,22 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Config } from '../config';
 import type { Repository } from '../db/repo';
-import { utcDay, type Audience, type Bible, type Character, type NodeRecord, type NodeTimings, type TreeRecord } from '../domain';
+import { type Audience, type Bible, type Character, type NodeRecord, type NodeTimings, type TreeRecord } from '../domain';
 import { newFileTag } from '../ids';
 import { errorDetails, type Logger } from '../log';
 import type { Media } from '../media';
 import { DirectorRefusal, type Director, type Scene, type SceneRequest } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
-import { VideoRejected, type VideoProvider } from '../providers/video/types';
+import { VideoNotBilled, VideoRejected, type RenderResult, type VideoProvider } from '../providers/video/types';
 import type { MediaStore } from '../storage';
 import { clipText, sanitizeUserText } from '../text';
+import { BudgetExhausted, type Budget } from './budget';
 import { GenerationError, MESSAGES } from './errors';
 
 export interface SceneGeneratorDeps {
   config: Config;
   repo: Repository;
+  budget: Budget;
   director: Director;
   video: VideoProvider;
   safety: SafetyChecker;
@@ -29,7 +31,6 @@ export interface SceneGeneratorDeps {
 export type GenerateOutcome = 'ready' | 'failed' | 'retry' | 'skipped';
 
 const MAX_ATTEMPTS = 2;
-const BUDGET_WARNING_SHARE = 0.8;
 const FALLBACK_CHOICES = ['Follow the glowing trail', 'Ask a new friend for help'];
 
 const clean = (text: string) => sanitizeUserText(text);
@@ -83,12 +84,10 @@ export class SceneGenerator {
   constructor(private readonly deps: SceneGeneratorDeps) {}
 
   async generate(nodeId: string): Promise<GenerateOutcome> {
-    const { repo, config, log } = this.deps;
+    const { repo, log } = this.deps;
     if (!repo.claimNode(nodeId)) return 'skipped';
 
     const started = performance.now();
-    const day = utcDay(this.deps.now());
-    let reservedSeconds = 0;
     let videoMade = false;
     let partialFiles: string[] = [];
     const timings: NodeTimings = { directorMs: 0, videoMs: 0, mediaMs: 0, totalMs: 0 };
@@ -96,7 +95,7 @@ export class SceneGenerator {
     try {
       const node = repo.getNode(nodeId)!;
       const tree = repo.getTree(node.treeId)!;
-      const bible = tree.bible ?? (await this.createBible(tree, timings));
+      const bible = tree.bible ?? (await this.createBible(tree, node, timings));
       const lineage = repo.getLineage(node.id);
       const parent = lineage.length > 1 ? lineage[lineage.length - 2]! : null;
       if (parent && (parent.status !== 'ready' || !parent.lastFramePath)) {
@@ -104,35 +103,21 @@ export class SceneGenerator {
       }
       const request = this.sceneRequest(tree, bible, lineage);
       const forced = forcedWarm(tree, node.depth, node.ownerStoryId);
-      const seconds = config.SCENE_SECONDS;
 
       let directorStarted = performance.now();
       let draft = await this.writeSafeScene(request, tree.audience, false);
       timings.directorMs = Math.round(performance.now() - directorStarted);
 
-      const dir = this.deps.store.nodeDir(node.id);
-      await mkdir(dir, { recursive: true });
-      const tag = newFileTag();
-      const rawPath = join(dir, `raw-${tag}.mp4`);
-      const clipPath = join(dir, `clip-${tag}.mp4`);
-      const posterPath = join(dir, `poster-${tag}.jpg`);
-      const lastFramePath = join(dir, `last-${tag}.jpg`);
-      partialFiles = [rawPath, clipPath, posterPath, lastFramePath];
-
-      const render = async (scene: Scene) => {
-        if (!this.reserve(day, seconds, forced)) throw new GenerationError('budget_exhausted', MESSAGES.budget);
-        reservedSeconds += seconds;
-        return this.deps.video.render({
-          prompt: scene.videoPrompt,
-          caption: scene.caption,
-          seconds,
-          startFramePath: parent?.lastFramePath ? this.deps.store.absolute(parent.lastFramePath) : null,
-          outPath: rawPath,
-        });
-      };
+      const files = await this.newFiles(node.id);
+      partialFiles = Object.values(files);
+      const render = (scene: Scene) =>
+        this.renderPaid(
+          { prompt: scene.videoPrompt, caption: scene.caption, startFramePath: this.startFrame(parent), outPath: files.raw },
+          { task: 'scene', nodeId: node.id, treeId: node.treeId, forced },
+        );
 
       const videoStarted = performance.now();
-      let rendered;
+      let rendered: RenderResult;
       try {
         rendered = await render(draft.scene);
       } catch (err) {
@@ -148,25 +133,18 @@ export class SceneGenerator {
       const scene = draft.scene;
       timings.videoMs = Math.round(performance.now() - videoStarted);
       if (rendered.inferenceMs !== null) timings.inferenceMs = rendered.inferenceMs;
-      if (rendered.billedSeconds !== seconds) repo.addVideoSeconds(day, rendered.billedSeconds - seconds);
-      reservedSeconds = 0;
 
       const mediaStarted = performance.now();
-      const { media } = this.deps;
-      await media.faststart(rawPath, clipPath);
-      await rm(rawPath, { force: true });
-      const durationMs = await media.probeDurationMs(clipPath);
-      await media.poster(clipPath, posterPath, (durationMs / 1000) * 0.4);
-      await media.lastFrame(clipPath, lastFramePath);
+      const durationMs = await this.finishMedia(files);
       timings.mediaMs = Math.round(performance.now() - mediaStarted);
       timings.totalMs = Math.round(performance.now() - started);
 
       const store = this.deps.store;
       repo.markReady(node.id, {
         ...scene,
-        clipPath: store.relative(clipPath),
-        posterPath: store.relative(posterPath),
-        lastFramePath: store.relative(lastFramePath),
+        clipPath: store.relative(files.clip),
+        posterPath: store.relative(files.poster),
+        lastFramePath: store.relative(files.lastFrame),
         durationMs,
         timings,
         costSeconds: rendered.billedSeconds,
@@ -174,7 +152,6 @@ export class SceneGenerator {
       log.info({ nodeId, treeId: node.treeId, depth: node.depth, timings }, 'scene ready');
       return 'ready';
     } catch (err) {
-      if (reservedSeconds) repo.addVideoSeconds(day, -reservedSeconds);
       await Promise.all(partialFiles.map((file) => rm(file, { force: true })));
       const outcome = this.handleFailure(nodeId, err);
       // A family should not pay for a scene that never got as far as video.
@@ -188,21 +165,103 @@ export class SceneGenerator {
     }
   }
 
-  /** Books video seconds against today's cap and warns once spend crosses 80% of it. */
-  private reserve(day: string, seconds: number, forced: boolean): boolean {
-    const { repo, config, log } = this.deps;
-    const cap = config.DAILY_VIDEO_SECONDS_CAP;
-    const before = repo.spendSeconds(day);
-    if (!repo.reserveVideoSeconds(day, seconds, forced ? Number.POSITIVE_INFINITY : cap)) return false;
-    const warnAt = cap * BUDGET_WARNING_SHARE;
-    if (before < warnAt && before + seconds >= warnAt) {
-      log.warn({ day, spentSeconds: before + seconds, capSeconds: cap }, 'daily video spend passed 80% of the cap');
+  /**
+   * Films a ready scene again from the same prompt and swaps in the new clip,
+   * poster and last frame. Refused once a later scene was filmed from its
+   * last frame, because that scene would no longer join up.
+   */
+  async redo(nodeId: string): Promise<{ node: NodeRecord; billedSeconds: number }> {
+    const { repo, store, log } = this.deps;
+    const node = repo.getNode(nodeId);
+    if (!node) throw new RedoRefused('not_found', 'that scene does not exist');
+    if (node.status !== 'ready' || !node.videoPrompt || node.deletedAt) {
+      throw new RedoRefused('not_ready', 'only a ready scene with its media can be filmed again');
     }
-    return true;
+    if (repo.countFilmedChildren(node.id) > 0) throw new RedoRefused('has_children', 'a later scene was already filmed from it');
+    const parent = node.parentId ? repo.getNode(node.parentId) : null;
+
+    const files = await this.newFiles(node.id);
+    try {
+      const rendered = await this.renderPaid(
+        { prompt: node.videoPrompt, caption: node.caption ?? '', startFramePath: this.startFrame(parent), outPath: files.raw },
+        { task: 'redo', nodeId: node.id, treeId: node.treeId, forced: false },
+      );
+      const durationMs = await this.finishMedia(files);
+      if (repo.countFilmedChildren(node.id) > 0) throw new RedoRefused('has_children', 'a later scene was filmed from it meanwhile');
+      const old = [node.clipPath, node.posterPath, node.lastFramePath].filter((file): file is string => Boolean(file));
+      repo.replaceNodeMedia(node.id, {
+        clipPath: store.relative(files.clip),
+        posterPath: store.relative(files.poster),
+        lastFramePath: store.relative(files.lastFrame),
+        durationMs,
+        extraCostSeconds: rendered.billedSeconds,
+      });
+      await Promise.all(old.map((file) => rm(store.absolute(file), { force: true })));
+      log.info({ nodeId, billedSeconds: rendered.billedSeconds }, 'scene filmed again');
+      return { node: repo.getNode(node.id)!, billedSeconds: rendered.billedSeconds };
+    } catch (err) {
+      await Promise.all(Object.values(files).map((file) => rm(file, { force: true })));
+      throw err;
+    }
+  }
+
+  private startFrame(parent: NodeRecord | null): string | null {
+    return parent?.lastFramePath ? this.deps.store.absolute(parent.lastFramePath) : null;
+  }
+
+  private async newFiles(nodeId: string) {
+    const dir = this.deps.store.nodeDir(nodeId);
+    await mkdir(dir, { recursive: true });
+    const tag = newFileTag();
+    return {
+      raw: join(dir, `raw-${tag}.mp4`),
+      clip: join(dir, `clip-${tag}.mp4`),
+      poster: join(dir, `poster-${tag}.jpg`),
+      lastFrame: join(dir, `last-${tag}.jpg`),
+    };
+  }
+
+  private async finishMedia(files: { raw: string; clip: string; poster: string; lastFrame: string }): Promise<number> {
+    const { media } = this.deps;
+    await media.faststart(files.raw, files.clip);
+    await rm(files.raw, { force: true });
+    const durationMs = await media.probeDurationMs(files.clip);
+    await media.poster(files.clip, files.poster, (durationMs / 1000) * 0.4);
+    await media.lastFrame(files.clip, files.lastFrame);
+    return durationMs;
+  }
+
+  /**
+   * Reserves the seconds before calling the provider so parallel renders can
+   * never overshoot a cap. The reservation is only given back when the
+   * provider says it turned the request down before doing any work.
+   */
+  private async renderPaid(
+    input: { prompt: string; caption: string; startFramePath: string | null; outPath: string },
+    context: { task: string; nodeId: string; treeId: string; forced: boolean },
+  ): Promise<RenderResult> {
+    const { budget, config } = this.deps;
+    const seconds = config.SCENE_SECONDS;
+    const reservation = budget.reserveVideo(seconds, context);
+    try {
+      const result = await this.deps.video.render({ ...input, seconds });
+      budget.settleVideo(reservation, result.billedSeconds, 'ok');
+      return result;
+    } catch (err) {
+      const billed = err instanceof VideoNotBilled ? false : err instanceof VideoRejected ? err.billed : true;
+      if (billed) budget.settleVideo(reservation, seconds, err instanceof VideoRejected ? 'rejected' : 'failed');
+      else budget.releaseVideo(reservation);
+      throw err;
+    }
   }
 
   private handleFailure(nodeId: string, err: unknown): GenerateOutcome {
     const { repo, log } = this.deps;
+    if (err instanceof BudgetExhausted) {
+      log.warn({ nodeId, limit: err.limit }, 'scene not made, the budget is used up');
+      repo.markFailed(nodeId, 'budget_exhausted', MESSAGES.budget);
+      return 'failed';
+    }
     if (err instanceof GenerationError) {
       log.warn({ nodeId, code: err.code, error: err.message }, 'scene failed');
       repo.markFailed(nodeId, err.code === 'budget_exhausted' ? 'budget_exhausted' : 'generation_failed', err.userMessage);
@@ -218,9 +277,11 @@ export class SceneGenerator {
     return outcome;
   }
 
-  private async createBible(tree: TreeRecord, timings: NodeTimings): Promise<Bible> {
+  private async createBible(tree: TreeRecord, node: NodeRecord, timings: NodeTimings): Promise<Bible> {
     const started = performance.now();
     const draft = await this.deps.director.createBible({
+      treeId: tree.id,
+      nodeId: node.id,
       prompt: tree.prompt ?? tree.logline,
       moods: tree.moods,
       audience: tree.audience,
@@ -260,6 +321,7 @@ export class SceneGenerator {
     }
     return {
       treeId: tree.id,
+      nodeId: node.id,
       pathKey: lineage.map((n) => n.id).join('/'),
       bible,
       cast,
@@ -295,6 +357,17 @@ export class SceneGenerator {
       log.warn({ treeId: request.treeId, sceneNumber: request.sceneNumber, stricter, reason: verdict.reason }, 'scene failed the safety check');
     }
     throw new GenerationError('unsafe_output', MESSAGES.sceneUnsafe);
+  }
+}
+
+export class RedoRefused extends Error {
+  override name = 'RedoRefused';
+
+  constructor(
+    readonly reason: 'not_found' | 'not_ready' | 'has_children',
+    message: string,
+  ) {
+    super(message);
   }
 }
 

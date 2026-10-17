@@ -152,6 +152,31 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX reports_node ON reports(node_id);
   `,
+  `
+  CREATE TABLE totals (
+    name TEXT PRIMARY KEY,
+    value REAL NOT NULL DEFAULT 0
+  );
+  INSERT INTO totals (name, value) SELECT 'video_seconds', COALESCE(SUM(video_seconds), 0) FROM spend;
+
+  CREATE TABLE spend_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    at TEXT NOT NULL,
+    day TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('video', 'director')),
+    task TEXT NOT NULL,
+    status TEXT NOT NULL,
+    node_id TEXT,
+    tree_id TEXT,
+    idea_id TEXT,
+    video_seconds REAL NOT NULL DEFAULT 0,
+    input_tokens INTEGER NOT NULL DEFAULT 0,
+    output_tokens INTEGER NOT NULL DEFAULT 0,
+    ms INTEGER
+  );
+  CREATE INDEX spend_log_day ON spend_log(day);
+  CREATE INDEX spend_log_node ON spend_log(node_id);
+  `,
 ];
 
 export function openDatabase(file: string): Db {

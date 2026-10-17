@@ -21,6 +21,7 @@ import {
   VerifyPurchaseResponse,
   WalletView,
 } from '@storyquest/contracts';
+import { z } from 'zod';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Config } from '../config';
 import { AppError, badRequest, MESSAGES, notFound, rateLimited } from '../engine/errors';
@@ -333,6 +334,33 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
       return reply.code(202).send(engine.warmTree(idParam(request.params.id), depth, force));
     },
   );
+
+  app.get('/v1/admin/spend', async (request) => {
+    requireAdmin(request);
+    return services.budget.summary();
+  });
+
+  const FilmRequest = z.object({
+    ideaId: z.string().regex(PATH_ID),
+    path: z.array(z.number().int().min(0).max(1)).max(20),
+    siblings: z.boolean().optional(),
+  });
+
+  app.post('/v1/admin/film', async (request, reply) => {
+    requireAdmin(request);
+    const body = parse(FilmRequest, request.body);
+    return reply.code(202).send(services.jobs.startFilm(body.ideaId, body.path, body.siblings ?? false));
+  });
+
+  app.get<{ Params: { id: string } }>('/v1/admin/film/:id', async (request) => {
+    requireAdmin(request);
+    return services.jobs.get(idParam(request.params.id));
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/admin/nodes/:id/redo', async (request, reply) => {
+    requireAdmin(request);
+    return reply.code(202).send(services.jobs.startRedo(idParam(request.params.id)));
+  });
 
   app.get('/v1/admin/reports', async (request) => {
     requireAdmin(request);

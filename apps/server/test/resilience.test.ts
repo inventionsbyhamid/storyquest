@@ -15,7 +15,7 @@ import { FakeDirector } from '../src/providers/director/fake';
 import type { Scene, SceneRequest } from '../src/providers/director/types';
 import { FakeVideo } from '../src/providers/video/fake';
 import { FalVideo } from '../src/providers/video/fal';
-import { VideoRejected } from '../src/providers/video/types';
+import { VideoNotBilled, VideoRejected } from '../src/providers/video/types';
 import type { Services } from '../src/services';
 import { captureLogger, createRig, manualClock, SpyVideo, testConfig, type TestRig } from './helpers';
 
@@ -284,9 +284,9 @@ describe('budget defaults', () => {
     rig.services.engine.start();
     await rig.services.daily.ensure();
     await rig.services.engine.idle();
-    const warnings = entries.filter((entry) => entry.msg === 'daily video spend passed 80% of the cap');
+    const warnings = entries.filter((entry) => entry.msg === 'daily video seconds passed 80% of the cap');
     expect(warnings).toHaveLength(1);
-    expect(warnings[0]!.obj).toMatchObject({ spentSeconds: 3, capSeconds: 3 });
+    expect(warnings[0]!.obj).toMatchObject({ used: 3, cap: 3 });
   });
 });
 
@@ -345,7 +345,19 @@ describe('video safety rejections', () => {
         throw new ApiError({ message: 'Bad Gateway', status: 502 });
       },
     });
-    await expect(flaky.render(request)).rejects.toBeInstanceOf(ApiError);
+    await expect(flaky.render(request)).rejects.toBeInstanceOf(VideoNotBilled);
     expect(calls).toBe(2);
+
+    // Once fal has queued the job it may bill, so the error is passed on as billed and not retried.
+    calls = 0;
+    const queued = new FalVideo(options, silentLogger, {
+      subscribe: (async (_endpoint: string, opts: { onEnqueue?: (id: string) => void }) => {
+        calls++;
+        opts.onEnqueue?.('req_1');
+        throw new ApiError({ message: 'Bad Gateway', status: 502 });
+      }) as never,
+    });
+    await expect(queued.render(request)).rejects.toBeInstanceOf(ApiError);
+    expect(calls).toBe(1);
   });
 });

@@ -10,6 +10,8 @@ export interface SceneHistoryItem {
 
 export interface SceneRequest {
   treeId: string;
+  /** The scene being written, for the spend log. */
+  nodeId?: string;
   /** Node ids from the root to this scene, used to seed deterministic fakes. */
   pathKey: string;
   bible: Bible;
@@ -34,6 +36,8 @@ export interface Scene {
 }
 
 export interface BibleRequest {
+  treeId?: string;
+  nodeId?: string;
   prompt: string;
   moods: Mood[];
   audience: Audience;
@@ -46,6 +50,26 @@ export interface Director {
   createBible(request: BibleRequest): Promise<Bible>;
   planIdeas(date: string, count: number, avoidTitles?: string[]): Promise<Bible[]>;
 }
+
+export interface DirectorCallContext {
+  task: 'scene' | 'bible' | 'plan';
+  nodeId?: string | null;
+  treeId?: string | null;
+}
+
+/**
+ * Counts every request to the model, retries included. beginCall throws
+ * when the lifetime call cap is reached, before any money is spent.
+ */
+export interface DirectorMeter {
+  beginCall(context: DirectorCallContext): void;
+  endCall(context: DirectorCallContext, result: { inputTokens: number; outputTokens: number; ms: number; ok: boolean }): void;
+}
+
+export const unmetered: DirectorMeter = {
+  beginCall() {},
+  endCall() {},
+};
 
 /** The model declined to write this. Treated like an unsafe draft. */
 export class DirectorRefusal extends Error {

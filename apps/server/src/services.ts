@@ -3,14 +3,16 @@ import { join, resolve } from 'node:path';
 import type { Config } from './config';
 import { openDatabase, type Db } from './db/database';
 import { Repository } from './db/repo';
+import { Budget } from './engine/budget';
 import { DailyIdeas } from './engine/daily';
+import { AdminJobs } from './engine/film';
 import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
 import { Media } from './media';
 import { BedrockDirector, createBedrockClient } from './providers/director/bedrock';
 import { FakeDirector } from './providers/director/fake';
-import type { Director } from './providers/director/types';
+import type { Director, DirectorMeter } from './providers/director/types';
 import { GuardrailsSafety } from './providers/safety/guardrails';
 import type { SafetyChecker } from './providers/safety/types';
 import { WordlistSafety } from './providers/safety/wordlist';
@@ -34,6 +36,8 @@ export interface Services {
   daily: DailyIdeas;
   wallet: Wallet;
   moderation: Moderation;
+  budget: Budget;
+  jobs: AdminJobs;
   now: () => Date;
 }
 
@@ -46,15 +50,16 @@ export interface ServiceOverrides {
   databaseFile?: string;
 }
 
-function createDirector(config: Config, log: Logger): Director {
+function createDirector(config: Config, log: Logger, meter: DirectorMeter): Director {
   if (config.DIRECTOR === 'bedrock') {
     return new BedrockDirector(
       createBedrockClient(config),
       { model: config.BEDROCK_MODEL, effort: config.BEDROCK_EFFORT, sceneSeconds: config.SCENE_SECONDS },
       log.child({ module: 'director' }),
+      meter,
     );
   }
-  return new FakeDirector();
+  return new FakeDirector(meter);
 }
 
 function createVideo(config: Config, media: Media, log: Logger): VideoProvider {
@@ -115,7 +120,8 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const repo = new Repository(db, now);
   const store = new MediaStore(join(dataDir, 'media'), config.PUBLIC_BASE_URL);
   const media = new Media();
-  const director = overrides.director ?? createDirector(config, log);
+  const budget = new Budget({ config, repo, log: log.child({ module: 'budget' }), now });
+  const director = overrides.director ?? createDirector(config, log, budget);
   const video = overrides.video ?? createVideo(config, media, log);
   const safety = overrides.safety ?? createSafety(config, log);
 
@@ -125,6 +131,7 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const engine = new StoryEngine({
     config,
     repo,
+    budget,
     director,
     video,
     safety,
@@ -137,6 +144,7 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const daily = new DailyIdeas({ config, repo, director, safety, engine, log: log.child({ module: 'daily' }), now });
 
   const moderation = new Moderation({ repo, store, log: log.child({ module: 'moderation' }) });
+  const jobs = new AdminJobs({ repo, engine, budget, log: log.child({ module: 'jobs' }), now });
 
-  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, now };
+  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, budget, jobs, now };
 }

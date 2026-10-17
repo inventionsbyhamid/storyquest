@@ -3,7 +3,7 @@ import { rm, writeFile } from 'node:fs/promises';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { Media } from '../../media';
 import { hashString } from '../director/fake';
-import type { RenderRequest, RenderResult, VideoProvider } from './types';
+import { VideoNotBilled, type RenderRequest, type RenderResult, type VideoProvider } from './types';
 
 export interface FakeVideoOptions {
   width: number;
@@ -95,6 +95,8 @@ export class FakeVideo implements VideoProvider {
         '-t', String(seconds),
         request.outPath,
       ]);
+    } catch (err) {
+      throw new VideoNotBilled((err as Error).message);
     } finally {
       await rm(textFile, { force: true });
     }

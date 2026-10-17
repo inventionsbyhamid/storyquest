@@ -27,6 +27,8 @@ export const MESSAGES = {
   pathClosed: 'That path is closed. Please pick another choice.',
   sceneRemoved: 'This scene was removed. Please pick another choice.',
   cannotRestore: 'This scene was deleted for good and cannot be restored.',
+  warmingOff: 'Warming is off while AUTO_PREFETCH is false. Film the paths you need instead.',
+  redoRefused: 'A later scene was already filmed from this one, so it cannot be filmed again.',
   internal: 'Something went wrong on our side. Please try again.',
   unauthorized: 'That token is not valid.',
 } as const;

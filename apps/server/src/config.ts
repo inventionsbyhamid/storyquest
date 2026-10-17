@@ -37,6 +37,8 @@ const ConfigSchema = z
     SCENE_SECONDS: int(8, 1, 30),
     PROMPT_EXPANSION: z.enum(['disabled', 'balanced', 'quality']).default('disabled'),
     VIDEO_PRICE_PER_SECOND: z.coerce.number().nonnegative().default(0.04),
+    BEDROCK_INPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(4.4),
+    BEDROCK_OUTPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(22),
     FAKE_VIDEO_DELAY_MS: int(2500, 0, 120_000),
     FAKE_VIDEO_SIZE: z
       .string()
@@ -73,6 +75,11 @@ const ConfigSchema = z
     IAP_MODE: z.enum(['fake', 'sandbox', 'production']).default('fake'),
     AMAZON_IAP_SHARED_SECRET: z.string().optional(),
     DAILY_VIDEO_SECONDS_CAP: int(900, 0, 100_000_000),
+    // Lifetime caps that survive restarts. 0 means no cap.
+    TOTAL_VIDEO_SECONDS_CAP: int(0, 0, 100_000_000),
+    DIRECTOR_CALL_CAP: int(0, 0, 100_000_000),
+    AUTO_PREFETCH: flag(true),
+    DAILY_PLANNER: flag(true),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .superRefine((env, ctx) => {

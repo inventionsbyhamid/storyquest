@@ -6,7 +6,7 @@ import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { ApiError, createFalClient, type FalClient } from '@fal-ai/client';
 import type { Logger } from '../../log';
-import { VideoRejected, type RenderRequest, type RenderResult, type VideoProvider } from './types';
+import { VideoNotBilled, VideoRejected, type RenderRequest, type RenderResult, type VideoProvider } from './types';
 
 export interface FalVideoOptions {
   key: string;
@@ -61,15 +61,18 @@ export class FalVideo implements VideoProvider {
       input.aspect_ratio = '16:9';
     }
 
-    let lastError: unknown;
     for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
       const started = Date.now();
+      let enqueued = false;
       try {
         const result = await this.client.subscribe(endpoint, {
           input,
           logs: false,
           timeout: RENDER_TIMEOUT_MS,
           abortSignal: AbortSignal.timeout(RENDER_TIMEOUT_MS + 5_000),
+          onEnqueue: () => {
+            enqueued = true;
+          },
         });
         const output = result.data as FalVideoOutput;
         const url = output.video?.url;
@@ -79,18 +82,18 @@ export class FalVideo implements VideoProvider {
         this.log.info({ endpoint, attempt, requestId: result.requestId, ms: Date.now() - started, inferenceMs }, 'video rendered');
         return { billedSeconds: request.seconds, inferenceMs };
       } catch (err) {
-        lastError = err;
         const status = err instanceof ApiError ? err.status : undefined;
-        this.log.warn({ endpoint, attempt, status, error: (err as Error).message }, 'video render failed');
+        const message = (err as Error).message;
+        this.log.warn({ endpoint, attempt, status, enqueued, error: message }, 'video render failed');
         // fal answers 422 when its safety checker or input validation turns a prompt down.
-        if (status === 422 || status === 400) {
-          throw new VideoRejected(`video request rejected: ${(err as Error).message}`);
-        }
-        if (!isRetryable(err) || attempt === ATTEMPTS) break;
+        if (status === 422 || status === 400) throw new VideoRejected(`video request rejected: ${message}`, enqueued);
+        // Once fal has queued the job it may run and bill even if we stop waiting, so it counts and is not retried.
+        if (enqueued) throw err;
+        if (!isRetryable(err) || attempt === ATTEMPTS) throw new VideoNotBilled(`fal did not take the request: ${message}`);
         await sleep((this.options.retryDelayMs ?? 1_500) * attempt);
       }
     }
-    throw lastError instanceof Error ? lastError : new Error('video render failed');
+    throw new VideoNotBilled('fal did not take the request');
   }
 
   private async download(url: string, outPath: string): Promise<void> {

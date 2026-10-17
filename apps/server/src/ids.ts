@@ -10,7 +10,7 @@ function randomString(alphabet: string, length: number): string {
   return out;
 }
 
-export type IdPrefix = 'tr' | 'nd' | 'st' | 'id';
+export type IdPrefix = 'tr' | 'nd' | 'st' | 'id' | 'jb';
 
 export function newId(prefix: IdPrefix): string {
   return `${prefix}_${randomString(ID_ALPHABET, 16)}`;

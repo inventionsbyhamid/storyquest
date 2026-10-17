@@ -61,6 +61,7 @@ export class DailyIdeas {
 
   /** A cheap nudge that only starts a run when the schedule allows one. Never awaited by requests. */
   kick(): void {
+    if (!this.deps.config.DAILY_PLANNER) return;
     const date = this.today();
     if (this.inflight.has(date)) return;
     const newDay = this.failures === 0 && this.lastHealthyDate !== date;
@@ -71,6 +72,10 @@ export class DailyIdeas {
   }
 
   start(): void {
+    if (!this.deps.config.DAILY_PLANNER) {
+      this.deps.log.info({}, 'daily planner is off, serving the stories that already exist');
+      return;
+    }
     this.kick();
     this.timer = setInterval(() => this.kick(), CHECK_MS);
     this.timer.unref();
@@ -94,7 +99,10 @@ export class DailyIdeas {
       return root?.status === 'ready' && !root.hiddenAt;
     };
     const hidden = (idea: IdeaRecord) => Boolean(repo.getNode(idea.rootNodeId)?.hiddenAt);
-    const oldest = utcDay(new Date(this.deps.now().getTime() - (config.IDEA_LIFETIME_DAYS - 1) * DAY_MS));
+    // With the planner off nothing new arrives, so every playable story stays up whatever its age.
+    const oldest = config.DAILY_PLANNER
+      ? utcDay(new Date(this.deps.now().getTime() - (config.IDEA_LIFETIME_DAYS - 1) * DAY_MS))
+      : '0000-01-01';
 
     let date = today;
     // Today's ideas show while their opening is still being made; older ones only once playable.
@@ -108,6 +116,8 @@ export class DailyIdeas {
         ideas = repo.listIdeas(fallback).filter(ready);
       }
     }
+
+    if (!config.DAILY_PLANNER && ideas[0] && ideas[0].date !== today) date = ideas[0].date;
 
     const listed = new Set(ideas.map((idea) => idea.id));
     const featured = repo.listFeatured().filter((idea) => idea.date < today && !listed.has(idea.id) && ready(idea));

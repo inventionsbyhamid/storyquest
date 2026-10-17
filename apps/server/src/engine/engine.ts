@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ChoiceStat, StoryStats } from '@storyquest/contracts';
-import { isPaid, utcDay, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
+import { isPaid, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
 import { newFileTag, newId, newShareSlug } from '../ids';
 import { errorDetails } from '../log';
 import { clipText, provisionalTitle, sanitizeUserText } from '../text';
@@ -63,7 +63,8 @@ export class StoryEngine {
   start(): void {
     const { repo, log } = this.deps;
     const reset = repo.resetGenerating();
-    const pending = repo.listPendingIds();
+    // Without auto prefetch, scenes prepared ahead before a restart wait until someone chooses them.
+    const pending = this.deps.config.AUTO_PREFETCH ? repo.listPendingIds() : repo.listWantedPendingIds();
     for (const id of pending) this.queue.enqueue(id, 'low');
     const movies = repo.listStoriesWithPendingMovie();
     for (const story of movies) this.trackMovie(story.id);
@@ -82,6 +83,15 @@ export class StoryEngine {
     return this.queue.size;
   }
 
+  get isStopping(): boolean {
+    return this.stopping;
+  }
+
+  /** Films a ready scene again for a better take. See SceneGenerator.redo. */
+  redo(nodeId: string) {
+    return this.generator.redo(nodeId);
+  }
+
   /** Resolves when no scene jobs or movie stitches are left. Mostly for tests. */
   async idle(): Promise<void> {
     await this.queue.idle();
@@ -92,9 +102,9 @@ export class StoryEngine {
     if (!this.stopping) this.queue.enqueue(nodeId, priority);
   }
 
+  /** True when the next scene could not be paid for under the daily or lifetime caps. */
   budgetExhausted(): boolean {
-    const { config, repo } = this.deps;
-    return repo.spendSeconds(utcDay(this.deps.now())) + config.SCENE_SECONDS > config.DAILY_VIDEO_SECONDS_CAP;
+    return this.deps.budget.exhausted() !== null;
   }
 
   // Stories
@@ -273,7 +283,7 @@ export class StoryEngine {
     const { repo, wallet } = this.deps;
     const node = repo.getNode(nodeId);
     if (!node) throw notFound();
-    if (node.ownerStoryId === null || node.hiddenAt) return node;
+    if (!this.deps.config.AUTO_PREFETCH || node.ownerStoryId === null || node.hiddenAt) return node;
     const story = repo.getStory(node.ownerStoryId);
     if (!story || (deviceId !== null && story.deviceId !== deviceId)) throw notFound();
     if (node.status !== 'ready') throw notReady();
@@ -298,6 +308,7 @@ export class StoryEngine {
     const { repo, log } = this.deps;
     const idea = repo.getIdea(ideaId);
     if (!idea) throw notFound();
+    if (!this.deps.config.AUTO_PREFETCH) throw conflict(MESSAGES.warmingOff);
     const tree = repo.getTree(idea.treeId)!;
     const target = Math.min(Math.max(1, Math.floor(depth ?? tree.totalScenes)), tree.totalScenes);
     repo.setTreeWarm(tree.id, target, force);
@@ -374,6 +385,7 @@ export class StoryEngine {
    */
   private prefetch(nodeId: string): void {
     const { repo } = this.deps;
+    if (!this.deps.config.AUTO_PREFETCH) return;
     const node = repo.getNode(nodeId);
     if (!node || node.status !== 'ready' || node.isEnding || node.hiddenAt) return;
     // Private scenes cost real money, so they are only prepared on request through prepareChoice.
@@ -381,7 +393,7 @@ export class StoryEngine {
     if (!node.wantChildren && node.warm <= 0) return;
     const tree = repo.getTree(node.treeId)!;
     if (node.depth + 1 >= tree.totalScenes) return;
-    if (!forcedWarm(tree, node.depth + 1, node.ownerStoryId) && this.budgetExhausted()) return;
+    if (this.deps.budget.exhausted({ ignoreDaily: forcedWarm(tree, node.depth + 1, node.ownerStoryId) })) return;
 
     node.choices.forEach((_label, index) => {
       const { node: child } = repo.getOrCreatePresetChild(node, index, Math.max(0, node.warm - 1));

@@ -177,6 +177,45 @@ const toStory = (row: StoryRow): StoryRecord => ({
   finishedAt: row.finished_at,
 });
 
+export type TotalName = 'video_seconds' | 'director_calls' | 'input_tokens' | 'output_tokens';
+
+export interface SpendEntry {
+  kind: 'video' | 'director';
+  task: string;
+  status: string;
+  day?: string;
+  nodeId?: string | null;
+  treeId?: string | null;
+  ideaId?: string | null;
+  videoSeconds?: number;
+  inputTokens?: number;
+  outputTokens?: number;
+  ms?: number;
+}
+
+export interface SpendRow {
+  id: number;
+  at: string;
+  day: string;
+  kind: string;
+  task: string;
+  status: string;
+  node_id: string | null;
+  tree_id: string | null;
+  idea_id: string | null;
+  video_seconds: number;
+  input_tokens: number;
+  output_tokens: number;
+  ms: number | null;
+}
+
+export interface SpendSums {
+  videoSeconds: number;
+  directorCalls: number;
+  inputTokens: number;
+  outputTokens: number;
+}
+
 export interface NewTree {
   id?: string;
   ideaId?: string | null;
@@ -891,6 +930,136 @@ export class Repository {
       this.addVideoSeconds(day, seconds);
       return true;
     });
+  }
+
+  // Lifetime totals and the spend log
+
+  getTotal(name: TotalName): number {
+    const row = this.stmt('SELECT value FROM totals WHERE name = ?').get(name) as { value: number } | undefined;
+    return row?.value ?? 0;
+  }
+
+  addTotal(name: TotalName, delta: number): void {
+    this.transaction(() => {
+      this.stmt('INSERT INTO totals (name, value) VALUES (?, 0) ON CONFLICT (name) DO NOTHING').run(name);
+      this.stmt('UPDATE totals SET value = MAX(0, value + ?) WHERE name = ?').run(delta, name);
+    });
+  }
+
+  /** Books video seconds against today's cap and the lifetime cap at once, so parallel renders cannot overshoot. */
+  reserveVideo(day: string, seconds: number, dailyCap: number, totalCap: number): 'ok' | 'daily' | 'total' {
+    return this.transaction(() => {
+      if (this.getTotal('video_seconds') + seconds > totalCap) return 'total';
+      if (this.spendSeconds(day) + seconds > dailyCap) return 'daily';
+      this.addVideoSeconds(day, seconds);
+      this.addTotal('video_seconds', seconds);
+      return 'ok';
+    });
+  }
+
+  adjustVideo(day: string, delta: number): void {
+    this.transaction(() => {
+      this.addVideoSeconds(day, delta);
+      this.addTotal('video_seconds', delta);
+    });
+  }
+
+  /** Counts one director request. Returns false when the lifetime cap is already reached. */
+  reserveDirectorCall(cap: number): boolean {
+    return this.transaction(() => {
+      if (cap > 0 && this.getTotal('director_calls') >= cap) return false;
+      this.addTotal('director_calls', 1);
+      return true;
+    });
+  }
+
+  logSpend(entry: SpendEntry): void {
+    const at = this.now();
+    this.stmt(
+      `INSERT INTO spend_log (at, day, kind, task, status, node_id, tree_id, idea_id, video_seconds, input_tokens, output_tokens, ms)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ).run(
+      at.toISOString(),
+      entry.day ?? at.toISOString().slice(0, 10),
+      entry.kind,
+      entry.task,
+      entry.status,
+      entry.nodeId ?? null,
+      entry.treeId ?? null,
+      entry.ideaId ?? null,
+      entry.videoSeconds ?? 0,
+      entry.inputTokens ?? 0,
+      entry.outputTokens ?? 0,
+      entry.ms ?? null,
+    );
+  }
+
+  listSpend(limit: number) {
+    return this.stmt('SELECT * FROM spend_log ORDER BY id DESC LIMIT ?').all(limit) as SpendRow[];
+  }
+
+  /** Sums the spend log, for one day or for a set of nodes since a moment. */
+  sumSpend(filter: { day?: string; nodeIds?: string[]; since?: string }): SpendSums {
+    const where: string[] = [];
+    const params: unknown[] = [];
+    if (filter.day) {
+      where.push('day = ?');
+      params.push(filter.day);
+    }
+    if (filter.since) {
+      where.push('at >= ?');
+      params.push(filter.since);
+    }
+    if (filter.nodeIds) {
+      if (filter.nodeIds.length === 0) return { videoSeconds: 0, directorCalls: 0, inputTokens: 0, outputTokens: 0 };
+      where.push(`node_id IN (${filter.nodeIds.map(() => '?').join(', ')})`);
+      params.push(...filter.nodeIds);
+    }
+    const row = this.db
+      .prepare(
+        `SELECT COALESCE(SUM(video_seconds), 0) AS videoSeconds, COALESCE(SUM(kind = 'director'), 0) AS directorCalls,
+           COALESCE(SUM(input_tokens), 0) AS inputTokens, COALESCE(SUM(output_tokens), 0) AS outputTokens
+         FROM spend_log ${where.length ? `WHERE ${where.join(' AND ')}` : ''}`,
+      )
+      .get(...params) as SpendSums;
+    return row;
+  }
+
+  /** Children that already used this scene's last frame, or are using it right now. */
+  countFilmedChildren(nodeId: string): number {
+    const row = this.stmt(
+      "SELECT COUNT(*) AS n FROM nodes WHERE parent_id = ? AND (status IN ('ready', 'generating') OR clip_path IS NOT NULL)",
+    ).get(nodeId) as { n: number };
+    return row.n;
+  }
+
+  replaceNodeMedia(
+    id: string,
+    media: { clipPath: string; posterPath: string; lastFramePath: string; durationMs: number; extraCostSeconds: number },
+  ): void {
+    this.stmt(
+      `UPDATE nodes SET clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?,
+         cost_seconds = COALESCE(cost_seconds, 0) + ?, updated_at = ? WHERE id = ?`,
+    ).run(
+      media.clipPath,
+      media.posterPath,
+      media.lastFramePath,
+      Math.round(media.durationMs),
+      media.extraCostSeconds,
+      this.timestamp(),
+      id,
+    );
+  }
+
+  /** Pending scenes someone is waiting for: story openings and scenes on a story's path. */
+  listWantedPendingIds(): string[] {
+    const rows = this.stmt(
+      `SELECT n.id FROM nodes n WHERE n.status = 'pending' AND (
+         EXISTS (SELECT 1 FROM ideas i WHERE i.root_node_id = n.id)
+         OR EXISTS (SELECT 1 FROM stories s WHERE s.path LIKE '%"' || n.id || '"%')
+       ) ORDER BY n.depth, n.created_at`,
+    ).all() as { id: string }[];
+    return rows.map((row) => row.id);
   }
 
   stats(day: string) {

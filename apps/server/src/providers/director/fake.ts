@@ -1,7 +1,7 @@
 import type { Bible, Character } from '../../domain';
 import { clipText, lowerFirst, provisionalTitle, sanitizeUserText } from '../../text';
 import { TEMPLATES, type StoryTemplate } from './templates';
-import type { BibleRequest, Director, Scene, SceneRequest } from './types';
+import { unmetered, type BibleRequest, type Director, type DirectorCallContext, type DirectorMeter, type Scene, type SceneRequest } from './types';
 
 const SHOTS = [
   'wide establishing shot, slow push in',
@@ -58,7 +58,16 @@ function toBible(template: StoryTemplate): Bible {
 export class FakeDirector implements Director {
   readonly name = 'fake';
 
+  constructor(private readonly meter: DirectorMeter = unmetered) {}
+
+  /** Counts like one real request with no tokens, so call caps can be tried without keys. */
+  private metered(context: DirectorCallContext): void {
+    this.meter.beginCall(context);
+    this.meter.endCall(context, { inputTokens: 0, outputTokens: 0, ms: 0, ok: true });
+  }
+
   async writeScene(request: SceneRequest): Promise<Scene> {
+    this.metered({ task: 'scene', nodeId: request.nodeId, treeId: request.treeId });
     const template = templateFor(request.bible);
     const random = seededRandom(hashString(`${request.treeId}|${request.pathKey}|${request.stricter ? 1 : 0}`));
     const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)]!;
@@ -126,6 +135,7 @@ export class FakeDirector implements Director {
   }
 
   async createBible(request: BibleRequest): Promise<Bible> {
+    this.metered({ task: 'bible', nodeId: request.nodeId, treeId: request.treeId });
     const template = TEMPLATES[hashString(request.prompt) % TEMPLATES.length]!;
     const prompt = sanitizeUserText(request.prompt).replace(/[.!?]+$/, '');
     return {
@@ -138,6 +148,7 @@ export class FakeDirector implements Director {
   }
 
   async planIdeas(date: string, count: number, avoidTitles: string[] = []): Promise<Bible[]> {
+    this.metered({ task: 'plan' });
     const day = Math.floor(Date.parse(`${date}T00:00:00Z`) / 86_400_000);
     const start = ((day % TEMPLATES.length) + TEMPLATES.length) % TEMPLATES.length;
     const rotated = [...TEMPLATES.slice(start), ...TEMPLATES.slice(0, start)];

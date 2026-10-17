@@ -19,6 +19,19 @@ export interface VideoProvider {
   render(request: RenderRequest): Promise<RenderResult>;
 }
 
+/** The provider turned the request down before doing any work, so nothing was billed. */
+export class VideoNotBilled extends Error {
+  override name = 'VideoNotBilled';
+}
+
+/** The provider's safety check turned the prompt down. If it happened after the job started, it may still be billed. */
 export class VideoRejected extends Error {
   override name = 'VideoRejected';
+
+  constructor(
+    message: string,
+    readonly billed = false,
+  ) {
+    super(message);
+  }
 }

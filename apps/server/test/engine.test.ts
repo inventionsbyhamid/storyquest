@@ -379,6 +379,7 @@ describe('failures', () => {
       log: silentLogger,
       now: () => new Date(),
       wallet: r.services.wallet,
+      budget: r.services.budget,
     });
     engine.start();
     const node = await engine.waitForNode(idea.rootNodeId, 20_000);
