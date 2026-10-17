@@ -126,3 +126,11 @@ Severity scale: High blocks progress, Medium costs more than an hour, Low is an 
 * Severity: Medium (the app looked like it crashed on Back).
 * Workaround: an app wide `hardwareBackPress` listener that claims a press already handled as a key event in the last 700 ms.
 * Suggestion: deliver Back once, or document the order of the two events and how they relate.
+
+## 14. A held key arrives as a quick press
+
+* Task: a grown ups check where Select is held for three seconds, using `eventKeyAction` 0 (down) and 1 (up) from TVEventHandler.
+* Actual: on the Vega Virtual Device, holding Select for 3.5 seconds arrived as key down and key up 6 ms apart, with nothing in between. A hold can never be detected there, and we could not confirm what a real remote sends.
+* Severity: Medium (we rebuilt the check as a times table question on a number pad).
+* Workaround: logged raw TVEventHandler events with `vega device start-log-stream` to find it, then used only single presses.
+* Suggestion: pass held keys through in the virtual device, and document long press and key repeat behaviour for remotes.
