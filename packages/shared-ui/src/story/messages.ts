@@ -20,7 +20,7 @@ export const messages = {
   purchaseStillOpen: 'A purchase is still being finished. Try again in a moment.',
   reportThanks: 'Thanks. We removed this scene for your family and will review it.',
   reportFailed: 'The report could not be sent. Try again.',
-  storyRemoved: 'This story was taken down. Pick another one from home.',
+  storyRemoved: 'Thanks for telling us. We took this story down and will review it. Pick another one from home.',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {
