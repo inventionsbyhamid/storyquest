@@ -558,6 +558,14 @@ export function notFilmedChoices(state: StoryState): number[] {
     .map((choice) => choice.index);
 }
 
+// Filming is paused and no choice here can play, so the family can only start over or leave.
+export function isPathEnd(state: StoryState): boolean {
+  const scene = state.scene;
+  if (state.phase !== 'choosing' || !state.filmingPaused || !scene || scene.choices.length === 0) return false;
+  const unavailable = [...closedChoices(state), ...notFilmedChoices(state)];
+  return scene.choices.every((choice) => unavailable.includes(choice.index));
+}
+
 export function isStillVisible(state: StoryState): boolean {
   if (state.sceneHidden) return true;
   if (!state.still) return false;

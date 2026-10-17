@@ -159,6 +159,41 @@ export function ReportSheet({ active, sending, error, onPick, onCancel }: Report
   );
 }
 
+interface PathEndPanelProps {
+  active: boolean;
+  restarting: boolean;
+  onStartOver: () => void;
+  onExit: () => void;
+}
+
+// While filming is paused, a family can reach a scene where no choice has been filmed.
+export function PathEndPanel({ active, restarting, onStartOver, onExit }: PathEndPanelProps) {
+  const opacity = useFadeIn();
+  return (
+    <SpatialNavigationRoot isActive={active}>
+      <Animated.View style={[styles.cover, { opacity }]}>
+        <View style={styles.sheet}>
+          <Text style={styles.sheetTitle}>The filmed path ends here</Text>
+          <Text style={styles.body}>What happens next has not been filmed yet. Start over to try another path.</Text>
+          <SpatialNavigationView direction="vertical" style={styles.buttons}>
+            <DefaultFocus>
+              <Button
+                label={restarting ? 'Starting over' : 'Start over'}
+                primary
+                icon="restart"
+                onSelect={onStartOver}
+                block
+                style={styles.button}
+              />
+            </DefaultFocus>
+            <Button label="Home" icon="home" onSelect={onExit} block style={styles.button} />
+          </SpatialNavigationView>
+        </View>
+      </Animated.View>
+    </SpatialNavigationRoot>
+  );
+}
+
 interface StoryErrorPanelProps {
   message: string;
   active: boolean;

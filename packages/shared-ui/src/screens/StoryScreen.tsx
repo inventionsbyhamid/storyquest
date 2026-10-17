@@ -9,7 +9,14 @@ import ClipPlayer from '../components/player/ClipPlayer';
 import type { MediaCommand } from '../components/player/types';
 import { CaptionBar } from '../components/story/CaptionBar';
 import { ChoiceOverlay } from '../components/story/ChoiceOverlay';
-import { CustomChoiceSheet, PausedBadge, PauseMenu, ReportSheet, StoryErrorPanel } from '../components/story/Panels';
+import {
+  CustomChoiceSheet,
+  PathEndPanel,
+  PausedBadge,
+  PauseMenu,
+  ReportSheet,
+  StoryErrorPanel,
+} from '../components/story/Panels';
 import { GrownUpsGate } from '../components/GrownUpsGate';
 import { SparksSheet } from '../components/sparks/SparksSheet';
 import { StillFrame } from '../components/story/StillFrame';
@@ -31,6 +38,7 @@ import {
   closedChoices,
   createStoryState,
   notFilmedChoices,
+  isPathEnd,
   isPlayerPaused,
   isPrivatePath,
   isStillVisible,
@@ -90,6 +98,7 @@ export default function StoryScreen() {
   const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { phase, scene } = state;
+  const pathEnded = isPathEnd(state);
   const inPlayback = phase === 'playing' || phase === 'ending';
   const paused = isPlayerPaused(state) || !isFocused || !appActive;
 
@@ -504,7 +513,11 @@ export default function StoryScreen() {
         />
       )}
 
-      {scene && phase === 'choosing' && (
+      {pathEnded && !state.menuOpen && (
+        <PathEndPanel active={isFocused} restarting={restarting} onStartOver={startOver} onExit={exitHome} />
+      )}
+
+      {scene && phase === 'choosing' && !pathEnded && (
         <ChoiceOverlay
           scene={scene}
           closedChoices={closedChoices(state)}

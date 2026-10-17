@@ -6,6 +6,7 @@ import {
   closedChoices,
   createStoryState,
   notFilmedChoices,
+  isPathEnd,
   isPrivatePath,
   isPlayerPaused,
   isStillVisible,
@@ -743,6 +744,25 @@ describe('filming paused', () => {
     expect(chosen.phase).toBe('waitingNext');
     expect(chosen.pendingNodeId).toBeNull();
     expect(waitingLabel(chosen)).toBe('Drawing the next scene');
+  });
+
+  it('ends the filmed path when no choice here can play', () => {
+    const deadEnd = makeScene({
+      id: 'root',
+      choices: [
+        makeChoice(0, { nodeId: null, ready: false, posterUrl: null }),
+        makeChoice(1, { nodeId: null, ready: false, posterUrl: null }),
+      ],
+    });
+    const at = (filmingPaused: boolean) =>
+      run(
+        createStoryState({ nodeId: 'root', filmingPaused }),
+        { type: 'NODE_UPDATE', scene: deadEnd },
+        { type: 'CLIP_ENDED', clipUrl: deadEnd.clipUrl! },
+      );
+    expect(isPathEnd(at(true))).toBe(true);
+    expect(isPathEnd(at(false))).toBe(false);
+    expect(isPathEnd(choosingBudget(true))).toBe(false);
   });
 
   it('explains instead of asking the server while filming is paused', () => {
