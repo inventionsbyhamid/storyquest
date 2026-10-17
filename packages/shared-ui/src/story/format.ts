@@ -12,28 +12,34 @@ export function formatCount(value: number): string {
 }
 
 export function formatPlays(plays: number): string {
-  if (plays <= 0) return 'Be the first to explore';
-  if (plays === 1) return '1 family played';
-  return `${formatCount(plays)} families played`;
+  if (plays <= 0) return 'New tonight';
+  return `${formatCount(plays)} played`;
 }
 
 export function formatMadeIn(generationMs: number | null | undefined): string | null {
   if (generationMs == null || !Number.isFinite(generationMs) || generationMs <= 0) return null;
   const seconds = generationMs / 1000;
-  return seconds < 60 ? `made in ${seconds.toFixed(1)} s` : `made in ${Math.round(seconds)} s`;
+  return seconds < 60 ? `Made in ${seconds.toFixed(1)} s` : `Made in ${Math.round(seconds)} s`;
+}
+
+export function formatFolio(sceneNumber: number, totalScenes: number): string {
+  return totalScenes > 0 ? `${sceneNumber} / ${totalScenes}` : String(sceneNumber);
 }
 
 export function formatSceneProgress(sceneNumber: number, totalScenes: number): string {
   return totalScenes > 0 ? `Scene ${sceneNumber} of ${totalScenes}` : `Scene ${sceneNumber}`;
 }
 
+const quoted = (label: string) => `\u201C${label.trim().replace(/[.!?]+$/, '')}\u201D`;
+
 export function formatRarestChoice(stat: ChoiceStat | null | undefined): string | null {
   if (!stat) return null;
-  if (stat.custom) return `Only your family went with ${stat.label}`;
-  if (stat.percent < 1) return `Fewer than 1% of families chose ${stat.label}`;
+  const label = quoted(stat.label);
+  if (stat.custom) return `Only your family went with ${label}`;
+  if (stat.percent < 1) return `Fewer than 1% of families chose ${label}`;
   const percent = Math.round(stat.percent);
-  if (percent <= 50) return `Only ${percent}% of families chose ${stat.label}`;
-  return `${percent}% of families also chose ${stat.label}`;
+  if (percent <= 50) return `Only ${percent}% of families chose ${label}`;
+  return `${percent}% of families also chose ${label}`;
 }
 
 export function formatEndingsDiscovered(count: number): string | null {
@@ -70,6 +76,16 @@ export const AUDIENCES: Audience[] = ['kids', 'family', 'grownups'];
 
 export function audienceLabel(audience: Audience): string {
   return AUDIENCE_LABELS[audience];
+}
+
+const AUDIENCE_FACTS: Record<Audience, string> = {
+  kids: 'For kids',
+  family: 'For families',
+  grownups: 'For grown ups',
+};
+
+export function audienceFact(audience: Audience): string {
+  return AUDIENCE_FACTS[audience];
 }
 
 export interface TextCheck {

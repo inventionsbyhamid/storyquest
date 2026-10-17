@@ -1,110 +1,73 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { colors, radii, type } from '../theme';
+import { colors, radii, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
-import { Focusable, FocusGlow, FocusScale } from './Focusable';
+import { Focusable, FocusFrame, FocusScale } from './Focusable';
+import { Icon, IconName } from './Icons';
 
 interface ButtonProps {
   label: string;
   onSelect: () => void;
   onFocus?: () => void;
   hint?: string;
-  detail?: string;
-  icon?: (color: string) => React.ReactNode;
-  variant?: 'primary' | 'quiet';
-  dimmed?: boolean;
+  icon?: IconName;
+  primary?: boolean;
   block?: boolean;
   style?: ViewStyle;
 }
 
-export const Button = React.memo(
-  ({
-    label,
-    onSelect,
-    onFocus,
-    hint,
-    detail,
-    icon,
-    variant = 'quiet',
-    dimmed = false,
-    block = false,
-    style,
-  }: ButtonProps) => (
-    <Focusable label={label} hint={hint ?? detail} onSelect={onSelect} onFocus={onFocus} style={style}>
-      {(focused) => {
-        const textColor = focused ? colors.textOnAccent : colors.text;
-        return (
-          <FocusScale focused={focused}>
-            <View
-              style={[
-                styles.button,
-                block && styles.block,
-                variant === 'primary' && styles.primary,
-                dimmed && !focused && styles.dimmed,
-                focused && styles.focused,
-              ]}
-            >
-              {focused && <FocusGlow radius={radii.pill} />}
-              {icon ? <View style={styles.icon}>{icon(textColor)}</View> : null}
-              <View>
-                <Text style={[styles.label, { color: textColor }]} numberOfLines={1}>
-                  {label}
-                </Text>
-                {detail ? (
-                  <Text style={[styles.detail, focused && styles.detailFocused]} numberOfLines={1}>
-                    {detail}
-                  </Text>
-                ) : null}
+// Primary: marigold with ink text, one per screen. Others sit on raised ink.
+export const Button = React.memo(({ label, onSelect, onFocus, hint, icon, primary, block, style }: ButtonProps) => (
+  <Focusable label={label} hint={hint} onSelect={onSelect} onFocus={onFocus} style={style}>
+    {(focused) => {
+      const textColor = primary ? colors.ink : colors.paper;
+      return (
+        <FocusScale focused={focused}>
+          <View style={[styles.button, primary ? styles.primary : styles.quiet, block && styles.block]}>
+            {focused && <FocusFrame radius={radii.card} />}
+            {icon ? (
+              <View style={styles.icon}>
+                <Icon name={icon} size={28} color={textColor} />
               </View>
-            </View>
-          </FocusScale>
-        );
-      }}
-    </Focusable>
-  ),
-);
+            ) : null}
+            <Text style={[styles.label, { color: textColor }]} numberOfLines={1}>
+              {label}
+            </Text>
+          </View>
+        </FocusScale>
+      );
+    }}
+  </Focusable>
+));
 
 const styles = StyleSheet.create({
   button: {
     flexDirection: 'row',
     alignItems: 'center',
     alignSelf: 'flex-start',
-    minHeight: scaledPixels(76),
-    paddingHorizontal: scaledPixels(40),
-    paddingVertical: scaledPixels(14),
-    borderRadius: radii.pill,
-    backgroundColor: 'rgba(246, 241, 233, 0.1)',
-    borderWidth: scaledPixels(3),
-    borderColor: 'transparent',
+    minHeight: scaledPixels(72),
+    paddingHorizontal: space.lg,
+    borderRadius: radii.card,
+    borderWidth: scaledPixels(2),
+  },
+  primary: {
+    backgroundColor: colors.marigold,
+    borderColor: colors.marigold,
+  },
+  quiet: {
+    backgroundColor: colors.inkRaised,
+    borderColor: colors.inkLine,
   },
   block: {
     alignSelf: 'stretch',
     justifyContent: 'center',
   },
-  primary: {
-    backgroundColor: colors.surfaceHigh,
-    borderColor: 'rgba(255, 181, 71, 0.55)',
-  },
-  dimmed: {
-    opacity: 0.6,
-  },
-  focused: {
-    backgroundColor: colors.accent,
-    borderColor: colors.accent,
-  },
   icon: {
-    marginRight: scaledPixels(16),
+    marginRight: space.sm,
   },
   label: {
     ...type.label,
-    fontSize: scaledPixels(30),
-  },
-  detail: {
-    ...type.meta,
-    color: colors.textMuted,
-    fontWeight: '500',
-  },
-  detailFocused: {
-    color: colors.textOnAccent,
+    fontSize: scaledPixels(28),
+    lineHeight: scaledPixels(36),
   },
 });

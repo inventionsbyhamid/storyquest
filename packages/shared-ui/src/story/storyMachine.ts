@@ -442,7 +442,7 @@ export function shouldWatchChoices(state: StoryState): boolean {
 }
 
 export function waitingLabel(state: StoryState): string | null {
-  if (state.phase === 'loadingScene') return 'Setting the scene';
+  if (state.phase === 'loadingScene') return 'Starting the story';
   if (state.phase !== 'waitingNext') return null;
-  return state.waitKind === 'custom' ? 'The story bends' : 'Drawing the next scene';
+  return state.waitKind === 'custom' ? 'Filming your idea' : 'Drawing the next scene';
 }

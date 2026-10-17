@@ -37,7 +37,7 @@ describe('loading the first scene', () => {
     expect(state.phase).toBe('loadingScene');
     expect(state.pendingNodeId).toBe('root');
     expect(isStillVisible(state)).toBe(true);
-    expect(waitingLabel(state)).toBe('Setting the scene');
+    expect(waitingLabel(state)).toBe('Starting the story');
     expect(isPlayerPaused(state)).toBe(true);
   });
 
@@ -271,7 +271,7 @@ describe('choices', () => {
     const failed = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'budget_exhausted' });
     expect(failed.phase).toBe('choosing');
     expect(failed.disabledChoices).toEqual([]);
-    expect(failed.notice?.text).toBe('New paths are resting until tomorrow. Try the other choice.');
+    expect(failed.notice?.text).toBe('New scenes are paused until tomorrow. Pick the other choice.');
   });
 
   it('returns to the choices when the next scene takes too long', () => {
@@ -500,13 +500,13 @@ describe('something else', () => {
     expect(storyReducer(long, { type: 'CUSTOM_TEXT', text: 'ok then' }).customError).toBeNull();
   });
 
-  it('waits for the custom scene with the story bends label', () => {
+  it('waits for the custom scene with the filming label', () => {
     const sent = run(inputOpen('  The fox finds a tiny dragon  '), { type: 'SUBMIT_CUSTOM' });
     expect(sent.phase).toBe('waitingNext');
     expect(sent.waitKind).toBe('custom');
     expect(sent.customText).toBe('The fox finds a tiny dragon');
     expect(sent.pendingNodeId).toBeNull();
-    expect(waitingLabel(sent)).toBe('The story bends');
+    expect(waitingLabel(sent)).toBe('Filming your idea');
 
     const accepted = storyReducer(sent, { type: 'CHOICE_ACCEPTED', seq: sent.requestSeq, nextNodeId: 'custom-1' });
     expect(accepted.pendingNodeId).toBe('custom-1');
@@ -520,14 +520,14 @@ describe('something else', () => {
     const rejected = storyReducer(sent, { type: 'CHOICE_FAILED', seq: sent.requestSeq, code: 'unsafe_input' });
     expect(rejected.phase).toBe('customInput');
     expect(rejected.customText).toBe('something odd');
-    expect(rejected.customError).toBe("Let's try a different idea.");
+    expect(rejected.customError).toBe('Try a different idea.');
   });
 
   it('sends the family back to the choices when new paths are resting', () => {
     const sent = run(inputOpen(), { type: 'SUBMIT_CUSTOM' });
     const rejected = storyReducer(sent, { type: 'CHOICE_FAILED', seq: sent.requestSeq, code: 'budget_exhausted' });
     expect(rejected.phase).toBe('choosing');
-    expect(rejected.notice?.text).toBe('New paths are resting until tomorrow. Pick one of the choices.');
+    expect(rejected.notice?.text).toBe('New scenes are paused until tomorrow. Pick one of the choices.');
   });
 
   it('returns to the choices when the custom scene fails', () => {

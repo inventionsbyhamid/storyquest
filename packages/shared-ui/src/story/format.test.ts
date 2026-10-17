@@ -2,11 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIENCES,
   MOODS,
+  audienceFact,
   audienceLabel,
   checkPromptText,
   formatCount,
   formatEndingsDiscovered,
   formatFamiliesPlayed,
+  formatFolio,
   formatMadeIn,
   formatPlays,
   formatRarestChoice,
@@ -24,37 +26,39 @@ describe('format helpers', () => {
   });
 
   it('describes plays', () => {
-    expect(formatPlays(0)).toBe('Be the first to explore');
-    expect(formatPlays(1)).toBe('1 family played');
-    expect(formatPlays(1204)).toBe('1,204 families played');
+    expect(formatPlays(0)).toBe('New tonight');
+    expect(formatPlays(1)).toBe('1 played');
+    expect(formatPlays(1204)).toBe('1,204 played');
   });
 
   it('formats generation time', () => {
-    expect(formatMadeIn(5800)).toBe('made in 5.8 s');
-    expect(formatMadeIn(430)).toBe('made in 0.4 s');
-    expect(formatMadeIn(64200)).toBe('made in 64 s');
+    expect(formatMadeIn(5800)).toBe('Made in 5.8 s');
+    expect(formatMadeIn(430)).toBe('Made in 0.4 s');
+    expect(formatMadeIn(64200)).toBe('Made in 64 s');
     expect(formatMadeIn(null)).toBeNull();
     expect(formatMadeIn(0)).toBeNull();
   });
 
   it('formats scene progress', () => {
     expect(formatSceneProgress(3, 6)).toBe('Scene 3 of 6');
+    expect(formatFolio(3, 6)).toBe('3 / 6');
+    expect(formatFolio(2, 0)).toBe('2');
     expect(formatSceneProgress(2, 0)).toBe('Scene 2');
   });
 
   it('describes the rarest choice', () => {
     expect(formatRarestChoice(null)).toBeNull();
     expect(formatRarestChoice({ sceneNumber: 2, label: 'Open the moon door', percent: 8.4, custom: false })).toBe(
-      'Only 8% of families chose Open the moon door',
+      'Only 8% of families chose \u201COpen the moon door\u201D',
     );
     expect(formatRarestChoice({ sceneNumber: 2, label: 'Hide', percent: 0.3, custom: false })).toBe(
-      'Fewer than 1% of families chose Hide',
+      'Fewer than 1% of families chose \u201CHide\u201D',
     );
-    expect(formatRarestChoice({ sceneNumber: 2, label: 'Run', percent: 72, custom: false })).toBe(
-      '72% of families also chose Run',
+    expect(formatRarestChoice({ sceneNumber: 2, label: 'Run!', percent: 72, custom: false })).toBe(
+      '72% of families also chose \u201CRun\u201D',
     );
     expect(formatRarestChoice({ sceneNumber: 3, label: 'A dragon tea party', percent: 0, custom: true })).toBe(
-      'Only your family went with A dragon tea party',
+      'Only your family went with \u201CA dragon tea party\u201D',
     );
   });
 
@@ -69,6 +73,7 @@ describe('format helpers', () => {
   it('labels moods and audiences', () => {
     expect(moodLabel('spooky')).toBe('A little spooky');
     expect(audienceLabel('grownups')).toBe('Grown ups');
+    expect(audienceFact('grownups')).toBe('For grown ups');
   });
 
   it('checks prompt length after trimming', () => {

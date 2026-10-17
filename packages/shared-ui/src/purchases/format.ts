@@ -6,7 +6,7 @@ export function formatSparks(count: number): string {
 }
 
 export function formatFreeScenes(count: number): string {
-  return count === 1 ? '1 free scene left' : `${formatCount(count)} free scenes left`;
+  return count === 1 ? '1 free scene' : `${formatCount(count)} free scenes`;
 }
 
 export function spendable(wallet: WalletView): number {
@@ -18,10 +18,9 @@ export function canAfford(wallet: WalletView | null, cost: number): boolean {
   return spendable(wallet) >= cost;
 }
 
-// The pill: free scenes first, because they are used first.
 export function walletLabel(wallet: WalletView): string {
   if (wallet.freeSparks > 0 && wallet.sparks === 0) {
-    return wallet.freeSparks === 1 ? 'Your first custom scene is on us' : formatFreeScenes(wallet.freeSparks);
+    return wallet.freeSparks === 1 ? 'Your first scene is free' : formatFreeScenes(wallet.freeSparks);
   }
   if (wallet.freeSparks > 0) return `${formatSparks(wallet.sparks)} and ${formatFreeScenes(wallet.freeSparks)}`;
   return formatSparks(wallet.sparks);
@@ -29,16 +28,11 @@ export function walletLabel(wallet: WalletView): string {
 
 export function costLabel(wallet: WalletView | null, cost: number): string | null {
   if (cost <= 0) return null;
-  if (wallet && wallet.freeSparks >= cost) return 'This scene is on us';
+  if (wallet && wallet.freeSparks >= cost) return 'Uses your free scene';
   return `Uses ${formatSparks(cost)}`;
 }
 
-export function sparksExplainer(wallet: WalletView): string {
-  return (
-    'New scenes are filmed just for your family, so each one uses ' +
-    `${formatSparks(wallet.sceneCost)}. Tonight's stories and their choices stay free.`
-  );
-}
+export const SPARKS_EXPLAINER = "Scenes made only for your family use Sparks. Tonight's stories stay free.";
 
 export function balanceLine(wallet: WalletView): string {
   if (wallet.freeSparks > 0)

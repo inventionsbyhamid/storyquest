@@ -9,21 +9,19 @@ import {
 } from 'react-tv-space-navigation';
 import type { IdeaView, TodayResponse } from '@storyquest/contracts';
 import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
-import { audienceLabel, formatPlays, moodLabel } from '../story/format';
+import { audienceFact, formatPlays, moodLabel } from '../story/format';
 import { messageForError } from '../story/messages';
-import { colors, safeZones, type } from '../theme';
+import { colors, radii, screen, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { prefetchImage } from '../utils/prefetch';
+import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
-import { HeroBackdrop } from '../components/home/HeroBackdrop';
+import { PosterPlate } from '../components/home/PosterPlate';
 import { CARD_GAP, CARD_HEIGHT, CARD_WIDTH, IdeaCard, MakeYourOwnCard } from '../components/home/StoryCards';
-import { PeopleIcon, SparkleIcon } from '../components/Icons';
 import { MotionContext } from '../components/Motion';
 import { Notice } from '../components/Notice';
-import { Pill } from '../components/Pill';
 import { SkeletonBlock, usePulse } from '../components/Skeleton';
-import { Wordmark } from '../components/Wordmark';
-import { SparksPill } from '../components/sparks/SparksPill';
+import { WalletText } from '../components/sparks/WalletText';
 import type { ScreenNavigation } from '../navigation/types';
 
 type LoadState =
@@ -31,39 +29,40 @@ type LoadState =
   | { status: 'ready'; today: TodayResponse }
   | { status: 'error'; message: string };
 
-const SIDE = scaledPixels(safeZones.titleSafe.horizontal);
+const PLATE_WIDTH = scaledPixels(760);
+const PLATE_HEIGHT = Math.round((PLATE_WIDTH * 9) / 16) + scaledPixels(20);
 
-const HeroText = React.memo(({ idea }: { idea: IdeaView | null }) => {
+const StoryText = React.memo(({ idea, empty }: { idea: IdeaView | null; empty: boolean }) => {
   if (!idea) {
     return (
-      <View style={styles.heroText}>
-        <Pill text="Your idea" tone="violet" icon={<SparkleIcon size={scaledPixels(22)} color="#CFC7FF" />} />
-        <Text style={styles.heroTitle}>Make your own story</Text>
-        <Text style={styles.heroLogline} numberOfLines={3}>
-          Tell us what you feel like watching. Say it with the remote microphone or type it, and we will film the first
-          scene for your family.
+      <View>
+        <Text style={styles.title} numberOfLines={2}>
+          {empty ? 'No stories tonight yet' : 'Make your own'}
+        </Text>
+        <Text style={styles.logline} numberOfLines={2}>
+          {empty
+            ? "Make your own story while tonight's stories are being made."
+            : 'Describe a story with the remote microphone or the keyboard, and we film the first scene.'}
         </Text>
       </View>
     );
   }
+  const facts = [...idea.moods.map(moodLabel), audienceFact(idea.audience), formatPlays(idea.plays)];
+  if (!idea.ready) facts.push('Getting ready');
   return (
-    <View style={styles.heroText}>
-      <View style={styles.tags}>
-        <Pill text={audienceLabel(idea.audience)} tone="accent" style={styles.tag} />
-        {idea.moods.map((mood) => (
-          <Pill key={mood} text={moodLabel(mood)} style={styles.tag} />
-        ))}
-        {!idea.ready && <Pill text="Warming up" tone="violet" style={styles.tag} />}
-      </View>
-      <Text style={styles.heroTitle} numberOfLines={2}>
+    <View>
+      <Text style={styles.title} numberOfLines={2}>
         {idea.title}
       </Text>
-      <Text style={styles.heroLogline} numberOfLines={3}>
+      <Text style={styles.logline} numberOfLines={2}>
         {idea.logline}
       </Text>
-      <View style={styles.plays}>
-        <PeopleIcon size={scaledPixels(32)} color={colors.accent} />
-        <Text style={styles.playsText}>{formatPlays(idea.plays)}</Text>
+      <View style={styles.facts}>
+        {facts.map((fact) => (
+          <Text key={fact} style={styles.fact}>
+            {fact}
+          </Text>
+        ))}
       </View>
     </View>
   );
@@ -73,26 +72,14 @@ const HomeSkeleton = () => {
   const pulse = usePulse();
   return (
     <>
-      <View style={styles.heroText}>
-        <SkeletonBlock
-          pulse={pulse}
-          style={[styles.skeletonLine, { width: scaledPixels(260), height: scaledPixels(36) }]}
-        />
-        <SkeletonBlock
-          pulse={pulse}
-          style={[styles.skeletonLine, { width: scaledPixels(820), height: scaledPixels(64) }]}
-        />
-        <SkeletonBlock
-          pulse={pulse}
-          style={[styles.skeletonLine, { width: scaledPixels(760), height: scaledPixels(32) }]}
-        />
-        <SkeletonBlock
-          pulse={pulse}
-          style={[styles.skeletonLine, { width: scaledPixels(600), height: scaledPixels(32) }]}
-        />
+      <View style={styles.text}>
+        <SkeletonBlock pulse={pulse} style={[styles.line, { width: scaledPixels(640), height: scaledPixels(76) }]} />
+        <SkeletonBlock pulse={pulse} style={[styles.line, { width: scaledPixels(720), height: scaledPixels(30) }]} />
+        <SkeletonBlock pulse={pulse} style={[styles.line, { width: scaledPixels(520), height: scaledPixels(30) }]} />
       </View>
+      <SkeletonBlock pulse={pulse} style={[styles.plate, styles.skeletonPlate]} />
       <View style={styles.rowArea}>
-        <Text style={styles.rowTitle}>Tonight's Stories</Text>
+        <Text style={styles.rowTitle}>Tonight's stories</Text>
         <View style={[styles.rowContent, styles.skeletonRow]}>
           {Array.from({ length: 5 }, (_, i) => (
             <SkeletonBlock key={i} pulse={pulse} style={styles.skeletonCard} />
@@ -113,8 +100,8 @@ interface StoryRowProps {
 
 const StoryRow = React.memo(({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn }: StoryRowProps) => (
   <View style={styles.rowArea}>
-    <Text style={styles.rowTitle}>Tonight's Stories</Text>
-    <SpatialNavigationScrollView horizontal offsetFromStart={SIDE + CARD_WIDTH + CARD_GAP} style={styles.scroll}>
+    <Text style={styles.rowTitle}>Tonight's stories</Text>
+    <SpatialNavigationScrollView horizontal offsetFromStart={screen.side + CARD_WIDTH + CARD_GAP} style={styles.scroll}>
       <SpatialNavigationView direction="horizontal" style={styles.rowContent}>
         <DefaultFocus enable={ideas.length === 0}>
           <MakeYourOwnCard onFocusIndex={onFocusIndex} onSelect={onMakeYourOwn} />
@@ -196,35 +183,39 @@ export default function HomeScreen() {
 
   const ideas = load.status === 'ready' ? load.today.ideas : [];
   const focusedIdea = focusedIndex > 0 ? (ideas[focusedIndex - 1] ?? null) : null;
-  const heroPoster = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
+  const plateUri = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
 
   return (
     <SpatialNavigationRoot isActive={isFocused} key={load.status}>
       <MotionContext.Provider value={isFocused}>
         <View style={styles.screen}>
-          <HeroBackdrop uri={load.status === 'ready' ? heroPoster : null} />
           <View style={styles.header}>
-            <Wordmark />
-          </View>
-          <View style={styles.wallet}>
-            <SparksPill />
+            <Brand />
+            <WalletText />
           </View>
 
           {load.status === 'loading' && <HomeSkeleton />}
 
           {load.status === 'error' && (
-            <View style={styles.heroText}>
-              <Text style={styles.heroTitle}>Tonight's stories are hiding</Text>
-              <Text style={styles.heroLogline}>{load.message}</Text>
+            <View style={[styles.text, styles.errorText]}>
+              <Text style={styles.title} numberOfLines={1}>
+                The stories did not load
+              </Text>
+              <Text style={styles.logline}>{load.message}</Text>
               <DefaultFocus>
-                <Button label="Try again" variant="primary" onSelect={retry} style={styles.retry} />
+                <Button label="Try again" primary onSelect={retry} style={styles.retry} />
               </DefaultFocus>
             </View>
           )}
 
           {load.status === 'ready' && (
             <>
-              <HeroText idea={focusedIdea} />
+              <View style={styles.hero}>
+                <View style={styles.heroText}>
+                  <StoryText idea={focusedIdea} empty={ideas.length === 0} />
+                </View>
+                <PosterPlate uri={plateUri} page={!focusedIdea} style={styles.heroPlate} />
+              </View>
               <StoryRow
                 ideas={ideas}
                 openingId={openingId}
@@ -245,75 +236,95 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
     overflow: 'hidden',
   },
   header: {
     position: 'absolute',
-    top: scaledPixels(safeZones.titleSafe.vertical),
-    left: SIDE,
-  },
-  wallet: {
-    position: 'absolute',
-    top: scaledPixels(safeZones.titleSafe.vertical),
-    right: SIDE,
-  },
-  heroText: {
-    position: 'absolute',
-    top: scaledPixels(176),
-    left: SIDE,
-    width: scaledPixels(940),
-  },
-  tags: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  tag: {
-    marginRight: scaledPixels(12),
-    marginBottom: scaledPixels(8),
-  },
-  heroTitle: {
-    ...type.hero,
-    color: colors.text,
-    marginTop: scaledPixels(18),
-  },
-  heroLogline: {
-    ...type.bodyLarge,
-    color: colors.textMuted,
-    marginTop: scaledPixels(18),
-  },
-  plays: {
+    top: screen.top,
+    left: screen.side,
+    right: screen.side,
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: scaledPixels(24),
+    justifyContent: 'space-between',
   },
-  playsText: {
+  text: {
+    position: 'absolute',
+    top: scaledPixels(196),
+    left: screen.side,
+    width: scaledPixels(860),
+  },
+  title: {
+    ...type.display,
+    color: colors.paper,
+  },
+  logline: {
     ...type.body,
-    color: colors.text,
-    marginLeft: scaledPixels(12),
+    color: colors.paper,
+    marginTop: space.md,
+  },
+  facts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: space.md,
+  },
+  fact: {
+    ...type.body,
+    color: colors.paperDim,
+    marginRight: space.xl,
+  },
+  plate: {
+    position: 'absolute',
+    top: scaledPixels(164),
+    right: screen.side,
+    width: PLATE_WIDTH,
+    height: PLATE_HEIGHT,
+  },
+  hero: {
+    position: 'absolute',
+    top: scaledPixels(164),
+    left: screen.side,
+    right: screen.side,
+    height: PLATE_HEIGHT,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  heroText: {
+    flex: 1,
+    marginRight: space.xxl,
+  },
+  heroPlate: {
+    width: PLATE_WIDTH,
+    height: PLATE_HEIGHT,
+  },
+  skeletonPlate: {
+    borderRadius: radii.plate,
+  },
+  errorText: {
+    width: scaledPixels(1400),
   },
   retry: {
-    marginTop: scaledPixels(36),
+    marginTop: space.xl,
   },
   rowArea: {
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: scaledPixels(safeZones.titleSafe.vertical + 6),
+    top: scaledPixels(664),
   },
   rowTitle: {
     ...type.heading,
-    color: colors.text,
-    marginLeft: SIDE,
-    marginBottom: scaledPixels(22),
+    color: colors.paper,
+    marginLeft: screen.side,
+    marginBottom: space.xs,
   },
   scroll: {
     flexGrow: 0,
   },
   rowContent: {
-    paddingLeft: SIDE,
-    paddingRight: SIDE,
-    paddingVertical: scaledPixels(18),
+    paddingLeft: screen.side,
+    paddingRight: screen.side,
+    paddingVertical: space.md,
   },
   skeletonRow: {
     flexDirection: 'row',
@@ -321,12 +332,11 @@ const styles = StyleSheet.create({
   skeletonCard: {
     width: CARD_WIDTH,
     height: CARD_HEIGHT,
-    borderRadius: scaledPixels(20),
+    borderRadius: radii.card,
     marginRight: CARD_GAP,
-    marginBottom: scaledPixels(56),
   },
-  skeletonLine: {
-    borderRadius: scaledPixels(12),
-    marginBottom: scaledPixels(20),
+  line: {
+    borderRadius: radii.image,
+    marginBottom: space.md,
   },
 });

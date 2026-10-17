@@ -1,18 +1,20 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, safeZones, type } from '../../theme';
+import { colors, radii, space, type } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 
 interface CaptionBarProps {
   caption: string | null;
-  progress: string;
+  folio: string;
   madeIn: string | null;
   showToken: number;
 }
 
-const VISIBLE_MS = 5000;
+const FADE_MS = 200;
+const VISIBLE_MS = 4000;
 
-export const CaptionBar = React.memo(({ caption, progress, madeIn, showToken }: CaptionBarProps) => {
+// The caption plate: a solid panel at the bottom with the line of the scene and a folio.
+export const CaptionBar = React.memo(({ caption, folio, madeIn, showToken }: CaptionBarProps) => {
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -22,35 +24,24 @@ export const CaptionBar = React.memo(({ caption, progress, madeIn, showToken }: 
       return;
     }
     const animation = Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 420, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 1, duration: FADE_MS, useNativeDriver: true }),
       Animated.delay(VISIBLE_MS),
-      Animated.timing(opacity, { toValue: 0, duration: 700, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: FADE_MS, useNativeDriver: true }),
     ]);
     animation.start();
     return () => animation.stop();
   }, [showToken, opacity]);
 
   return (
-    <Animated.View
-      pointerEvents="none"
-      style={[
-        styles.wrap,
-        {
-          opacity,
-          transform: [{ translateY: opacity.interpolate({ inputRange: [0, 1], outputRange: [scaledPixels(16), 0] }) }],
-        },
-      ]}
-    >
-      <View style={styles.bar}>
-        <View style={styles.metaRow}>
-          <Text style={styles.progress}>{progress}</Text>
+    <Animated.View pointerEvents="none" style={[styles.wrap, { opacity }]}>
+      <View style={styles.plate}>
+        <Text style={styles.caption} numberOfLines={2}>
+          {caption ?? ''}
+        </Text>
+        <View style={styles.folio}>
+          <Text style={styles.folioText}>{folio}</Text>
           {madeIn ? <Text style={styles.madeIn}>{madeIn}</Text> : null}
         </View>
-        {caption ? (
-          <Text style={styles.caption} numberOfLines={2}>
-            {caption}
-          </Text>
-        ) : null}
       </View>
     </Animated.View>
   );
@@ -61,38 +52,33 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    bottom: scaledPixels(safeZones.titleSafe.vertical + 24),
+    bottom: scaledPixels(64),
     alignItems: 'center',
   },
-  bar: {
-    maxWidth: scaledPixels(1440),
-    paddingHorizontal: scaledPixels(40),
-    paddingVertical: scaledPixels(20),
-    borderRadius: radii.lg,
-    backgroundColor: 'rgba(11, 13, 26, 0.66)',
-    alignItems: 'center',
-  },
-  metaRow: {
+  plate: {
+    width: scaledPixels(1320),
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  progress: {
-    ...type.meta,
-    color: colors.accent,
-    letterSpacing: scaledPixels(1),
-  },
-  madeIn: {
-    ...type.meta,
-    fontWeight: '500',
-    color: colors.textFaint,
-    marginLeft: scaledPixels(18),
+    paddingHorizontal: space.lg,
+    paddingVertical: space.md,
+    borderRadius: radii.card,
+    backgroundColor: colors.scrim,
   },
   caption: {
-    ...type.bodyLarge,
-    fontSize: scaledPixels(36),
-    lineHeight: scaledPixels(46),
-    color: colors.text,
-    textAlign: 'center',
-    marginTop: scaledPixels(6),
+    ...type.body,
+    color: colors.paper,
+    flex: 1,
+  },
+  folio: {
+    alignItems: 'flex-end',
+    marginLeft: space.xl,
+  },
+  folioText: {
+    ...type.body,
+    color: colors.paperDim,
+  },
+  madeIn: {
+    ...type.small,
+    color: colors.paperDim,
   },
 });

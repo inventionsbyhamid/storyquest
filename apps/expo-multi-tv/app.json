@@ -60,12 +60,12 @@
       "bundleIdentifier": "com.storyquest.tv"
     },
     "newArchEnabled": false,
-    "backgroundColor": "#0B0D1A",
+    "backgroundColor": "#1C2240",
     "web": {
       "name": "StoryQuest",
       "shortName": "StoryQuest",
-      "backgroundColor": "#0B0D1A",
-      "themeColor": "#0B0D1A"
+      "backgroundColor": "#1C2240",
+      "themeColor": "#1C2240"
     }
   }
 }

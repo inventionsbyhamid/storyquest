@@ -1,7 +1,7 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import { colors, radii, type } from '../theme';
+import { colors, radii, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 
 function displayUrl(url: string): string {
@@ -11,7 +11,7 @@ function displayUrl(url: string): string {
 export const ShareCode = React.memo(({ url }: { url: string }) => (
   <View style={styles.wrap} accessible accessibilityLabel={`QR code to share your story. ${displayUrl(url)}`}>
     <View style={styles.card}>
-      <QRCode value={url} size={scaledPixels(300)} color={colors.background} backgroundColor="#FFFFFF" ecl="M" />
+      <QRCode value={url} size={scaledPixels(300)} color={colors.ink} backgroundColor={colors.paper} ecl="M" />
     </View>
     <Text style={styles.title}>Scan to share your story</Text>
     <Text style={styles.url} numberOfLines={1}>
@@ -25,20 +25,19 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   card: {
-    padding: scaledPixels(26),
-    borderRadius: radii.lg,
-    backgroundColor: '#FFFFFF',
+    padding: space.md,
+    borderRadius: radii.card,
+    backgroundColor: colors.paper,
   },
   title: {
-    ...type.label,
-    color: colors.text,
-    marginTop: scaledPixels(24),
+    ...type.body,
+    color: colors.paper,
+    marginTop: space.md,
   },
   url: {
-    ...type.meta,
-    fontWeight: '500',
-    color: colors.textFaint,
-    marginTop: scaledPixels(6),
+    ...type.small,
+    color: colors.paperDim,
+    marginTop: space.xs,
     maxWidth: scaledPixels(420),
   },
 });

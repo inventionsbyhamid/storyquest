@@ -3,60 +3,60 @@ import type { ApiErrorCode } from '../api/errors';
 export type MessageContext = 'preset' | 'custom' | 'start' | 'today' | 'general';
 
 export const messages = {
-  pathClosed: 'That path is closed. Try the other one.',
-  customFailed: 'That idea got lost on the way. Try a choice or another idea.',
+  pathClosed: 'That path could not be made. Pick the other one.',
+  customFailed: 'That idea could not be filmed. Pick a choice or try another idea.',
   sceneWouldNotPlay: 'That scene would not play. Pick what happens next.',
   storyCouldNotStart: 'This story could not start. Try again in a moment.',
   slowScene: 'This scene is taking longer than usual. Try again.',
-  promptTooShort: 'Tell us a little more about your idea.',
-  promptTooLong: 'That is a lot of story! Try something shorter.',
-  movieAlmostReady: 'Your movie is almost ready.',
-  movieFailed: 'We could not make the movie this time.',
-  choiceNotSaved: 'We could not save that choice, but your story keeps going.',
-  purchaseCancelled: 'No Sparks were bought, and nothing was charged.',
-  purchasesUnavailable: 'Purchases are not available on this TV right now. Free ideas come back tomorrow.',
+  promptTooShort: 'Add a few more words to your idea.',
+  promptTooLong: 'That idea is too long. Try a shorter one.',
+  movieAlmostReady: 'Your movie is still being made.',
+  movieFailed: 'The movie could not be made this time.',
+  choiceNotSaved: 'Your choice was not saved, but the story goes on.',
+  purchaseCancelled: 'No purchase was made.',
+  purchasesUnavailable: 'Purchases are not available on this TV right now.',
   purchaseInvalid: 'Amazon could not confirm that purchase, so no Sparks were added.',
-  sparksPending: 'Your purchase went through. Your Sparks will appear as soon as we reach StoryQuest.',
-  purchaseStillOpen: 'That purchase is still being finished. Try again in a moment.',
+  sparksPending: 'Your purchase went through. Your Sparks will show up shortly.',
+  purchaseStillOpen: 'A purchase is still being finished. Try again in a moment.',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {
   if (context === 'today' && code !== 'network' && code !== 'timeout') {
-    return "Tonight's stories are still being written. Try again in a moment.";
+    return "Tonight's stories are not ready yet. Try again in a moment.";
   }
   switch (code) {
     case 'unsafe_input':
-      return "Let's try a different idea.";
+      return 'Try a different idea.';
     case 'payment_required':
-      return 'You need a few more Sparks for that.';
+      return 'You need more Sparks for that.';
     case 'purchase_invalid':
       return messages.purchaseInvalid;
     case 'budget_exhausted':
-      if (context === 'custom') return 'New paths are resting until tomorrow. Pick one of the choices.';
-      if (context === 'preset') return 'New paths are resting until tomorrow. Try the other choice.';
-      if (context === 'start') return "New stories are resting until tomorrow. Pick one of tonight's stories.";
-      return 'StoryQuest is resting until tomorrow.';
+      if (context === 'custom') return 'New scenes are paused until tomorrow. Pick one of the choices.';
+      if (context === 'preset') return 'New scenes are paused until tomorrow. Pick the other choice.';
+      if (context === 'start') return "New stories are paused until tomorrow. Pick one of tonight's stories.";
+      return 'New scenes are paused until tomorrow.';
     case 'rate_limited':
-      return 'Lots of families are making stories right now. Try again in a moment.';
+      return 'StoryQuest is busy right now. Try again in a moment.';
     case 'network':
-      return "We can't reach StoryQuest right now. Check your connection and try again.";
+      return "StoryQuest can't be reached. Check the connection and try again.";
     case 'timeout':
       return context === 'preset' || context === 'custom'
         ? messages.slowScene
-        : 'StoryQuest is taking a while to answer. Try again.';
+        : 'StoryQuest is slow to answer. Try again.';
     case 'generation_failed':
     case 'node_failed':
       if (context === 'preset') return messages.pathClosed;
       if (context === 'custom') return messages.customFailed;
       if (context === 'start') return messages.storyCouldNotStart;
-      return 'Something went wrong while drawing. Try again.';
+      return 'That scene could not be made. Try again.';
     case 'not_found':
-      return 'We could not find that story. Head home and pick another.';
+      return 'That story could not be found. Go home and pick another.';
     case 'bad_request':
       return context === 'custom' || context === 'start'
-        ? 'Try saying that a little differently.'
-        : 'Something did not work. Try again.';
+        ? 'Try saying that differently.'
+        : 'That did not work. Try again.';
     default:
-      return 'Something went wrong on our side. Try again.';
+      return 'Something went wrong. Try again.';
   }
 }

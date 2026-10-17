@@ -19,7 +19,7 @@ import { useBackHandler, useRemoteKey } from '../hooks/useBackHandler';
 import { useLatest } from '../hooks/useLatest';
 import { canAfford, costLabel, sparks, useSparks } from '../purchases';
 import { createSerialQueue, sendChoice } from '../story/choiceSync';
-import { formatMadeIn, formatSceneProgress } from '../story/format';
+import { formatFolio, formatMadeIn } from '../story/format';
 import { messageForError } from '../story/messages';
 import { startRequestFor } from '../story/origin';
 import {
@@ -411,7 +411,7 @@ export default function StoryScreen() {
       {scene && (
         <CaptionBar
           caption={scene.caption}
-          progress={formatSceneProgress(scene.sceneNumber, scene.totalScenes)}
+          folio={formatFolio(scene.sceneNumber, scene.totalScenes)}
           madeIn={formatMadeIn(scene.generationMs)}
           showToken={captionToken}
         />
@@ -422,6 +422,7 @@ export default function StoryScreen() {
           scene={scene}
           closedChoices={state.disabledChoices}
           customCost={customCost}
+          freeSparks={wallet?.freeSparks ?? 0}
           active={layersActive && phase === 'choosing'}
           onChoose={choose}
           onSomethingElse={openCustom}
@@ -446,11 +447,7 @@ export default function StoryScreen() {
           key={`${phase}-${state.requestSeq}`}
           label={waiting}
           detail={
-            phase === 'loadingScene'
-              ? session.title
-              : state.waitKind === 'custom'
-                ? 'We are filming your idea. This takes a few seconds.'
-                : null
+            phase === 'loadingScene' ? session.title : state.waitKind === 'custom' ? 'This takes a few seconds.' : null
           }
           delayMs={phase === 'waitingNext' && state.waitKind === 'preset' ? 600 : 400}
         />
@@ -461,7 +458,7 @@ export default function StoryScreen() {
       {state.notice && <Notice id={state.notice.id} text={state.notice.text} onDismiss={dismissNotice} />}
 
       {phase === 'error' && state.error && (
-        <StoryErrorPanel message={state.error.message} active={isFocused} onRetry={retry} onExit={exitHome} />
+        <StoryErrorPanel message={state.error.message} active={isFocused} onRetry={retry} />
       )}
 
       {state.sparksPrompt && !state.menuOpen && (
@@ -485,6 +482,6 @@ export default function StoryScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
   },
 });

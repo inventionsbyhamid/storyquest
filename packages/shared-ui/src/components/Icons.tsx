@@ -1,61 +1,40 @@
 import React from 'react';
 import Svg, { Circle, Path } from 'react-native-svg';
+import { colors } from '../theme';
+import { scaledPixels } from '../hooks/useScale';
+
+export type IconName = 'pen' | 'mic' | 'play' | 'pause' | 'restart' | 'home' | 'plus' | 'check' | 'back';
+
+// Drawn on a 24 unit grid; the stroke is kept at 2.5 design pixels whatever the size.
+const PATHS: Record<IconName, string[]> = {
+  pen: ['M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z', 'M13.5 6.5l4 4'],
+  mic: ['M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3z', 'M5.5 11.5a6.5 6.5 0 0 0 13 0', 'M12 18v3'],
+  play: ['M8 5.5v13l10.5-6.5z'],
+  pause: ['M8 5v14', 'M16 5v14'],
+  restart: ['M4.5 12a7.5 7.5 0 1 0 2.2-5.3', 'M4.5 4.5v4h4'],
+  home: ['M4 11l8-7 8 7', 'M6.5 9.5V20h11V9.5'],
+  plus: ['M12 5v14', 'M5 12h14'],
+  check: ['M5 12.5l4.5 4.5L19 7.5'],
+  back: ['M19 12H5', 'M11 6l-6 6 6 6'],
+};
 
 interface IconProps {
-  size: number;
-  color: string;
+  name: IconName;
+  size?: number;
+  color?: string;
 }
 
-export const SparkleIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24">
-    <Path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z" fill={color} />
-    <Path d="M19 15.5l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8z" fill={color} opacity={0.7} />
+export const Icon = React.memo(({ name, size = 28, color = colors.paper }: IconProps) => (
+  <Svg width={scaledPixels(size)} height={scaledPixels(size)} viewBox="0 0 24 24" fill="none">
+    {PATHS[name].map((d) => (
+      <Path key={d} d={d} stroke={color} strokeWidth={(2.5 * 24) / size} strokeLinecap="round" strokeLinejoin="round" />
+    ))}
   </Svg>
 ));
 
-export const PencilIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path
-      d="M4 20h4L19 9a2.8 2.8 0 0 0-4-4L4 16v4z"
-      stroke={color}
-      strokeWidth={2}
-      strokeLinejoin="round"
-      strokeLinecap="round"
-    />
-    <Path d="M13.5 6.5l4 4" stroke={color} strokeWidth={2} strokeLinecap="round" />
-  </Svg>
-));
-
-export const MicIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" fill={color} />
-    <Path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7" stroke={color} strokeWidth={2} strokeLinecap="round" />
-  </Svg>
-));
-
-export const PlayIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24">
-    <Path d="M8 5.5v13a1 1 0 0 0 1.5.86l10.5-6.5a1 1 0 0 0 0-1.72L9.5 4.64A1 1 0 0 0 8 5.5z" fill={color} />
-  </Svg>
-));
-
-export const PauseIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24">
-    <Path d="M7 5h3v14H7zM14 5h3v14h-3z" fill={color} />
-  </Svg>
-));
-
-export const PlusIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Path d="M12 5v14M5 12h14" stroke={color} strokeWidth={2.4} strokeLinecap="round" />
-  </Svg>
-));
-
-export const PeopleIcon = React.memo(({ size, color }: IconProps) => (
-  <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
-    <Circle cx={9} cy={8} r={3.2} fill={color} />
-    <Circle cx={16.5} cy={9} r={2.6} fill={color} opacity={0.7} />
-    <Path d="M3 19c.6-3.3 3-5 6-5s5.4 1.7 6 5z" fill={color} />
-    <Path d="M15.5 14.2c2.6-.3 4.8 1.2 5.5 4.8h-4.2" fill={color} opacity={0.7} />
+// The Spark: a plain marigold coin. Amounts are written next to it.
+export const SparkCoin = React.memo(({ size = 20 }: { size?: number }) => (
+  <Svg width={scaledPixels(size)} height={scaledPixels(size)} viewBox="0 0 20 20">
+    <Circle cx={10} cy={10} r={10} fill={colors.marigold} />
   </Svg>
 ));

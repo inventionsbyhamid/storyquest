@@ -6,7 +6,8 @@ import { useMotion } from './Motion';
 
 const DOTS = 3;
 
-export const WaitingDots = React.memo(({ color = colors.accent, size = 16 }: { color?: string; size?: number }) => {
+// Three solid dots whose opacity pulses in turn. Never a spinner.
+export const WaitingDots = React.memo(({ color = colors.paper, size = 12 }: { color?: string; size?: number }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const active = useMotion();
 
@@ -15,7 +16,7 @@ export const WaitingDots = React.memo(({ color = colors.accent, size = 16 }: { c
     const loop = Animated.loop(
       Animated.timing(progress, {
         toValue: 1,
-        duration: 1400,
+        duration: 1200,
         easing: Easing.linear,
         useNativeDriver: true,
         isInteraction: false,
@@ -33,14 +34,6 @@ export const WaitingDots = React.memo(({ color = colors.accent, size = 16 }: { c
         const end = start + 0.4;
         return {
           opacity: progress.interpolate({ inputRange: [0, start, peak, end, 1], outputRange: [0.3, 0.3, 1, 0.3, 0.3] }),
-          transform: [
-            {
-              scale: progress.interpolate({
-                inputRange: [0, start, peak, end, 1],
-                outputRange: [0.8, 0.8, 1.25, 0.8, 0.8],
-              }),
-            },
-          ],
         };
       }),
     [progress],
@@ -68,6 +61,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   dot: {
-    marginHorizontal: scaledPixels(6),
+    marginHorizontal: scaledPixels(5),
   },
 });

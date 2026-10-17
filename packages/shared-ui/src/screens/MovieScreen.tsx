@@ -77,8 +77,8 @@ export default function MovieScreen() {
         onMediaCommand={onMediaCommand}
       />
       <StillFrame uri={posterUrl} visible={!started} />
-      <CaptionBar caption={title} progress="Your story as one movie" madeIn={null} showToken={captionToken} />
-      {!started && !failed && <WaitingCard label="Rolling the film" detail={title} delayMs={600} />}
+      <CaptionBar caption={title} folio="Your movie" madeIn={null} showToken={captionToken} />
+      {!started && !failed && <WaitingCard label="Loading your movie" detail={title} delayMs={600} />}
       {started && paused && <PausedBadge />}
       {failed && <Notice id={1} text={messages.movieFailed} onDismiss={noop} />}
     </View>
@@ -88,6 +88,6 @@ export default function MovieScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
   },
 });

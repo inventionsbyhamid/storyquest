@@ -56,19 +56,21 @@ export function Focusable({
 
 interface FocusScaleProps {
   focused: boolean;
-  scale?: number;
   style?: StyleProp<ViewStyle>;
   children: React.ReactNode;
 }
 
-export function FocusScale({ focused, scale = 1.06, style, children }: FocusScaleProps) {
+const FOCUS_SCALE = 1.04;
+const FOCUS_MS = 150;
+
+export function FocusScale({ focused, style, children }: FocusScaleProps) {
   const progress = useRef(new Animated.Value(focused ? 1 : 0)).current;
 
   useEffect(() => {
     const animation = Animated.timing(progress, {
       toValue: focused ? 1 : 0,
-      duration: 180,
-      easing: Easing.out(Easing.cubic),
+      duration: FOCUS_MS,
+      easing: Easing.out(Easing.quad),
       useNativeDriver: true,
       isInteraction: false,
     });
@@ -77,25 +79,28 @@ export function FocusScale({ focused, scale = 1.06, style, children }: FocusScal
   }, [focused, progress]);
 
   const animatedStyle = useMemo(
-    () => ({ transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, scale] }) }] }),
-    [progress, scale],
+    () => ({ transform: [{ scale: progress.interpolate({ inputRange: [0, 1], outputRange: [1, FOCUS_SCALE] }) }] }),
+    [progress],
   );
 
   return <Animated.View style={[style, animatedStyle]}>{children}</Animated.View>;
 }
 
-export function FocusGlow({ radius }: { radius: number }) {
-  return <View pointerEvents="none" style={[styles.glow, { borderRadius: radius + scaledPixels(10) }]} />;
+// The focus frame: 4px of marigold drawn 4px outside the element. No shadow, no glow.
+export function FocusFrame({ radius }: { radius: number }) {
+  return <View pointerEvents="none" style={[styles.frame, { borderRadius: radius + OUTSET }]} />;
 }
 
+const OUTSET = scaledPixels(8);
+
 const styles = StyleSheet.create({
-  glow: {
+  frame: {
     position: 'absolute',
-    top: -scaledPixels(10),
-    left: -scaledPixels(10),
-    right: -scaledPixels(10),
-    bottom: -scaledPixels(10),
-    borderWidth: scaledPixels(6),
-    borderColor: colors.accentGlow,
+    top: -OUTSET,
+    left: -OUTSET,
+    right: -OUTSET,
+    bottom: -OUTSET,
+    borderWidth: scaledPixels(4),
+    borderColor: colors.marigold,
   },
 });

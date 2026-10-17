@@ -1,24 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { SparkProduct } from '@storyquest/contracts';
-import { colors, radii, type } from '../../theme';
+import { colors, radii, space, type } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
-import {
-  balanceLine,
-  bestValueSku,
-  formatSparks,
-  packPrice,
-  packTitle,
-  sparks,
-  sparksExplainer,
-  useSparks,
-} from '../../purchases';
+import { SPARKS_EXPLAINER, bestValueSku, formatSparks, packPrice, packTitle, sparks, useSparks } from '../../purchases';
 import { messages } from '../../story/messages';
 import { Button } from '../Button';
-import { Focusable, FocusGlow, FocusScale } from '../Focusable';
-import { SparkleIcon } from '../Icons';
-import { Pill } from '../Pill';
+import { Focusable, FocusFrame, FocusScale } from '../Focusable';
+import { SparkCoin } from '../Icons';
 import { WaitingDots } from '../WaitingDots';
 
 type SheetStatus =
@@ -43,23 +33,21 @@ const PackCard = React.memo(({ product, price, best, busy, position, onBuy }: Pa
   return (
     <Focusable
       label={packTitle(product)}
-      hint={`${priceText}. Amazon handles the purchase`}
+      hint={`${priceText}. Amazon handles the payment`}
       position={position}
       onSelect={buy}
       style={styles.packSlot}
     >
       {(focused) => (
         <FocusScale focused={focused}>
-          <View style={[styles.pack, focused && styles.packFocused, busy && styles.packBusy]}>
-            {focused && <FocusGlow radius={radii.lg} />}
-            {best && (
-              <View style={styles.bestBadge}>
-                <Pill text="Best value" tone="violet" />
-              </View>
-            )}
-            <SparkleIcon size={scaledPixels(64)} color={colors.accent} />
-            <Text style={styles.packTitle}>{packTitle(product)}</Text>
-            <Text style={[styles.packPrice, !price && styles.packPriceMuted]}>{priceText}</Text>
+          <View style={[styles.pack, busy && styles.packBusy]}>
+            {focused && <FocusFrame radius={radii.card} />}
+            <View style={styles.amountRow}>
+              <SparkCoin size={30} />
+              <Text style={styles.amount}>{packTitle(product)}</Text>
+            </View>
+            <Text style={styles.price}>{priceText}</Text>
+            <Text style={styles.best}>{best ? 'Best value' : ' '}</Text>
           </View>
         </FocusScale>
       )}
@@ -76,18 +64,21 @@ interface SparksSheetProps {
 // Shown when a new scene needs Sparks the family does not have. After a purchase it hands back
 // to the screen so the original action can carry on.
 export function SparksSheet({ active, onDone, onClose }: SparksSheetProps) {
-  const snapshot = useSparks();
-  const { wallet, prices, canBuy } = snapshot;
+  const { wallet, prices, canBuy } = useSparks();
   const [status, setStatus] = useState<SheetStatus>({ kind: 'idle', message: null });
   const mounted = useRef(true);
+  const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     mounted.current = true;
     sparks.refreshWallet();
+    const animation = Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true });
+    animation.start();
     return () => {
       mounted.current = false;
+      animation.stop();
     };
-  }, []);
+  }, [opacity]);
 
   useEffect(() => {
     if (status.kind !== 'done') return;
@@ -110,192 +101,154 @@ export function SparksSheet({ active, onDone, onClose }: SparksSheetProps) {
 
   return (
     <SpatialNavigationRoot isActive={active}>
-      <View style={styles.dim}>
-        <View style={styles.panel}>
-          <View style={styles.eyebrowRow}>
-            <SparkleIcon size={scaledPixels(28)} color={colors.accent} />
-            <Text style={styles.eyebrow}>Sparks</Text>
-          </View>
-          <Text style={styles.title}>
-            {status.kind === 'done' ? `${formatSparks(status.credited)} added` : 'Get more Sparks'}
-          </Text>
-          {wallet && status.kind !== 'done' ? (
-            <>
-              <Text style={styles.body}>{sparksExplainer(wallet)}</Text>
-              <Text style={styles.balance}>{balanceLine(wallet)}</Text>
-            </>
-          ) : null}
-
+      <Animated.View style={[styles.cover, { opacity }]}>
+        <View style={styles.sheet}>
           {status.kind === 'done' ? (
-            <View style={styles.statusRow}>
-              <SparkleIcon size={scaledPixels(40)} color={colors.accent} />
-              <Text style={styles.done}>Thank you! Back to your story.</Text>
-            </View>
-          ) : showPacks ? (
-            <SpatialNavigationView direction="horizontal" style={styles.packs}>
-              {products.map((product, i) => (
-                <DefaultFocus key={product.sku} enable={i === 0}>
-                  <PackCard
-                    product={product}
-                    price={prices[product.sku] ?? null}
-                    best={product.sku === best}
-                    busy={busy}
-                    position={i + 1}
-                    onBuy={buy}
-                  />
-                </DefaultFocus>
-              ))}
-            </SpatialNavigationView>
+            <>
+              <View style={styles.amountRow}>
+                <SparkCoin size={40} />
+                <Text style={[styles.title, styles.doneTitle]}>{`${formatSparks(status.credited)} added`}</Text>
+              </View>
+              <Text style={styles.body}>Back to your story.</Text>
+            </>
           ) : (
-            <Text style={styles.unavailable}>{messages.purchasesUnavailable}</Text>
-          )}
-
-          {busy ? (
-            <View style={styles.statusRow}>
-              <WaitingDots size={12} />
-              <Text style={styles.statusInline}>Finishing up with Amazon</Text>
-            </View>
-          ) : status.kind === 'idle' && status.message ? (
-            <Text style={styles.statusText}>{status.message}</Text>
-          ) : null}
-
-          {status.kind !== 'done' && (
-            <View style={styles.footer}>
-              <Text style={styles.footnote}>
-                {showPacks ? 'Amazon handles the purchase. Your Sparks follow your Amazon account to every TV.' : ''}
-              </Text>
-              <DefaultFocus enable={!showPacks}>
-                <Button label="Not now" onSelect={onClose} />
-              </DefaultFocus>
-            </View>
+            <>
+              <Text style={styles.title}>Keep your story going</Text>
+              <Text style={styles.body}>{SPARKS_EXPLAINER}</Text>
+              {showPacks ? (
+                <SpatialNavigationView direction="horizontal" style={styles.packs}>
+                  {products.map((product, i) => (
+                    <DefaultFocus key={product.sku} enable={i === 0}>
+                      <PackCard
+                        product={product}
+                        price={prices[product.sku] ?? null}
+                        best={product.sku === best}
+                        busy={busy}
+                        position={i + 1}
+                        onBuy={buy}
+                      />
+                    </DefaultFocus>
+                  ))}
+                </SpatialNavigationView>
+              ) : (
+                <Text style={styles.unavailable}>{messages.purchasesUnavailable}</Text>
+              )}
+              {busy ? (
+                <View style={styles.statusRow}>
+                  <WaitingDots />
+                  <Text style={styles.status}>Waiting for Amazon</Text>
+                </View>
+              ) : status.kind === 'idle' && status.message ? (
+                <Text style={styles.message}>{status.message}</Text>
+              ) : null}
+              <View style={styles.footer}>
+                <Text style={styles.note}>{showPacks ? 'Amazon handles the payment.' : ''}</Text>
+                <DefaultFocus enable={!showPacks}>
+                  <Button label="Not now" onSelect={onClose} />
+                </DefaultFocus>
+              </View>
+            </>
           )}
         </View>
-      </View>
+      </Animated.View>
     </SpatialNavigationRoot>
   );
 }
 
 const styles = StyleSheet.create({
-  dim: {
+  cover: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrimStrong,
+    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 50,
   },
-  panel: {
-    width: scaledPixels(1280),
-    paddingHorizontal: scaledPixels(72),
-    paddingVertical: scaledPixels(56),
-    borderRadius: radii.lg,
-    backgroundColor: colors.backgroundRaised,
-    borderWidth: scaledPixels(2),
-    borderColor: 'rgba(255, 181, 71, 0.35)',
-  },
-  eyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  eyebrow: {
-    ...type.meta,
-    color: colors.accent,
-    letterSpacing: scaledPixels(2),
-    textTransform: 'uppercase',
-    marginLeft: scaledPixels(10),
+  sheet: {
+    width: scaledPixels(1120),
+    paddingHorizontal: space.xxl,
+    paddingVertical: space.xl,
+    borderRadius: radii.card,
+    backgroundColor: colors.inkRaised,
   },
   title: {
     ...type.title,
-    color: colors.text,
-    marginTop: scaledPixels(8),
+    color: colors.paper,
+  },
+  doneTitle: {
+    marginLeft: space.md,
   },
   body: {
     ...type.body,
-    color: colors.textMuted,
-    marginTop: scaledPixels(14),
-  },
-  balance: {
-    ...type.body,
-    color: colors.text,
-    marginTop: scaledPixels(6),
+    color: colors.paper,
+    marginTop: space.sm,
   },
   packs: {
-    marginTop: scaledPixels(36),
+    marginTop: space.xl,
   },
   packSlot: {
-    marginRight: scaledPixels(36),
+    marginRight: space.lg,
   },
   pack: {
-    width: scaledPixels(440),
-    height: scaledPixels(250),
-    borderRadius: radii.lg,
-    borderWidth: scaledPixels(4),
-    borderColor: colors.border,
-    backgroundColor: colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  packFocused: {
-    borderColor: colors.accent,
-    backgroundColor: colors.surfaceHigh,
+    width: scaledPixels(472),
+    paddingHorizontal: space.lg,
+    paddingVertical: space.lg,
+    borderRadius: radii.card,
+    borderWidth: scaledPixels(2),
+    borderColor: colors.inkLine,
+    backgroundColor: colors.ink,
   },
   packBusy: {
     opacity: 0.6,
   },
-  bestBadge: {
-    position: 'absolute',
-    top: scaledPixels(16),
-    right: scaledPixels(16),
+  amountRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  packTitle: {
+  amount: {
     ...type.heading,
-    color: colors.text,
-    marginTop: scaledPixels(10),
+    color: colors.paper,
+    marginLeft: space.sm,
   },
-  packPrice: {
-    ...type.bodyLarge,
-    color: colors.accent,
-    marginTop: scaledPixels(4),
+  price: {
+    ...type.body,
+    color: colors.paper,
+    marginTop: space.sm,
   },
-  packPriceMuted: {
-    color: colors.textFaint,
-    fontSize: scaledPixels(26),
+  best: {
+    ...type.small,
+    color: colors.paperDim,
+    marginTop: space.xs,
   },
   unavailable: {
-    ...type.bodyLarge,
-    color: colors.text,
-    marginTop: scaledPixels(36),
+    ...type.body,
+    color: colors.paper,
+    marginTop: space.xl,
   },
   statusRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: scaledPixels(28),
+    marginTop: space.lg,
   },
-  statusText: {
+  status: {
     ...type.body,
-    color: colors.textMuted,
-    marginTop: scaledPixels(24),
+    color: colors.paperDim,
+    marginLeft: space.sm,
   },
-  statusInline: {
+  message: {
     ...type.body,
-    color: colors.textMuted,
-    marginLeft: scaledPixels(12),
-  },
-  done: {
-    ...type.heading,
-    color: colors.text,
-    marginLeft: scaledPixels(16),
+    color: colors.paper,
+    marginTop: space.lg,
   },
   footer: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: scaledPixels(36),
+    marginTop: space.xl,
   },
-  footnote: {
-    ...type.meta,
-    fontWeight: '500',
-    color: colors.textFaint,
+  note: {
+    ...type.small,
+    color: colors.paperDim,
     flexShrink: 1,
-    marginRight: scaledPixels(32),
+    marginRight: space.lg,
   },
 });

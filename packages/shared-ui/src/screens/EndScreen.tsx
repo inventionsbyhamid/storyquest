@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useIsFocused, useNavigation, useRoute } from '@react-navigation/native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { FinishResponse, MovieStatus } from '@storyquest/contracts';
@@ -7,12 +7,10 @@ import { api, isAbortError, toApiError } from '../api';
 import { sleep } from '../api/sleep';
 import { formatEndingsDiscovered, formatFamiliesPlayed, formatRarestChoice } from '../story/format';
 import { messageForError, messages } from '../story/messages';
-import { colors, radii, safeZones, type } from '../theme';
+import { colors, radii, screen, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { useBackHandler } from '../hooks/useBackHandler';
 import { Button } from '../components/Button';
-import { Gradient } from '../components/Gradient';
-import { PlayIcon, SparkleIcon } from '../components/Icons';
 import { Notice } from '../components/Notice';
 import { ShareCode } from '../components/ShareCode';
 import { SkeletonBlock, usePulse } from '../components/Skeleton';
@@ -23,25 +21,20 @@ type FinishState =
   | { status: 'ready'; result: FinishResponse }
   | { status: 'error'; message: string };
 
-const SIDE = scaledPixels(safeZones.titleSafe.horizontal);
 const MOVIE_POLL_MS = 4000;
 const MOVIE_POLL_LIMIT_MS = 4 * 60 * 1000;
-
-const SCRIM = [
-  { offset: 0, color: colors.background, opacity: 0.97 },
-  { offset: 0.55, color: colors.background, opacity: 0.84 },
-  { offset: 1, color: colors.background, opacity: 0.45 },
-];
 
 const QrPlaceholder = () => {
   const pulse = usePulse();
   return <SkeletonBlock pulse={pulse} style={styles.qrSkeleton} />;
 };
 
-function movieDetail(status: MovieStatus): string {
-  if (status === 'ready') return 'All your scenes in a row';
-  if (status === 'failed') return 'Not available this time';
-  return messages.movieAlmostReady;
+const asSentence = (line: string) => (/[.!?]$/.test(line) ? line : `${line}.`);
+
+function movieNote(status: MovieStatus): string | null {
+  if (status === 'failed') return messages.movieFailed;
+  if (status === 'pending') return messages.movieAlmostReady;
+  return null;
 }
 
 export default function EndScreen() {
@@ -53,7 +46,6 @@ export default function EndScreen() {
   const [attempt, setAttempt] = useState(0);
   const [movie, setMovie] = useState<{ status: MovieStatus; url: string | null }>({ status: 'pending', url: null });
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
-  const stillSource = useMemo(() => (stillUrl ? { uri: stillUrl } : null), [stillUrl]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -116,57 +108,54 @@ export default function EndScreen() {
         ].filter((line): line is string => !!line)
       : [];
 
+  const note = finish.status === 'ready' ? movieNote(movie.status) : null;
+
   return (
     <SpatialNavigationRoot isActive={isFocused} key={finish.status}>
       <View style={styles.screen}>
-        {stillSource && (
-          <Image source={stillSource} style={StyleSheet.absoluteFill} resizeMode="cover" fadeDuration={0} />
-        )}
-        <Gradient style={StyleSheet.absoluteFill} direction="right" stops={SCRIM} />
-
         <View style={styles.column}>
-          <View style={styles.eyebrowRow}>
-            <SparkleIcon size={scaledPixels(30)} color={colors.accent} />
-            <Text style={styles.eyebrow}>The End</Text>
-          </View>
+          <Text style={styles.end}>The end</Text>
           <Text style={styles.title} numberOfLines={2}>
             {title}
           </Text>
 
-          {finish.status === 'loading' && <Text style={styles.stat}>Wrapping up your story</Text>}
-          {finish.status === 'error' && <Text style={styles.error}>{finish.message}</Text>}
+          {finish.status === 'loading' && <Text style={styles.stat}>Saving your story.</Text>}
+          {finish.status === 'error' && <Text style={styles.stat}>{finish.message}</Text>}
           {stats.map((line) => (
-            <View key={line} style={styles.statRow}>
-              <View style={styles.statDot} />
-              <Text style={styles.stat}>{line}</Text>
-            </View>
+            <Text key={line} style={styles.stat}>
+              {asSentence(line)}
+            </Text>
           ))}
 
           <SpatialNavigationView direction="horizontal" style={styles.actions}>
             {finish.status === 'error' ? (
               <DefaultFocus>
-                <Button label="Try again" variant="primary" onSelect={retry} style={styles.action} />
+                <Button label="Try again" primary icon="restart" onSelect={retry} style={styles.action} />
               </DefaultFocus>
             ) : (
               <DefaultFocus>
                 <Button
                   label="Watch it as one movie"
-                  detail={movieDetail(movie.status)}
-                  variant="primary"
-                  dimmed={movie.status !== 'ready'}
+                  hint={note ?? undefined}
+                  primary
+                  icon="play"
                   onSelect={watchMovie}
-                  icon={(color) => <PlayIcon size={scaledPixels(30)} color={color} />}
                   style={styles.action}
                 />
               </DefaultFocus>
             )}
-            <Button label="New story" onSelect={newStory} style={styles.action} />
-            <Button label="Home" onSelect={goHome} style={styles.action} />
+            <Button label="New story" icon="plus" onSelect={newStory} style={styles.action} />
+            <Button label="Home" icon="home" onSelect={goHome} style={styles.action} />
           </SpatialNavigationView>
+          {note ? <Text style={styles.note}>{note}</Text> : null}
         </View>
 
         <View style={styles.share}>
-          {finish.status === 'ready' ? <ShareCode url={finish.result.shareUrl} /> : <QrPlaceholder />}
+          {finish.status === 'ready' ? (
+            <ShareCode url={finish.result.shareUrl} />
+          ) : finish.status === 'loading' ? (
+            <QrPlaceholder />
+          ) : null}
         </View>
 
         {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} />}
@@ -178,68 +167,50 @@ export default function EndScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
   },
   column: {
     position: 'absolute',
-    left: SIDE,
-    top: scaledPixels(236),
-    width: scaledPixels(1060),
+    left: screen.side,
+    top: scaledPixels(272),
+    width: scaledPixels(1040),
   },
-  eyebrowRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  eyebrow: {
-    ...type.label,
-    color: colors.accent,
-    letterSpacing: scaledPixels(3),
-    textTransform: 'uppercase',
-    marginLeft: scaledPixels(12),
+  end: {
+    ...type.display,
+    color: colors.paper,
   },
   title: {
-    ...type.display,
-    color: colors.text,
-    marginTop: scaledPixels(14),
-    marginBottom: scaledPixels(28),
-  },
-  statRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: scaledPixels(14),
-  },
-  statDot: {
-    width: scaledPixels(12),
-    height: scaledPixels(12),
-    borderRadius: scaledPixels(6),
-    backgroundColor: colors.accent,
-    marginRight: scaledPixels(18),
+    ...type.title,
+    color: colors.paper,
+    marginTop: space.xs,
+    marginBottom: space.lg,
   },
   stat: {
-    ...type.bodyLarge,
-    color: colors.text,
-    flexShrink: 1,
-  },
-  error: {
-    ...type.bodyLarge,
-    color: colors.danger,
+    ...type.body,
+    color: colors.paper,
+    marginTop: space.xs,
   },
   actions: {
-    marginTop: scaledPixels(64),
+    marginTop: space.xl,
     alignItems: 'center',
   },
   action: {
-    marginRight: scaledPixels(28),
+    marginRight: space.md,
+  },
+  note: {
+    ...type.small,
+    color: colors.paperDim,
+    marginTop: space.sm,
   },
   share: {
     position: 'absolute',
-    right: SIDE + scaledPixels(20),
-    top: scaledPixels(250),
+    right: screen.side,
+    top: scaledPixels(292),
     alignItems: 'center',
   },
   qrSkeleton: {
-    width: scaledPixels(352),
-    height: scaledPixels(352),
-    borderRadius: radii.lg,
+    width: scaledPixels(348),
+    height: scaledPixels(348),
+    borderRadius: radii.card,
   },
 });

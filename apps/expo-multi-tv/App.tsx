@@ -1,7 +1,8 @@
 import { useEffect } from 'react';
 import { LogBox } from 'react-native';
+import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
-import { AppNavigator, setApiBaseUrl } from '@multi-tv/shared-ui';
+import { AppNavigator, DISPLAY_FONT, setApiBaseUrl } from '@multi-tv/shared-ui';
 import '../../packages/shared-ui/src/app/configureRemoteControl';
 import { API_BASE_URL } from './config';
 
@@ -14,9 +15,14 @@ if (__DEV__) {
 SplashScreen.preventAutoHideAsync().catch(() => undefined);
 
 export default function App() {
-  useEffect(() => {
-    SplashScreen.hideAsync().catch(() => undefined);
-  }, []);
+  // Same file as the Vega app: the family name matches the file name.
+  const [loaded, error] = useFonts({ [DISPLAY_FONT]: require('./assets/fonts/Fraunces.ttf') });
+  const ready = loaded || !!error;
 
-  return <AppNavigator />;
+  useEffect(() => {
+    if (error) console.warn('Fraunces did not load', error);
+    if (ready) SplashScreen.hideAsync().catch(() => undefined);
+  }, [ready, error]);
+
+  return ready ? <AppNavigator /> : null;
 }

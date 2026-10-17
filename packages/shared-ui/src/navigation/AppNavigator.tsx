@@ -17,18 +17,18 @@ const theme = {
   ...DarkTheme,
   colors: {
     ...DarkTheme.colors,
-    primary: colors.accent,
-    background: colors.background,
-    card: colors.background,
-    text: colors.text,
-    border: colors.border,
+    primary: colors.marigold,
+    background: colors.ink,
+    card: colors.ink,
+    text: colors.paper,
+    border: colors.inkLine,
   },
 };
 
 const screenOptions = {
   headerShown: false,
   animation: 'fade' as const,
-  contentStyle: { backgroundColor: colors.background },
+  contentStyle: { backgroundColor: colors.ink },
 };
 
 export default function AppNavigator() {

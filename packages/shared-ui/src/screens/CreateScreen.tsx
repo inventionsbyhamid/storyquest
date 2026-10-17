@@ -4,31 +4,29 @@ import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { Audience, Mood } from '@storyquest/contracts';
 import { api, toApiError } from '../api';
-import { AUDIENCES, MOODS, PROMPT_LIMITS, audienceLabel, checkPromptText, moodLabel } from '../story/format';
+import {
+  AUDIENCES,
+  MOODS,
+  PROMPT_LIMITS,
+  audienceFact,
+  audienceLabel,
+  checkPromptText,
+  moodLabel,
+} from '../story/format';
 import { messageForError } from '../story/messages';
-import { colors, safeZones, type } from '../theme';
+import { DISPLAY_FONT, colors, radii, screen, space, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { useBackHandler } from '../hooks/useBackHandler';
+import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
-import { Gradient } from '../components/Gradient';
-import { SparkleIcon } from '../components/Icons';
 import { MicHint, PromptField } from '../components/PromptField';
-import { WaitingDots } from '../components/WaitingDots';
-import { Wordmark } from '../components/Wordmark';
-import { SparksPill } from '../components/sparks/SparksPill';
 import { SparksSheet } from '../components/sparks/SparksSheet';
+import { WalletText } from '../components/sparks/WalletText';
 import { canAfford, costLabel, useSparks } from '../purchases';
 import type { ScreenNavigation } from '../navigation/types';
 
 const MAX_MOODS = 3;
-const SIDE = scaledPixels(safeZones.titleSafe.horizontal);
-
-const GLOW = [
-  { offset: 0, color: colors.secondary, opacity: 0.32 },
-  { offset: 0.6, color: colors.secondary, opacity: 0.08 },
-  { offset: 1, color: colors.secondary, opacity: 0 },
-];
 
 export default function CreateScreen() {
   const navigation = useNavigation<ScreenNavigation<'Create'>>();
@@ -101,27 +99,34 @@ export default function CreateScreen() {
     start();
   }, [start]);
 
+  const cost = costLabel(wallet, storyCost);
+
   return (
     <>
       <SpatialNavigationRoot isActive={isFocused && !needsSparks}>
         <View style={styles.screen}>
-          <Gradient style={styles.glow} direction="left" stops={GLOW} />
-          <View style={styles.decor} pointerEvents="none">
-            <SparkleIcon size={scaledPixels(360)} color="rgba(140, 123, 255, 0.28)" />
+          <View style={styles.header}>
+            <Brand />
+            <WalletText />
           </View>
 
-          <View style={styles.header}>
-            <Wordmark size={30} />
-          </View>
-          <View style={styles.wallet}>
-            <SparksPill />
+          <View style={styles.page} accessible accessibilityLabel={`Your story. ${prompt.trim() || 'No idea yet'}`}>
+            <Text style={styles.pageLabel}>Your story</Text>
+            <Text style={[styles.pageTitle, !prompt.trim() && styles.pageEmpty]} numberOfLines={7}>
+              {prompt.trim() || 'Your idea shows up here as you speak or type.'}
+            </Text>
+            <View style={styles.pageFacts}>
+              {[...moods.map(moodLabel), audienceFact(audience)].map((fact) => (
+                <Text key={fact} style={styles.pageFact}>
+                  {fact}
+                </Text>
+              ))}
+            </View>
           </View>
 
           <View style={styles.column}>
             <Text style={styles.title}>Make your own</Text>
-            <Text style={styles.subtitle}>
-              Tell us what you feel like watching. We will film the first scene just for you.
-            </Text>
+            <Text style={styles.subtitle}>Describe a story and we film the first scene for your family.</Text>
 
             <DefaultFocus>
               <PromptField
@@ -132,7 +137,7 @@ export default function CreateScreen() {
                 maxLength={PROMPT_LIMITS.max}
               />
             </DefaultFocus>
-            <MicHint text="Press the microphone button on your remote and tell us what you feel like watching" />
+            <MicHint text="Press the microphone button on your remote and say your idea" />
 
             <Text style={styles.section}>Mood</Text>
             <SpatialNavigationView direction="horizontal" style={styles.row}>
@@ -164,18 +169,12 @@ export default function CreateScreen() {
 
             <View style={styles.actions}>
               <Button
-                label={submitting ? 'Starting your story' : 'Start the story'}
-                detail={costLabel(wallet, storyCost) ?? undefined}
-                variant="primary"
+                label={submitting ? 'Starting the story' : 'Start the story'}
+                hint={cost ?? undefined}
+                primary
                 onSelect={start}
-                icon={(color) =>
-                  submitting ? (
-                    <WaitingDots color={color} size={10} />
-                  ) : (
-                    <SparkleIcon size={scaledPixels(30)} color={color} />
-                  )
-                }
               />
+              {cost ? <Text style={styles.cost}>{cost}</Text> : null}
               {error ? <Text style={styles.error}>{error}</Text> : null}
             </View>
           </View>
@@ -189,67 +188,90 @@ export default function CreateScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: colors.background,
+    backgroundColor: colors.ink,
     overflow: 'hidden',
-  },
-  glow: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    bottom: 0,
-    width: '55%',
-  },
-  decor: {
-    position: 'absolute',
-    right: scaledPixels(160),
-    top: scaledPixels(300),
   },
   header: {
     position: 'absolute',
-    top: scaledPixels(safeZones.titleSafe.vertical),
-    left: SIDE,
-  },
-  wallet: {
-    position: 'absolute',
-    top: scaledPixels(safeZones.titleSafe.vertical),
-    right: SIDE,
+    top: screen.top,
+    left: screen.side,
+    right: screen.side,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   column: {
     position: 'absolute',
-    top: scaledPixels(140),
-    left: SIDE,
-    width: scaledPixels(1180),
+    top: scaledPixels(156),
+    left: screen.side,
+    width: scaledPixels(1100),
   },
   title: {
     ...type.title,
-    color: colors.text,
+    color: colors.paper,
+  },
+  page: {
+    position: 'absolute',
+    top: scaledPixels(300),
+    right: screen.side,
+    width: scaledPixels(500),
+    minHeight: scaledPixels(420),
+    padding: space.xl,
+    borderRadius: radii.plate,
+    backgroundColor: colors.paper,
+  },
+  pageLabel: {
+    ...type.small,
+    color: colors.inkLine,
+  },
+  pageTitle: {
+    fontFamily: DISPLAY_FONT,
+    fontSize: scaledPixels(40),
+    lineHeight: scaledPixels(50),
+    letterSpacing: -0.5,
+    color: colors.ink,
+    marginTop: space.sm,
+  },
+  pageEmpty: {
+    color: colors.inkLine,
+  },
+  pageFacts: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: space.lg,
+  },
+  pageFact: {
+    ...type.small,
+    color: colors.inkLine,
+    marginRight: space.md,
   },
   subtitle: {
     ...type.body,
-    color: colors.textMuted,
-    marginTop: scaledPixels(10),
-    marginBottom: scaledPixels(30),
+    color: colors.paperDim,
+    marginTop: space.xs,
+    marginBottom: space.lg,
   },
   section: {
-    ...type.meta,
-    color: colors.textFaint,
-    textTransform: 'uppercase',
-    letterSpacing: scaledPixels(2),
-    marginTop: scaledPixels(40),
-    marginBottom: scaledPixels(16),
+    ...type.label,
+    fontWeight: '400',
+    color: colors.paperDim,
+    marginTop: space.lg,
+    marginBottom: space.sm,
   },
   row: {
     flexWrap: 'nowrap',
   },
   actions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: scaledPixels(48),
+    marginTop: space.xl,
+  },
+  cost: {
+    ...type.small,
+    color: colors.paperDim,
+    marginTop: space.sm,
   },
   error: {
     ...type.body,
-    color: colors.danger,
-    marginLeft: scaledPixels(32),
-    flexShrink: 1,
+    color: colors.paper,
+    marginTop: space.sm,
   },
 });

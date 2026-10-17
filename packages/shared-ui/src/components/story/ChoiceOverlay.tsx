@@ -4,47 +4,38 @@ import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'reac
 import type { ChoiceView, SceneView } from '@storyquest/contracts';
 import { resolveMediaUrl } from '../../api/media';
 import { formatSceneProgress } from '../../story/format';
-import { colors, radii, safeZones, type } from '../../theme';
-import { scaledPixels } from '../../hooks/useScale';
-import { Focusable, FocusGlow, FocusScale } from '../Focusable';
-import { Gradient } from '../Gradient';
-import { MicIcon, PencilIcon, SparkleIcon } from '../Icons';
-import { Pill } from '../Pill';
-import { WaitingDots } from '../WaitingDots';
-import { CostBadge } from '../sparks/SparksPill';
 import { formatSparks } from '../../purchases/format';
+import { colors, radii, space, type } from '../../theme';
+import { scaledPixels } from '../../hooks/useScale';
+import { Focusable, FocusFrame, FocusScale } from '../Focusable';
+import { Icon } from '../Icons';
+import { Placeholder } from '../Placeholder';
+import { CostTag } from '../sparks/WalletText';
 
-const CARD_WIDTH = scaledPixels(500);
-const THUMB_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
-
-const SCRIM = [
-  { offset: 0, color: colors.background, opacity: 0 },
-  { offset: 0.35, color: colors.background, opacity: 0.55 },
-  { offset: 0.7, color: colors.background, opacity: 0.88 },
-  { offset: 1, color: colors.background, opacity: 0.96 },
-];
-
-const PLACEHOLDER = [
-  { offset: 0, color: colors.secondary, opacity: 0.5 },
-  { offset: 1, color: colors.background, opacity: 0.9 },
-];
+const CARD_WIDTH = scaledPixels(380);
+const CARD_PADDING = scaledPixels(16);
+const THUMB_WIDTH = CARD_WIDTH - CARD_PADDING * 2 - scaledPixels(4);
+const THUMB_HEIGHT = Math.round((THUMB_WIDTH * 9) / 16);
+const RISE = scaledPixels(24);
 
 interface ChoiceCardProps {
   choice: ChoiceView;
   closed: boolean;
+  freeSparks: number;
   onChoose: (index: number) => void;
   onFocusChoice: (index: number | null) => void;
 }
 
 function choiceHint(choice: ChoiceView, closed: boolean): string | undefined {
-  if (closed) return 'This path is closed';
+  if (closed) return 'This path could not be made';
   const parts: string[] = [];
   if (choice.sparks > 0) parts.push(`Uses ${formatSparks(choice.sparks)}`);
   if (!choice.ready && choice.nodeId) parts.push('Still being drawn. You can pick it and wait');
   return parts.length ? parts.join('. ') : undefined;
 }
 
-const ChoiceCard = React.memo(({ choice, closed, onChoose, onFocusChoice }: ChoiceCardProps) => {
+const ChoiceCard = React.memo(({ choice, closed, freeSparks, onChoose, onFocusChoice }: ChoiceCardProps) => {
+  const costs = choice.sparks > freeSparks;
   const poster = resolveMediaUrl(choice.posterUrl);
   const source = useMemo(() => (poster ? { uri: poster } : null), [poster]);
   const select = useCallback(() => onChoose(choice.index), [choice.index, onChoose]);
@@ -59,40 +50,38 @@ const ChoiceCard = React.memo(({ choice, closed, onChoose, onFocusChoice }: Choi
       onSelect={select}
       onFocus={focus}
       onBlur={blur}
-      style={styles.slot}
     >
       {(focused) => (
-        <FocusScale focused={focused} style={[styles.card, closed && styles.closed]}>
-          <View style={[styles.thumb, focused && styles.thumbFocused]}>
-            {focused && <FocusGlow radius={radii.lg} />}
-            <View style={styles.thumbClip}>
+        <FocusScale focused={focused}>
+          <View style={[styles.card, focused && styles.cardFocused, closed && styles.closed]}>
+            {focused && <FocusFrame radius={radii.card} />}
+            <View style={styles.thumb}>
               {source ? (
                 <Image source={source} style={styles.image} resizeMode="cover" fadeDuration={0} />
               ) : (
-                <View style={styles.placeholder}>
-                  <Gradient style={StyleSheet.absoluteFill} direction="down" stops={PLACEHOLDER} />
-                  <SparkleIcon size={scaledPixels(72)} color="rgba(246, 241, 233, 0.75)" />
-                </View>
+                <Placeholder style={styles.placeholder} />
               )}
               {closed ? (
-                <View style={styles.badge}>
-                  <Pill text="Path closed" tone="dark" />
+                <View style={styles.status}>
+                  <Text style={styles.statusText}>Closed</Text>
                 </View>
               ) : !choice.ready && choice.nodeId ? (
-                <View style={styles.badge}>
-                  <Pill text="Drawing" tone="dark" icon={<WaitingDots size={8} />} />
+                <View style={styles.status}>
+                  <Text style={styles.statusText}>Drawing</Text>
                 </View>
               ) : null}
-              {!closed && choice.sparks > 0 && (
-                <View style={styles.costBadge}>
-                  <CostBadge sparks={choice.sparks} />
+              {!closed && costs && (
+                <View style={styles.cost}>
+                  <CostTag sparks={choice.sparks} />
                 </View>
               )}
             </View>
+            <View style={styles.text}>
+              <Text style={styles.label} numberOfLines={2}>
+                {choice.label}
+              </Text>
+            </View>
           </View>
-          <Text style={[styles.label, focused && styles.labelFocused]} numberOfLines={2}>
-            {choice.label}
-          </Text>
         </FocusScale>
       )}
     </Focusable>
@@ -111,33 +100,33 @@ interface SomethingElseProps {
 const SomethingElseCard = React.memo(({ position, cost, onSelect, onFocusChoice }: SomethingElseProps) => (
   <Focusable
     label="Something else"
-    hint={cost > 0 ? `Say or type your own idea. Uses ${formatSparks(cost)}` : 'Say or type your own idea'}
+    hint={cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it'}
     position={position}
     altLabels={ELSE_ALT_LABELS}
     onSelect={onSelect}
     onFocus={() => onFocusChoice(null)}
-    style={styles.slot}
   >
     {(focused) => (
-      <FocusScale focused={focused} style={styles.card}>
-        <View style={[styles.thumb, styles.elseThumb, focused && styles.thumbFocused]}>
-          {focused && <FocusGlow radius={radii.lg} />}
-          {cost > 0 && (
-            <View style={styles.costBadge}>
-              <CostBadge sparks={cost} />
-            </View>
-          )}
-          <View style={[styles.elseIcon, focused && styles.elseIconFocused]}>
-            <PencilIcon size={scaledPixels(56)} color={focused ? colors.textOnAccent : colors.text} />
+      <FocusScale focused={focused}>
+        <View style={[styles.card, focused && styles.cardFocused]}>
+          {focused && <FocusFrame radius={radii.card} />}
+          <View style={[styles.thumb, styles.elseThumb]}>
+            <Icon name="pen" size={56} />
+            {cost > 0 && (
+              <View style={styles.cost}>
+                <CostTag sparks={cost} />
+              </View>
+            )}
           </View>
-          <View style={styles.elseHint}>
-            <MicIcon size={scaledPixels(26)} color={colors.textMuted} />
-            <Text style={styles.elseHintText}>Say or type your own idea</Text>
+          <View style={styles.text}>
+            <Text style={styles.label} numberOfLines={1}>
+              Something else
+            </Text>
+            <Text style={styles.sub} numberOfLines={1}>
+              Say it or type it
+            </Text>
           </View>
         </View>
-        <Text style={[styles.label, focused && styles.labelFocused]} numberOfLines={2}>
-          Something else
-        </Text>
       </FocusScale>
     )}
   </Focusable>
@@ -147,188 +136,173 @@ interface ChoiceOverlayProps {
   scene: SceneView;
   closedChoices: number[];
   customCost: number;
+  freeSparks: number;
   active: boolean;
   onChoose: (index: number) => void;
   onSomethingElse: () => void;
   onFocusChoice: (index: number | null) => void;
 }
 
+// The choice dock: the last frame stays above, a solid panel fills the bottom, and the cards
+// rise in one after another. This is the only orchestrated motion in the app.
 export function ChoiceOverlay({
   scene,
   closedChoices,
   customCost,
+  freeSparks,
   active,
   onChoose,
   onSomethingElse,
   onFocusChoice,
 }: ChoiceOverlayProps) {
-  const enter = useRef(new Animated.Value(0)).current;
+  const panel = useRef(new Animated.Value(0)).current;
+  const cards = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
 
   useEffect(() => {
-    const animation = Animated.timing(enter, {
-      toValue: 1,
-      duration: 360,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    });
+    const animation = Animated.parallel([
+      Animated.timing(panel, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.stagger(
+        60,
+        cards.map((value) =>
+          Animated.timing(value, {
+            toValue: 1,
+            duration: 240,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+        ),
+      ),
+    ]);
     animation.start();
     return () => animation.stop();
-  }, [enter]);
+  }, [panel, cards]);
+
+  const rise = (value: Animated.Value) => ({
+    opacity: value,
+    transform: [{ translateY: value.interpolate({ inputRange: [0, 1], outputRange: [RISE, 0] }) }],
+  });
 
   const firstOpen = scene.choices.find((choice) => !closedChoices.includes(choice.index))?.index ?? -1;
 
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.overlay, { opacity: enter }]}>
-        <Gradient style={StyleSheet.absoluteFill} direction="down" stops={SCRIM} />
-        <Animated.View
-          style={[
-            styles.content,
-            {
-              transform: [
-                { translateY: enter.interpolate({ inputRange: [0, 1], outputRange: [scaledPixels(48), 0] }) },
-              ],
-            },
-          ]}
-        >
-          <Text style={styles.eyebrow}>{formatSceneProgress(scene.sceneNumber, scene.totalScenes)}</Text>
-          <Text style={styles.heading}>What happens next?</Text>
-          <SpatialNavigationView direction="horizontal" style={styles.row}>
-            {scene.choices.map((choice) => (
-              <DefaultFocus key={choice.index} enable={choice.index === firstOpen}>
+      <Animated.View
+        style={[styles.dock, { opacity: panel }]}
+        accessibilityLabel={`What happens next? ${formatSceneProgress(scene.sceneNumber, scene.totalScenes)}`}
+      >
+        <Text style={styles.heading}>What happens next?</Text>
+        <SpatialNavigationView direction="horizontal" style={styles.row}>
+          {scene.choices.map((choice, i) => (
+            <Animated.View key={choice.index} style={[styles.slot, rise(cards[Math.min(i, 3)])]}>
+              <DefaultFocus enable={choice.index === firstOpen}>
                 <ChoiceCard
                   choice={choice}
                   closed={closedChoices.includes(choice.index)}
+                  freeSparks={freeSparks}
                   onChoose={onChoose}
                   onFocusChoice={onFocusChoice}
                 />
               </DefaultFocus>
-            ))}
+            </Animated.View>
+          ))}
+          <Animated.View style={[styles.slot, rise(cards[Math.min(scene.choices.length, 3)])]}>
             <DefaultFocus enable={firstOpen === -1}>
               <SomethingElseCard
                 position={scene.choices.length + 1}
-                cost={customCost}
+                cost={customCost > freeSparks ? customCost : 0}
                 onSelect={onSomethingElse}
                 onFocusChoice={onFocusChoice}
               />
             </DefaultFocus>
-          </SpatialNavigationView>
-        </Animated.View>
+          </Animated.View>
+        </SpatialNavigationView>
       </Animated.View>
     </SpatialNavigationRoot>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: {
+  dock: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '78%',
-    justifyContent: 'flex-end',
-  },
-  content: {
+    height: '46%',
+    backgroundColor: colors.scrim,
     alignItems: 'center',
-    paddingBottom: scaledPixels(safeZones.titleSafe.vertical + 6),
-  },
-  eyebrow: {
-    ...type.meta,
-    color: colors.accent,
-    letterSpacing: scaledPixels(2),
-    textTransform: 'uppercase',
+    paddingTop: space.md,
   },
   heading: {
     ...type.title,
-    color: colors.text,
-    marginTop: scaledPixels(6),
-    marginBottom: scaledPixels(36),
+    color: colors.paper,
+    marginBottom: space.sm,
   },
   row: {
     justifyContent: 'center',
   },
   slot: {
-    marginHorizontal: scaledPixels(22),
+    marginHorizontal: space.sm,
   },
   card: {
     width: CARD_WIDTH,
+    padding: CARD_PADDING,
+    borderRadius: radii.card,
+    borderWidth: scaledPixels(2),
+    borderColor: colors.inkLine,
+    backgroundColor: colors.inkRaised,
+  },
+  cardFocused: {
+    borderColor: colors.ink,
   },
   closed: {
-    opacity: 0.45,
+    opacity: 0.5,
   },
   thumb: {
-    width: CARD_WIDTH,
+    width: THUMB_WIDTH,
     height: THUMB_HEIGHT,
-    borderRadius: radii.lg,
-    borderWidth: scaledPixels(4),
-    borderColor: 'rgba(246, 241, 233, 0.18)',
-    backgroundColor: colors.surface,
-  },
-  thumbFocused: {
-    borderColor: colors.accent,
-  },
-  thumbClip: {
-    flex: 1,
-    borderRadius: radii.lg - scaledPixels(4),
+    borderRadius: radii.image,
     overflow: 'hidden',
+    backgroundColor: colors.ink,
+  },
+  elseThumb: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  text: {
+    height: scaledPixels(80),
+    marginTop: space.xs,
   },
   image: {
     width: '100%',
     height: '100%',
   },
   placeholder: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surfaceHigh,
+    backgroundColor: colors.ink,
   },
-  badge: {
+  status: {
     position: 'absolute',
-    left: scaledPixels(16),
-    top: scaledPixels(16),
+    left: space.xs,
+    bottom: space.xs,
+    paddingHorizontal: space.sm,
+    paddingVertical: scaledPixels(4),
+    borderRadius: radii.image,
+    backgroundColor: colors.ink,
   },
-  costBadge: {
+  statusText: {
+    ...type.small,
+    color: colors.paperDim,
+  },
+  cost: {
     position: 'absolute',
-    right: scaledPixels(16),
-    top: scaledPixels(16),
-    zIndex: 2,
+    top: space.xs,
+    right: space.xs,
   },
   label: {
-    ...type.heading,
-    fontSize: scaledPixels(36),
-    lineHeight: scaledPixels(44),
-    color: colors.textMuted,
-    textAlign: 'center',
-    marginTop: scaledPixels(18),
+    ...type.body,
+    color: colors.paper,
   },
-  labelFocused: {
-    color: colors.text,
-  },
-  elseThumb: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(140, 123, 255, 0.22)',
-    borderColor: 'rgba(140, 123, 255, 0.55)',
-  },
-  elseIcon: {
-    width: scaledPixels(112),
-    height: scaledPixels(112),
-    borderRadius: scaledPixels(56),
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(246, 241, 233, 0.14)',
-  },
-  elseIconFocused: {
-    backgroundColor: colors.accent,
-  },
-  elseHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: scaledPixels(18),
-  },
-  elseHintText: {
-    ...type.meta,
-    color: colors.textMuted,
-    marginLeft: scaledPixels(8),
+  sub: {
+    ...type.small,
+    color: colors.paperDim,
   },
 });

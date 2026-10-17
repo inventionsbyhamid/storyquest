@@ -8,7 +8,7 @@ import {
   formatFreeScenes,
   formatSparks,
   packPrice,
-  sparksExplainer,
+  SPARKS_EXPLAINER,
   walletLabel,
 } from './format';
 
@@ -28,15 +28,15 @@ describe('wallet formatting', () => {
   it('counts sparks and free scenes', () => {
     expect(formatSparks(1)).toBe('1 Spark');
     expect(formatSparks(1204)).toBe('1,204 Sparks');
-    expect(formatFreeScenes(1)).toBe('1 free scene left');
-    expect(formatFreeScenes(3)).toBe('3 free scenes left');
+    expect(formatFreeScenes(1)).toBe('1 free scene');
+    expect(formatFreeScenes(3)).toBe('3 free scenes');
   });
 
   it('welcomes new families and otherwise shows the balance', () => {
-    expect(walletLabel(wallet({ freeSparks: 1 }))).toBe('Your first custom scene is on us');
-    expect(walletLabel(wallet({ freeSparks: 3 }))).toBe('3 free scenes left');
+    expect(walletLabel(wallet({ freeSparks: 1 }))).toBe('Your first scene is free');
+    expect(walletLabel(wallet({ freeSparks: 3 }))).toBe('3 free scenes');
     expect(walletLabel(wallet({ sparks: 12 }))).toBe('12 Sparks');
-    expect(walletLabel(wallet({ sparks: 12, freeSparks: 1 }))).toBe('12 Sparks and 1 free scene left');
+    expect(walletLabel(wallet({ sparks: 12, freeSparks: 1 }))).toBe('12 Sparks and 1 free scene');
     expect(walletLabel(wallet())).toBe('0 Sparks');
   });
 
@@ -49,12 +49,12 @@ describe('wallet formatting', () => {
   });
 
   it('describes costs, balance and packs', () => {
-    expect(costLabel(wallet({ freeSparks: 1 }), 1)).toBe('This scene is on us');
+    expect(costLabel(wallet({ freeSparks: 1 }), 1)).toBe('Uses your free scene');
     expect(costLabel(wallet({ sparks: 4 }), 1)).toBe('Uses 1 Spark');
     expect(costLabel(wallet(), 0)).toBeNull();
     expect(balanceLine(wallet({ sparks: 2 }))).toBe('You have 2 Sparks.');
-    expect(balanceLine(wallet({ freeSparks: 1 }))).toBe('You have 0 Sparks and 1 free scene left.');
-    expect(sparksExplainer(wallet())).toContain('each one uses 1 Spark');
+    expect(balanceLine(wallet({ freeSparks: 1 }))).toBe('You have 0 Sparks and 1 free scene.');
+    expect(SPARKS_EXPLAINER).toBe("Scenes made only for your family use Sparks. Tonight's stories stay free.");
     expect(packPrice('$11.99')).toBe('$11.99');
     expect(packPrice(null)).toBe('Price shown by Amazon');
     expect(bestValueSku(wallet().products)).toBe('storyquest.sparks.25');
@@ -69,7 +69,7 @@ describe('wallet formatting', () => {
       costLabel(wallet(), 1)!,
       costLabel(wallet({ freeSparks: 1 }), 1)!,
       balanceLine(wallet({ freeSparks: 2 })),
-      sparksExplainer(wallet()),
+      SPARKS_EXPLAINER,
       packPrice(null),
     ];
     for (const text of texts) expect(text).not.toMatch(dash);
