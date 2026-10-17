@@ -4,6 +4,7 @@ import {
   StoryEvent,
   StoryState,
   createStoryState,
+  isPrivatePath,
   isPlayerPaused,
   isStillVisible,
   shouldWatchChoices,
@@ -416,6 +417,65 @@ describe('instant choices', () => {
     expect(reset.syncs).toEqual([]);
     expect(reset.syncSeq).toBe(2);
     expect(reset.childScenes).toEqual({});
+  });
+});
+
+describe('sparks', () => {
+  it('waits for the server before playing a paid scene, even when it is cached', () => {
+    const scene = makeScene({ id: 'root', choices: [makeChoice(0, { sparks: 1 }), makeChoice(1)] });
+    const state = run(
+      createStoryState({ nodeId: 'root' }),
+      { type: 'NODE_UPDATE', scene },
+      { type: 'CLIP_ENDED', clipUrl: scene.clipUrl! },
+      { type: 'CHILD_SCENE', scene: child0 },
+      { type: 'CHOOSE', index: 0 },
+    );
+    expect(state.phase).toBe('waitingNext');
+    expect(state.syncs).toEqual([]);
+    expect(state.pendingNodeId).toBe('child-0');
+  });
+
+  it('asks for Sparks when the server says a choice needs them, then can resume it', () => {
+    const chosen = storyReducer(choosing(), { type: 'CHOOSE', index: 1 });
+    const needs = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'payment_required' });
+    expect(needs.phase).toBe('choosing');
+    expect(needs.sparksPrompt).toEqual({ kind: 'choice', index: 1 });
+    expect(needs.notice).toBeNull();
+    const dismissed = storyReducer(needs, { type: 'SPARKS_DISMISSED' });
+    expect(dismissed.sparksPrompt).toBeNull();
+    expect(storyReducer(dismissed, { type: 'CHOOSE', index: 1 }).phase).toBe('waitingNext');
+  });
+
+  it('keeps the idea when a custom scene needs Sparks', () => {
+    const sent = run(
+      choosing(),
+      { type: 'OPEN_CUSTOM' },
+      { type: 'CUSTOM_TEXT', text: 'A dragon tea party' },
+      { type: 'SUBMIT_CUSTOM' },
+    );
+    const needs = storyReducer(sent, { type: 'CHOICE_FAILED', seq: sent.requestSeq, code: 'payment_required' });
+    expect(needs.phase).toBe('customInput');
+    expect(needs.customText).toBe('A dragon tea party');
+    expect(needs.customError).toBeNull();
+    expect(needs.sparksPrompt).toEqual({ kind: 'custom' });
+    expect(storyReducer(needs, { type: 'SUBMIT_CUSTOM' }).phase).toBe('waitingNext');
+  });
+
+  it('recognises private paths by their paid choices', () => {
+    expect(isPrivatePath(root)).toBe(false);
+    expect(isPrivatePath(makeScene({ choices: [makeChoice(0, { sparks: 1 }), makeChoice(1, { sparks: 1 })] }))).toBe(
+      true,
+    );
+    expect(isPrivatePath(null)).toBe(false);
+  });
+
+  it('can ask up front and closes with back', () => {
+    const asked = storyReducer(choosing(), { type: 'NEED_SPARKS', prompt: { kind: 'openCustom' } });
+    expect(asked.sparksPrompt).toEqual({ kind: 'openCustom' });
+    const back = storyReducer(asked, { type: 'BACK' });
+    expect(back.sparksPrompt).toBeNull();
+    expect(back.menuOpen).toBe(false);
+    expect(storyReducer(playing(), { type: 'NEED_SPARKS', prompt: { kind: 'custom' } }).sparksPrompt).toBeNull();
   });
 });
 

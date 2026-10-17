@@ -22,6 +22,7 @@
     "@amazon-devices/expo-file-system": "~2.0.0",
     "@amazon-devices/kepler-media-controls": "^1.0.0",
     "@amazon-devices/kepler-media-types": "^1.0.0",
+    "@amazon-devices/keplerscript-appstore-iap-lib": "~2.13.0",
     "@amazon-devices/react-native-async-storage__async-storage": "~2.0.0",
     "@amazon-devices/react-native-gesture-handler": "~2.0.0",
     "@amazon-devices/react-native-kepler": "^2.0.0",

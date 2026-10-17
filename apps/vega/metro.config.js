@@ -45,6 +45,9 @@ const blockedFromParent = [
     new RegExp(escape(path.resolve(__dirname, '..', 'node_modules', name))),
 );
 
+// The IAP library depends on the community async storage package; send everyone to the Vega port.
+blockedFromParent.push(new RegExp(escape(path.join(nodeModules, '@react-native-async-storage'))));
+
 const config = {
   watchFolders: [
     path.resolve(__dirname, '../../packages/shared-ui'),

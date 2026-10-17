@@ -88,6 +88,8 @@ describe('user facing copy', () => {
     'unsafe_input',
     'generation_failed',
     'not_ready',
+    'payment_required',
+    'purchase_invalid',
     'internal',
     'network',
     'timeout',

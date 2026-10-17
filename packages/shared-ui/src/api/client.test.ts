@@ -24,7 +24,10 @@ const story = {
   shareSlug: null,
 };
 
-function setup(responses: Array<Response | Error | ((init: RequestInit) => Promise<Response>)>) {
+function setup(
+  responses: Array<Response | Error | ((init: RequestInit) => Promise<Response>)>,
+  iapUserId: string | null = null,
+) {
   const calls: FetchArgs[] = [];
   const fetchMock = vi.fn(async (url: string, init: RequestInit) => {
     calls.push([url, init]);
@@ -38,6 +41,7 @@ function setup(responses: Array<Response | Error | ((init: RequestInit) => Promi
   const client = createApiClient({
     getBaseUrl: () => 'https://api.example.test',
     getDeviceId: async () => 'tv_device',
+    getIapUserId: () => iapUserId,
     fetch: fetchMock as unknown as typeof fetch,
     sleep: async (ms) => {
       sleeps.push(ms);
@@ -56,6 +60,52 @@ describe('api client', () => {
     expect(url).toBe('https://api.example.test/v1/today');
     expect(init.method).toBe('GET');
     expect((init.headers as Record<string, string>)['x-device-id']).toBe('tv_device');
+  });
+
+  it('sends the iap user id once it is known', async () => {
+    const wallet = {
+      sparks: 12,
+      freeSparks: 1,
+      sceneCost: 1,
+      products: [{ sku: 'sparks_10', sparks: 10 }],
+      purchasesEnabled: true,
+    };
+    const { client, calls } = setup([jsonResponse(wallet), jsonResponse(wallet)], 'amzn-user');
+    await expect(client.getWallet()).resolves.toEqual(wallet);
+    expect(calls[0][0]).toBe('https://api.example.test/v1/wallet');
+    expect((calls[0][1].headers as Record<string, string>)['x-iap-user-id']).toBe('amzn-user');
+
+    const without = setup([jsonResponse(wallet)]);
+    await without.client.getWallet();
+    expect((without.calls[0][1].headers as Record<string, string>)['x-iap-user-id']).toBeUndefined();
+  });
+
+  it('verifies purchases and reports invalid receipts', async () => {
+    const wallet = {
+      sparks: 10,
+      freeSparks: 0,
+      sceneCost: 1,
+      products: [],
+      purchasesEnabled: true,
+    };
+    const ok = setup([jsonResponse({ wallet, credited: 10, alreadyProcessed: false })]);
+    const body = { receiptId: 'r1', userId: 'u1', sku: 'sparks_10' };
+    await expect(ok.client.verifyPurchase(body)).resolves.toMatchObject({ credited: 10 });
+    expect(ok.calls[0][0]).toBe('https://api.example.test/v1/purchases/verify');
+    expect(JSON.parse(ok.calls[0][1].body as string)).toEqual(body);
+
+    const bad = setup([jsonResponse({ error: { code: 'purchase_invalid', message: 'no' } }, 400)]);
+    await expect(bad.client.verifyPurchase(body)).rejects.toMatchObject({ code: 'purchase_invalid' });
+  });
+
+  it('asks the server to prepare one focused choice', async () => {
+    const { client, calls } = setup([jsonResponse(makeScene({ id: 'node/1' }))]);
+    const parent = await client.prefetchChild('node/1', { index: 1 });
+    expect(parent.id).toBe('node/1');
+    expect(parent.clipUrl).toBe('https://api.example.test/media/node/1/clip.mp4');
+    expect(calls[0][0]).toBe('https://api.example.test/v1/nodes/node%2F1/prefetch');
+    expect(calls[0][1].method).toBe('POST');
+    expect(JSON.parse(calls[0][1].body as string)).toEqual({ index: 1 });
   });
 
   it('posts json bodies', async () => {

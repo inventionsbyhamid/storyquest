@@ -100,6 +100,21 @@ id = "com.amazon.audio.system"
 [[wants.service]]
 id = "com.amazon.network.service"
 
+# ------------------------------------------------------------------------------
+# In App Purchasing (Sparks). The tester entries let App Tester answer in sandbox mode.
+# ------------------------------------------------------------------------------
+[[wants.service]]
+id = "com.amazon.iap.core.service"
+
+[[wants.module]]
+id = "/com.amazon.iap.core@IIAPCoreUI"
+
+[[wants.service]]
+id = "com.amazon.iap.tester.service"
+
+[[wants.module]]
+id = "/com.amazonappstore.iap.tester@IIAPTesterUI"
+
 ## ------------------------------------------------------------------------------
 ## Needs - Required capabilities
 ## ------------------------------------------------------------------------------
@@ -124,6 +139,12 @@ id = "com.amazon.network.privilege.net-info"
 # ------------------------------------------------------------------------------
 [[needs.module]]
 id = "/com.amazon.vega.os@IVega_1_2"
+
+# ------------------------------------------------------------------------------
+# In App Purchasing
+# ------------------------------------------------------------------------------
+[[needs.module]]
+id = "/com.amazon.kepler.appstore.iap.purchase.core@IAppstoreIAPPurchaseCoreService"
 
 ## ------------------------------------------------------------------------------
 ## Offers

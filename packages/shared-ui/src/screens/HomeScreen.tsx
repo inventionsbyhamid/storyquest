@@ -23,6 +23,7 @@ import { Notice } from '../components/Notice';
 import { Pill } from '../components/Pill';
 import { SkeletonBlock, usePulse } from '../components/Skeleton';
 import { Wordmark } from '../components/Wordmark';
+import { SparksPill } from '../components/sparks/SparksPill';
 import type { ScreenNavigation } from '../navigation/types';
 
 type LoadState =
@@ -205,6 +206,9 @@ export default function HomeScreen() {
           <View style={styles.header}>
             <Wordmark />
           </View>
+          <View style={styles.wallet}>
+            <SparksPill />
+          </View>
 
           {load.status === 'loading' && <HomeSkeleton />}
 
@@ -248,6 +252,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: scaledPixels(safeZones.titleSafe.vertical),
     left: SIDE,
+  },
+  wallet: {
+    position: 'absolute',
+    top: scaledPixels(safeZones.titleSafe.vertical),
+    right: SIDE,
   },
   heroText: {
     position: 'absolute',

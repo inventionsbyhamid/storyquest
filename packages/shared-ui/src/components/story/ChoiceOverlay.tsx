@@ -11,6 +11,8 @@ import { Gradient } from '../Gradient';
 import { MicIcon, PencilIcon, SparkleIcon } from '../Icons';
 import { Pill } from '../Pill';
 import { WaitingDots } from '../WaitingDots';
+import { CostBadge } from '../sparks/SparksPill';
+import { formatSparks } from '../../purchases/format';
 
 const CARD_WIDTH = scaledPixels(500);
 const THUMB_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
@@ -31,17 +33,23 @@ interface ChoiceCardProps {
   choice: ChoiceView;
   closed: boolean;
   onChoose: (index: number) => void;
+  onFocusChoice: (index: number | null) => void;
 }
 
 function choiceHint(choice: ChoiceView, closed: boolean): string | undefined {
   if (closed) return 'This path is closed';
-  return choice.ready ? undefined : 'Still being drawn. You can pick it and wait';
+  const parts: string[] = [];
+  if (choice.sparks > 0) parts.push(`Uses ${formatSparks(choice.sparks)}`);
+  if (!choice.ready && choice.nodeId) parts.push('Still being drawn. You can pick it and wait');
+  return parts.length ? parts.join('. ') : undefined;
 }
 
-const ChoiceCard = React.memo(({ choice, closed, onChoose }: ChoiceCardProps) => {
+const ChoiceCard = React.memo(({ choice, closed, onChoose, onFocusChoice }: ChoiceCardProps) => {
   const poster = resolveMediaUrl(choice.posterUrl);
   const source = useMemo(() => (poster ? { uri: poster } : null), [poster]);
   const select = useCallback(() => onChoose(choice.index), [choice.index, onChoose]);
+  const focus = useCallback(() => onFocusChoice(choice.index), [choice.index, onFocusChoice]);
+  const blur = useCallback(() => onFocusChoice(null), [onFocusChoice]);
 
   return (
     <Focusable
@@ -49,6 +57,8 @@ const ChoiceCard = React.memo(({ choice, closed, onChoose }: ChoiceCardProps) =>
       hint={choiceHint(choice, closed)}
       position={choice.index + 1}
       onSelect={select}
+      onFocus={focus}
+      onBlur={blur}
       style={styles.slot}
     >
       {(focused) => (
@@ -68,11 +78,16 @@ const ChoiceCard = React.memo(({ choice, closed, onChoose }: ChoiceCardProps) =>
                 <View style={styles.badge}>
                   <Pill text="Path closed" tone="dark" />
                 </View>
-              ) : !choice.ready ? (
+              ) : !choice.ready && choice.nodeId ? (
                 <View style={styles.badge}>
                   <Pill text="Drawing" tone="dark" icon={<WaitingDots size={8} />} />
                 </View>
               ) : null}
+              {!closed && choice.sparks > 0 && (
+                <View style={styles.costBadge}>
+                  <CostBadge sparks={choice.sparks} />
+                </View>
+              )}
             </View>
           </View>
           <Text style={[styles.label, focused && styles.labelFocused]} numberOfLines={2}>
@@ -86,19 +101,32 @@ const ChoiceCard = React.memo(({ choice, closed, onChoose }: ChoiceCardProps) =>
 
 const ELSE_ALT_LABELS = ['My own idea', 'Something different', 'Type my idea'];
 
-const SomethingElseCard = React.memo(({ position, onSelect }: { position: number; onSelect: () => void }) => (
+interface SomethingElseProps {
+  position: number;
+  cost: number;
+  onSelect: () => void;
+  onFocusChoice: (index: number | null) => void;
+}
+
+const SomethingElseCard = React.memo(({ position, cost, onSelect, onFocusChoice }: SomethingElseProps) => (
   <Focusable
     label="Something else"
-    hint="Say or type your own idea"
+    hint={cost > 0 ? `Say or type your own idea. Uses ${formatSparks(cost)}` : 'Say or type your own idea'}
     position={position}
     altLabels={ELSE_ALT_LABELS}
     onSelect={onSelect}
+    onFocus={() => onFocusChoice(null)}
     style={styles.slot}
   >
     {(focused) => (
       <FocusScale focused={focused} style={styles.card}>
         <View style={[styles.thumb, styles.elseThumb, focused && styles.thumbFocused]}>
           {focused && <FocusGlow radius={radii.lg} />}
+          {cost > 0 && (
+            <View style={styles.costBadge}>
+              <CostBadge sparks={cost} />
+            </View>
+          )}
           <View style={[styles.elseIcon, focused && styles.elseIconFocused]}>
             <PencilIcon size={scaledPixels(56)} color={focused ? colors.textOnAccent : colors.text} />
           </View>
@@ -118,12 +146,22 @@ const SomethingElseCard = React.memo(({ position, onSelect }: { position: number
 interface ChoiceOverlayProps {
   scene: SceneView;
   closedChoices: number[];
+  customCost: number;
   active: boolean;
   onChoose: (index: number) => void;
   onSomethingElse: () => void;
+  onFocusChoice: (index: number | null) => void;
 }
 
-export function ChoiceOverlay({ scene, closedChoices, active, onChoose, onSomethingElse }: ChoiceOverlayProps) {
+export function ChoiceOverlay({
+  scene,
+  closedChoices,
+  customCost,
+  active,
+  onChoose,
+  onSomethingElse,
+  onFocusChoice,
+}: ChoiceOverlayProps) {
   const enter = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -158,11 +196,21 @@ export function ChoiceOverlay({ scene, closedChoices, active, onChoose, onSometh
           <SpatialNavigationView direction="horizontal" style={styles.row}>
             {scene.choices.map((choice) => (
               <DefaultFocus key={choice.index} enable={choice.index === firstOpen}>
-                <ChoiceCard choice={choice} closed={closedChoices.includes(choice.index)} onChoose={onChoose} />
+                <ChoiceCard
+                  choice={choice}
+                  closed={closedChoices.includes(choice.index)}
+                  onChoose={onChoose}
+                  onFocusChoice={onFocusChoice}
+                />
               </DefaultFocus>
             ))}
             <DefaultFocus enable={firstOpen === -1}>
-              <SomethingElseCard position={scene.choices.length + 1} onSelect={onSomethingElse} />
+              <SomethingElseCard
+                position={scene.choices.length + 1}
+                cost={customCost}
+                onSelect={onSomethingElse}
+                onFocusChoice={onFocusChoice}
+              />
             </DefaultFocus>
           </SpatialNavigationView>
         </Animated.View>
@@ -238,6 +286,12 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: scaledPixels(16),
     top: scaledPixels(16),
+  },
+  costBadge: {
+    position: 'absolute',
+    right: scaledPixels(16),
+    top: scaledPixels(16),
+    zIndex: 2,
   },
   label: {
     ...type.heading,

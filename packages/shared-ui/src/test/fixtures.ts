@@ -7,6 +7,7 @@ export function makeChoice(index: number, overrides: Partial<ChoiceView> = {}): 
     nodeId: `child-${index}`,
     ready: true,
     posterUrl: `/media/child-${index}/poster.jpg`,
+    sparks: 0,
     ...overrides,
   };
 }

@@ -16,6 +16,9 @@ import { SparkleIcon } from '../components/Icons';
 import { MicHint, PromptField } from '../components/PromptField';
 import { WaitingDots } from '../components/WaitingDots';
 import { Wordmark } from '../components/Wordmark';
+import { SparksPill } from '../components/sparks/SparksPill';
+import { SparksSheet } from '../components/sparks/SparksSheet';
+import { canAfford, costLabel, useSparks } from '../purchases';
 import type { ScreenNavigation } from '../navigation/types';
 
 const MAX_MOODS = 3;
@@ -35,9 +38,15 @@ export default function CreateScreen() {
   const [audience, setAudience] = useState<Audience>('family');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [needsSparks, setNeedsSparks] = useState(false);
   const busy = useRef(false);
+  const { wallet } = useSparks();
+  const storyCost = wallet?.sceneCost ?? 1;
 
-  useBackHandler(() => navigation.goBack(), isFocused);
+  useBackHandler(() => {
+    if (needsSparks) setNeedsSparks(false);
+    else navigation.goBack();
+  }, isFocused);
 
   const changePrompt = useCallback((text: string) => {
     setPrompt(text);
@@ -60,6 +69,10 @@ export default function CreateScreen() {
       setError(check.message);
       return;
     }
+    if (!canAfford(wallet, storyCost)) {
+      setNeedsSparks(true);
+      return;
+    }
     busy.current = true;
     setSubmitting(true);
     setError(null);
@@ -73,88 +86,103 @@ export default function CreateScreen() {
         origin: { ideaId: null, prompt: check.text, moods, audience },
       });
     } catch (e) {
-      setError(messageForError(toApiError(e).code, 'start'));
+      const code = toApiError(e).code;
+      if (code === 'payment_required') setNeedsSparks(true);
+      else setError(messageForError(code, 'start'));
     } finally {
       busy.current = false;
       setSubmitting(false);
     }
-  }, [prompt, moods, audience, navigation]);
+  }, [prompt, moods, audience, navigation, wallet, storyCost]);
+
+  const closeSparks = useCallback(() => setNeedsSparks(false), []);
+  const sparksDone = useCallback(() => {
+    setNeedsSparks(false);
+    start();
+  }, [start]);
 
   return (
-    <SpatialNavigationRoot isActive={isFocused}>
-      <View style={styles.screen}>
-        <Gradient style={styles.glow} direction="left" stops={GLOW} />
-        <View style={styles.decor} pointerEvents="none">
-          <SparkleIcon size={scaledPixels(360)} color="rgba(140, 123, 255, 0.28)" />
-        </View>
+    <>
+      <SpatialNavigationRoot isActive={isFocused && !needsSparks}>
+        <View style={styles.screen}>
+          <Gradient style={styles.glow} direction="left" stops={GLOW} />
+          <View style={styles.decor} pointerEvents="none">
+            <SparkleIcon size={scaledPixels(360)} color="rgba(140, 123, 255, 0.28)" />
+          </View>
 
-        <View style={styles.header}>
-          <Wordmark size={30} />
-        </View>
+          <View style={styles.header}>
+            <Wordmark size={30} />
+          </View>
+          <View style={styles.wallet}>
+            <SparksPill />
+          </View>
 
-        <View style={styles.column}>
-          <Text style={styles.title}>Make your own</Text>
-          <Text style={styles.subtitle}>
-            Tell us what you feel like watching. We will film the first scene just for you.
-          </Text>
+          <View style={styles.column}>
+            <Text style={styles.title}>Make your own</Text>
+            <Text style={styles.subtitle}>
+              Tell us what you feel like watching. We will film the first scene just for you.
+            </Text>
 
-          <DefaultFocus>
-            <PromptField
-              label="Story idea"
-              value={prompt}
-              onChangeText={changePrompt}
-              placeholder="A shy dragon who opens a bakery"
-              maxLength={PROMPT_LIMITS.max}
-            />
-          </DefaultFocus>
-          <MicHint text="Press the microphone button on your remote and tell us what you feel like watching" />
-
-          <Text style={styles.section}>Mood</Text>
-          <SpatialNavigationView direction="horizontal" style={styles.row}>
-            {MOODS.map((mood) => (
-              <Chip
-                key={mood}
-                group="Mood"
-                value={mood}
-                label={moodLabel(mood)}
-                selected={moods.includes(mood)}
-                onToggle={toggleMood}
+            <DefaultFocus>
+              <PromptField
+                label="Story idea"
+                value={prompt}
+                onChangeText={changePrompt}
+                placeholder="A shy dragon who opens a bakery"
+                maxLength={PROMPT_LIMITS.max}
               />
-            ))}
-          </SpatialNavigationView>
+            </DefaultFocus>
+            <MicHint text="Press the microphone button on your remote and tell us what you feel like watching" />
 
-          <Text style={styles.section}>Who is watching</Text>
-          <SpatialNavigationView direction="horizontal" style={styles.row}>
-            {AUDIENCES.map((value) => (
-              <Chip
-                key={value}
-                group="Who is watching"
-                value={value}
-                label={audienceLabel(value)}
-                selected={audience === value}
-                onToggle={pickAudience}
+            <Text style={styles.section}>Mood</Text>
+            <SpatialNavigationView direction="horizontal" style={styles.row}>
+              {MOODS.map((mood) => (
+                <Chip
+                  key={mood}
+                  group="Mood"
+                  value={mood}
+                  label={moodLabel(mood)}
+                  selected={moods.includes(mood)}
+                  onToggle={toggleMood}
+                />
+              ))}
+            </SpatialNavigationView>
+
+            <Text style={styles.section}>Who is watching</Text>
+            <SpatialNavigationView direction="horizontal" style={styles.row}>
+              {AUDIENCES.map((value) => (
+                <Chip
+                  key={value}
+                  group="Who is watching"
+                  value={value}
+                  label={audienceLabel(value)}
+                  selected={audience === value}
+                  onToggle={pickAudience}
+                />
+              ))}
+            </SpatialNavigationView>
+
+            <View style={styles.actions}>
+              <Button
+                label={submitting ? 'Starting your story' : 'Start the story'}
+                detail={costLabel(wallet, storyCost) ?? undefined}
+                variant="primary"
+                onSelect={start}
+                icon={(color) =>
+                  submitting ? (
+                    <WaitingDots color={color} size={10} />
+                  ) : (
+                    <SparkleIcon size={scaledPixels(30)} color={color} />
+                  )
+                }
               />
-            ))}
-          </SpatialNavigationView>
-
-          <View style={styles.actions}>
-            <Button
-              label={submitting ? 'Starting your story' : 'Start the story'}
-              variant="primary"
-              onSelect={start}
-              icon={(color) =>
-                submitting ? (
-                  <WaitingDots color={color} size={10} />
-                ) : (
-                  <SparkleIcon size={scaledPixels(30)} color={color} />
-                )
-              }
-            />
-            {error ? <Text style={styles.error}>{error}</Text> : null}
+              {error ? <Text style={styles.error}>{error}</Text> : null}
+            </View>
           </View>
         </View>
-      </View>
-    </SpatialNavigationRoot>
+      </SpatialNavigationRoot>
+      {needsSparks && <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />}
+    </>
   );
 }
 
@@ -180,6 +208,11 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: scaledPixels(safeZones.titleSafe.vertical),
     left: SIDE,
+  },
+  wallet: {
+    position: 'absolute',
+    top: scaledPixels(safeZones.titleSafe.vertical),
+    right: SIDE,
   },
   column: {
     position: 'absolute',

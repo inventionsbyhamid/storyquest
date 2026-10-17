@@ -10,12 +10,14 @@ import type { MediaCommand } from '../components/player/types';
 import { CaptionBar } from '../components/story/CaptionBar';
 import { ChoiceOverlay } from '../components/story/ChoiceOverlay';
 import { CustomChoiceSheet, PausedBadge, PauseMenu, StoryErrorPanel } from '../components/story/Panels';
+import { SparksSheet } from '../components/sparks/SparksSheet';
 import { StillFrame } from '../components/story/StillFrame';
 import { WaitingCard } from '../components/story/WaitingCard';
 import { Notice } from '../components/Notice';
 import { useAppActive } from '../hooks/useAppActive';
 import { useBackHandler, useRemoteKey } from '../hooks/useBackHandler';
 import { useLatest } from '../hooks/useLatest';
+import { canAfford, costLabel, sparks, useSparks } from '../purchases';
 import { createSerialQueue, sendChoice } from '../story/choiceSync';
 import { formatMadeIn, formatSceneProgress } from '../story/format';
 import { messageForError } from '../story/messages';
@@ -23,6 +25,7 @@ import { startRequestFor } from '../story/origin';
 import {
   createStoryState,
   isPlayerPaused,
+  isPrivatePath,
   isStillVisible,
   shouldWatchChoices,
   storyReducer,
@@ -36,6 +39,7 @@ import type { ScreenNavigation, ScreenRoute } from '../navigation/types';
 
 const TOGGLE_DEBOUNCE_MS = 600;
 const SYNC_FLUSH_MS = 3000;
+const FOCUS_PREFETCH_MS = 1200;
 const LOCAL_START_TIMEOUT_MS = 4000;
 
 export default function StoryScreen() {
@@ -58,6 +62,10 @@ export default function StoryScreen() {
   const sentSyncs = useRef(new Set<number>());
   const childFetches = useRef(new Set<string>());
   const latestState = useLatest(state);
+  const { wallet } = useSparks();
+  const latestWallet = useLatest(wallet);
+  const prefetchedChoices = useRef(new Set<string>());
+  const focusTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const { phase, scene } = state;
   const inPlayback = phase === 'playing' || phase === 'ending';
@@ -111,10 +119,16 @@ export default function StoryScreen() {
       state.waitKind === 'custom'
         ? { kind: 'custom', fromNodeId: state.scene.id, text: state.customText }
         : { kind: 'preset', fromNodeId: state.scene.id, index: state.pendingChoice ?? 0 };
+    const paid =
+      body.kind === 'custom' ||
+      (state.scene.choices.find((choice) => choice.index === state.pendingChoice)?.sparks ?? 0) > 0;
     const controller = new AbortController();
     syncQueue
       .run(() => api.choose(session.storyId, body, { signal: controller.signal }))
-      .then((result) => dispatch({ type: 'CHOICE_ACCEPTED', seq, nextNodeId: result.nextNodeId }))
+      .then((result) => {
+        dispatch({ type: 'CHOICE_ACCEPTED', seq, nextNodeId: result.nextNodeId });
+        if (paid) sparks.refreshWallet();
+      })
       .catch((error) => {
         if (!isAbortError(error)) dispatch({ type: 'CHOICE_FAILED', seq, code: toApiError(error).code });
       });
@@ -299,24 +313,87 @@ export default function StoryScreen() {
   const choose = useCallback(
     (index: number) => {
       const current = latestState.current;
-      const nodeId = current.scene?.choices.find((choice) => choice.index === index)?.nodeId;
+      const choice = current.scene?.choices.find((item) => item.index === index);
+      if (choice && choice.sparks > 0 && !canAfford(latestWallet.current, choice.sparks)) {
+        dispatch({ type: 'NEED_SPARKS', prompt: { kind: 'choice', index } });
+        return;
+      }
+      const nodeId = choice?.nodeId;
       markChoice(`${index}${nodeId && current.childScenes[nodeId] ? ' scene cached' : ' waiting'}`);
       dispatch({ type: 'CHOOSE', index });
     },
-    [latestState],
+    [latestState, latestWallet],
   );
-  const openCustom = useCallback(() => dispatch({ type: 'OPEN_CUSTOM' }), []);
+  const openCustom = useCallback(() => {
+    const current = latestWallet.current;
+    if (!canAfford(current, current?.sceneCost ?? 1)) {
+      dispatch({ type: 'NEED_SPARKS', prompt: { kind: 'openCustom' } });
+      return;
+    }
+    dispatch({ type: 'OPEN_CUSTOM' });
+  }, [latestWallet]);
   const changeCustom = useCallback((text: string) => dispatch({ type: 'CUSTOM_TEXT', text }), []);
   const submitCustom = useCallback(() => {
+    const current = latestWallet.current;
+    if (!canAfford(current, current?.sceneCost ?? 1)) {
+      dispatch({ type: 'NEED_SPARKS', prompt: { kind: 'custom' } });
+      return;
+    }
     markChoice('custom');
     dispatch({ type: 'SUBMIT_CUSTOM' });
-  }, []);
+  }, [latestWallet]);
+
+  // After buying Sparks, carry on with exactly what the family was doing.
+  const closeSparks = useCallback(() => dispatch({ type: 'SPARKS_DISMISSED' }), []);
+  const sparksDone = useCallback(() => {
+    const prompt = latestState.current.sparksPrompt;
+    dispatch({ type: 'SPARKS_DISMISSED' });
+    if (prompt?.kind === 'choice') choose(prompt.index);
+    else if (prompt?.kind === 'custom') submitCustom();
+    else if (prompt?.kind === 'openCustom') openCustom();
+  }, [latestState, choose, submitCustom, openCustom]);
+
+  // On private paths nothing is filmed ahead, so prepare the choice a family lingers on.
+  useEffect(
+    () => () => {
+      if (focusTimer.current) clearTimeout(focusTimer.current);
+    },
+    [],
+  );
+  const onFocusChoice = useCallback(
+    (index: number | null) => {
+      if (focusTimer.current) clearTimeout(focusTimer.current);
+      focusTimer.current = null;
+      if (index === null) return;
+      focusTimer.current = setTimeout(() => {
+        focusTimer.current = null;
+        const current = latestState.current;
+        const currentScene = current.scene;
+        if (!currentScene || current.phase !== 'choosing' || !isPrivatePath(currentScene)) return;
+        const choice = currentScene.choices.find((item) => item.index === index);
+        if (!choice || choice.ready || current.disabledChoices.includes(index)) return;
+        if (!canAfford(latestWallet.current, choice.sparks)) return;
+        const key = `${currentScene.id}:${index}`;
+        if (prefetchedChoices.current.has(key)) return;
+        prefetchedChoices.current.add(key);
+        logTiming('preparing focused choice', String(index));
+        api
+          .prefetchChild(currentScene.id, { index }, { signal: lifetime.signal })
+          .then((parent) => dispatch({ type: 'NODE_UPDATE', scene: parent }))
+          .catch((error) => {
+            if (!isAbortError(error)) prefetchedChoices.current.delete(key);
+          });
+      }, FOCUS_PREFETCH_MS);
+    },
+    [latestState, latestWallet, lifetime],
+  );
   const cancelCustom = useCallback(() => dispatch({ type: 'CANCEL_CUSTOM' }), []);
   const resume = useCallback(() => dispatch({ type: 'CLOSE_MENU' }), []);
   const dismissNotice = useCallback((id: number) => dispatch({ type: 'DISMISS_NOTICE', id }), []);
 
   const waiting = waitingLabel(state);
-  const layersActive = isFocused && !state.menuOpen;
+  const layersActive = isFocused && !state.menuOpen && !state.sparksPrompt;
+  const customCost = wallet?.sceneCost ?? 1;
 
   return (
     <View style={styles.screen}>
@@ -344,9 +421,11 @@ export default function StoryScreen() {
         <ChoiceOverlay
           scene={scene}
           closedChoices={state.disabledChoices}
+          customCost={customCost}
           active={layersActive && phase === 'choosing'}
           onChoose={choose}
           onSomethingElse={openCustom}
+          onFocusChoice={onFocusChoice}
         />
       )}
 
@@ -355,6 +434,7 @@ export default function StoryScreen() {
           active={layersActive}
           text={state.customText}
           error={state.customError}
+          costText={costLabel(wallet, customCost)}
           onChangeText={changeCustom}
           onSubmit={submitCustom}
           onCancel={cancelCustom}
@@ -382,6 +462,10 @@ export default function StoryScreen() {
 
       {phase === 'error' && state.error && (
         <StoryErrorPanel message={state.error.message} active={isFocused} onRetry={retry} onExit={exitHome} />
+      )}
+
+      {state.sparksPrompt && !state.menuOpen && (
+        <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />
       )}
 
       {state.menuOpen && (

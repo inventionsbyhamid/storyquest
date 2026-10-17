@@ -32,8 +32,12 @@ export interface ChoiceSync {
   nodeId: string;
 }
 
+// The action to resume once the family has enough Sparks.
+export type SparksPrompt = { kind: 'choice'; index: number } | { kind: 'custom' } | { kind: 'openCustom' };
+
 export interface StoryState {
   phase: StoryPhase;
+  sparksPrompt: SparksPrompt | null;
   scene: SceneView | null;
   childScenes: Record<string, SceneView>;
   syncs: ChoiceSync[];
@@ -63,6 +67,8 @@ export type StoryEvent =
   | { type: 'CHILD_SCENE'; scene: SceneView }
   | { type: 'SYNC_DONE'; id: number }
   | { type: 'SYNC_FAILED'; id: number }
+  | { type: 'NEED_SPARKS'; prompt: SparksPrompt }
+  | { type: 'SPARKS_DISMISSED' }
   | { type: 'CLIP_PLAYING'; clipUrl: string }
   | { type: 'CLIP_ENDED'; clipUrl: string }
   | { type: 'CLIP_FAILED'; clipUrl: string }
@@ -91,6 +97,7 @@ export interface StoryStart {
 export function createStoryState({ nodeId, posterUrl = null }: StoryStart): StoryState {
   return {
     phase: 'loadingScene',
+    sparksPrompt: null,
     scene: null,
     childScenes: {},
     syncs: [],
@@ -148,6 +155,7 @@ function startScene(state: StoryState, scene: SceneView): StoryState {
   return {
     ...clearPending(state),
     phase: scene.isEnding ? 'ending' : 'playing',
+    sparksPrompt: null,
     scene,
     childScenes: {},
     still: state.still ?? scene.posterUrl,
@@ -211,6 +219,11 @@ function onClipFinished(state: StoryState, clipUrl: string, failed: boolean): St
   return failed ? withNotice(next, messages.sceneWouldNotPlay) : next;
 }
 
+// Private paths are filmed only for this family, so the server prepares just the choice they focus on.
+export function isPrivatePath(scene: SceneView | null): boolean {
+  return !!scene && scene.choices.some((choice) => choice.sparks > 0);
+}
+
 export function isPlayable(scene: SceneView | undefined): scene is SceneView {
   return !!scene && scene.status === 'ready' && !!scene.clipUrl;
 }
@@ -230,8 +243,9 @@ function onChoose(state: StoryState, index: number): StoryState {
   if (state.disabledChoices.includes(index)) return withNotice(state, messages.pathClosed);
 
   // The next scene is already on the device: play it now and tell the server in the background.
+  // Paid scenes wait for the server to accept the choice, because that is when Sparks are charged.
   const cached = choice.nodeId ? state.childScenes[choice.nodeId] : undefined;
-  if (choice.ready && isPlayable(cached)) {
+  if (choice.ready && choice.sparks === 0 && isPlayable(cached)) {
     const id = state.syncSeq + 1;
     const sync: ChoiceSync = { id, fromNodeId: state.scene.id, index, nodeId: cached.id };
     return { ...startScene(state, cached), syncs: [...state.syncs, sync], syncSeq: id };
@@ -260,6 +274,13 @@ function onChoiceAccepted(state: StoryState, seq: number, nextNodeId: string): S
 
 function onChoiceFailed(state: StoryState, seq: number, code: ApiErrorCode): StoryState {
   if (state.phase !== 'waitingNext' || seq !== state.requestSeq) return state;
+  if (code === 'payment_required') {
+    if (state.waitKind === 'custom') {
+      return { ...clearPending(state), phase: 'customInput', sparksPrompt: { kind: 'custom' } };
+    }
+    const index = state.pendingChoice ?? 0;
+    return { ...clearPending(state), phase: 'choosing', sparksPrompt: { kind: 'choice', index } };
+  }
   if (state.waitKind === 'custom' && code !== 'budget_exhausted') {
     return {
       ...clearPending(state),
@@ -334,7 +355,14 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
 
     case 'OPEN_CUSTOM':
       if (state.phase !== 'choosing' || state.menuOpen) return state;
-      return { ...state, phase: 'customInput', customError: null, notice: null };
+      return { ...state, phase: 'customInput', customError: null, notice: null, sparksPrompt: null };
+
+    case 'NEED_SPARKS':
+      if (state.phase !== 'choosing' && state.phase !== 'customInput') return state;
+      return { ...state, sparksPrompt: event.prompt };
+
+    case 'SPARKS_DISMISSED':
+      return state.sparksPrompt ? { ...state, sparksPrompt: null } : state;
 
     case 'CUSTOM_TEXT':
       if (state.phase !== 'customInput') return state;
@@ -348,6 +376,7 @@ export function storyReducer(state: StoryState, event: StoryEvent): StoryState {
       return { ...state, phase: 'choosing', customError: null };
 
     case 'BACK':
+      if (state.sparksPrompt) return { ...state, sparksPrompt: null };
       if (state.menuOpen) return { ...state, menuOpen: false };
       if (state.phase === 'customInput') return { ...state, phase: 'choosing', customError: null };
       if (state.phase === 'finished') return state;

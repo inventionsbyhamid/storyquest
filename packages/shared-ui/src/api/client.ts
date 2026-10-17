@@ -4,12 +4,15 @@ import {
   DEVICE_HEADER,
   ErrorResponse,
   FinishResponse,
+  IAP_USER_HEADER,
   SceneView,
   ShareView,
   StoryView,
   TodayResponse,
+  VerifyPurchaseResponse,
+  WalletView,
 } from '@storyquest/contracts';
-import type { ChooseRequest, StartStoryRequest } from '@storyquest/contracts';
+import type { ChooseRequest, PrefetchRequest, StartStoryRequest, VerifyPurchaseRequest } from '@storyquest/contracts';
 import { ApiError, codeForStatus, isApiError, isTransient, toApiError } from './errors';
 import { resolveMediaUrl } from './media';
 import { sleep as defaultSleep } from './sleep';
@@ -31,6 +34,7 @@ export interface RequestOptions {
 export interface ApiClientOptions {
   getBaseUrl: () => string;
   getDeviceId: () => Promise<string>;
+  getIapUserId?: () => string | null;
   fetch?: typeof fetch;
   timeoutMs?: number;
   retries?: number;
@@ -76,6 +80,8 @@ export function createApiClient(options: ApiClientOptions) {
     try {
       const deviceId = await options.getDeviceId();
       const headers: Record<string, string> = { accept: 'application/json', [DEVICE_HEADER]: deviceId };
+      const iapUserId = options.getIapUserId?.();
+      if (iapUserId) headers[IAP_USER_HEADER] = iapUserId;
       if (body !== undefined) headers['content-type'] = 'application/json';
 
       const response = await fetchImpl(`${options.getBaseUrl()}/${API_VERSION}${path}`, {
@@ -182,6 +188,9 @@ export function createApiClient(options: ApiClientOptions) {
       }).then(withSceneMedia);
     },
 
+    prefetchChild: (nodeId: string, input: PrefetchRequest, opts?: RequestOptions) =>
+      request('POST', `/nodes/${id(nodeId)}/prefetch`, SceneView, input, opts).then(withSceneMedia),
+
     choose: (storyId: string, input: ChooseRequest, opts?: RequestOptions) =>
       request('POST', `/stories/${id(storyId)}/choose`, ChooseResponse, input, opts),
 
@@ -191,6 +200,11 @@ export function createApiClient(options: ApiClientOptions) {
         shareUrl: media(result.shareUrl) ?? result.shareUrl,
         movieUrl: media(result.movieUrl),
       })),
+
+    getWallet: (opts?: RequestOptions) => request('GET', '/wallet', WalletView, undefined, opts),
+
+    verifyPurchase: (input: VerifyPurchaseRequest, opts?: RequestOptions) =>
+      request('POST', '/purchases/verify', VerifyPurchaseResponse, input, opts),
 
     getShare: (slug: string, opts?: RequestOptions) =>
       request('GET', `/share/${id(slug)}`, ShareView, undefined, opts).then((share) => ({

@@ -12,13 +12,24 @@ interface FocusableProps {
   altLabels?: string[];
   onSelect?: () => void;
   onFocus?: () => void;
+  onBlur?: () => void;
   style?: ViewStyle;
   children: (focused: boolean) => React.ReactElement;
 }
 
 // Every focusable gets a short spoken name: screen readers read it and Vega voice navigation
 // matches "Alexa, select ..." against it.
-export function Focusable({ label, hint, position, altLabels, onSelect, onFocus, style, children }: FocusableProps) {
+export function Focusable({
+  label,
+  hint,
+  position,
+  altLabels,
+  onSelect,
+  onFocus,
+  onBlur,
+  style,
+  children,
+}: FocusableProps) {
   const altKey = altLabels?.join('|');
   const viewProps = useMemo(
     () => ({
@@ -31,7 +42,13 @@ export function Focusable({ label, hint, position, altLabels, onSelect, onFocus,
     [label, hint, position, altKey],
   );
   return (
-    <SpatialNavigationFocusableView onSelect={onSelect} onFocus={onFocus} style={style} viewProps={viewProps}>
+    <SpatialNavigationFocusableView
+      onSelect={onSelect}
+      onFocus={onFocus}
+      onBlur={onBlur}
+      style={style}
+      viewProps={viewProps}
+    >
       {({ isFocused }) => children(isFocused)}
     </SpatialNavigationFocusableView>
   );

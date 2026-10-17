@@ -8,6 +8,7 @@ import { Button } from '../Button';
 import { Gradient } from '../Gradient';
 import { PauseIcon, PlayIcon, SparkleIcon } from '../Icons';
 import { MicHint, PromptField } from '../PromptField';
+import { SparksPill } from '../sparks/SparksPill';
 
 const SHEET_SCRIM = [
   { offset: 0, color: colors.background, opacity: 0 },
@@ -65,18 +66,30 @@ interface CustomChoiceSheetProps {
   active: boolean;
   text: string;
   error: string | null;
+  costText: string | null;
   onChangeText: (text: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
-export function CustomChoiceSheet({ active, text, error, onChangeText, onSubmit, onCancel }: CustomChoiceSheetProps) {
+export function CustomChoiceSheet({
+  active,
+  text,
+  error,
+  costText,
+  onChangeText,
+  onSubmit,
+  onCancel,
+}: CustomChoiceSheetProps) {
   return (
     <SpatialNavigationRoot isActive={active}>
       <View style={styles.sheetWrap}>
         <Gradient style={StyleSheet.absoluteFill} direction="down" stops={SHEET_SCRIM} />
         <View style={styles.sheet}>
-          <Text style={styles.sheetEyebrow}>Something else</Text>
+          <View style={styles.sheetTop}>
+            <Text style={styles.sheetEyebrow}>Something else</Text>
+            <SparksPill />
+          </View>
           <Text style={styles.sheetTitle}>What should happen next?</Text>
           <DefaultFocus>
             <PromptField
@@ -94,6 +107,7 @@ export function CustomChoiceSheet({ active, text, error, onChangeText, onSubmit,
             <SpatialNavigationView direction="horizontal">
               <Button
                 label="Make it happen"
+                detail={costText ?? undefined}
                 variant="primary"
                 onSelect={onSubmit}
                 icon={(color) => <SparkleIcon size={scaledPixels(30)} color={color} />}
@@ -206,6 +220,11 @@ const styles = StyleSheet.create({
   sheet: {
     paddingHorizontal: scaledPixels(safeZones.titleSafe.horizontal + 160),
     paddingBottom: scaledPixels(safeZones.titleSafe.vertical + 24),
+  },
+  sheetTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
   sheetEyebrow: {
     ...type.meta,

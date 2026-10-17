@@ -13,6 +13,11 @@ export const messages = {
   movieAlmostReady: 'Your movie is almost ready.',
   movieFailed: 'We could not make the movie this time.',
   choiceNotSaved: 'We could not save that choice, but your story keeps going.',
+  purchaseCancelled: 'No Sparks were bought, and nothing was charged.',
+  purchasesUnavailable: 'Purchases are not available on this TV right now. Free ideas come back tomorrow.',
+  purchaseInvalid: 'Amazon could not confirm that purchase, so no Sparks were added.',
+  sparksPending: 'Your purchase went through. Your Sparks will appear as soon as we reach StoryQuest.',
+  purchaseStillOpen: 'That purchase is still being finished. Try again in a moment.',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {
@@ -22,6 +27,10 @@ export function messageForError(code: ApiErrorCode | 'node_failed', context: Mes
   switch (code) {
     case 'unsafe_input':
       return "Let's try a different idea.";
+    case 'payment_required':
+      return 'You need a few more Sparks for that.';
+    case 'purchase_invalid':
+      return messages.purchaseInvalid;
     case 'budget_exhausted':
       if (context === 'custom') return 'New paths are resting until tomorrow. Pick one of the choices.';
       if (context === 'preset') return 'New paths are resting until tomorrow. Try the other choice.';
