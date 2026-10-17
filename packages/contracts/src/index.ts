@@ -15,6 +15,7 @@ export const ChoiceView = z.object({
   nodeId: z.string().nullable(),
   ready: z.boolean(),
   posterUrl: z.string().nullable(),
+  sparks: z.number().int().min(0),
 });
 export type ChoiceView = z.infer<typeof ChoiceView>;
 
@@ -161,16 +162,17 @@ export type SparkProduct = z.infer<typeof SparkProduct>;
 
 export const WalletView = z.object({
   sparks: z.number().int().min(0),
-  freeIdeasLeft: z.number().int().min(0),
-  freeStoriesLeft: z.number().int().min(0),
-  prices: z.object({
-    customChoice: z.number().int().min(0),
-    customStory: z.number().int().min(0),
-  }),
+  freeSparks: z.number().int().min(0),
+  sceneCost: z.number().int().min(0),
   products: z.array(SparkProduct),
   purchasesEnabled: z.boolean(),
 });
 export type WalletView = z.infer<typeof WalletView>;
+
+export const PrefetchRequest = z.object({
+  index: z.number().int().min(0).max(1),
+});
+export type PrefetchRequest = z.infer<typeof PrefetchRequest>;
 
 export const VerifyPurchaseRequest = z.object({
   receiptId: z.string().min(1).max(512),

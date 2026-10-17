@@ -79,11 +79,14 @@ No em dashes, en dashes or hyphens in any text a user sees. The director is told
 
 ## Sparks and purchases
 
-* Daily stories and preset choices are free, because shared paths are made once and reused.
-* Custom ideas cost real video, so they use Sparks: 1 for a Something else idea, 5 for a Make your own story. Each TV gets a free daily allowance first (5 ideas, 2 stories).
-* Sparks are bought with Amazon In App Purchasing on Vega: consumable packs of 10 and 30. No sign up: the wallet belongs to the Amazon account's IAP user id, so it follows the family to every TV on that account.
+* Daily stories and their preset paths are free. A shared story tree is filmed once and reused by every family, so its cost does not grow with the audience.
+* Anything filmed only for one family costs Sparks: **1 Spark per newly filmed private scene**. That covers a Something else idea, every later scene on that private path, and every scene of a Make your own story. Choice cards show the cost when picking them will film something new.
+* Free Sparks: one free filmed scene per new user, for life. An optional daily allowance exists only for judging and promotions.
+* Private paths do not film both next scenes ahead. The TV asks the server to prepare only the choice the family focuses on, and only when they can afford it. Sparks are charged when a scene is chosen, not when it is prepared.
+* Sparks are bought with Amazon In App Purchasing on Vega: consumable packs of 10 and 25. No sign up: the wallet belongs to the Amazon account's IAP user id, so it follows the family to every TV on that account.
 * The app sends each receipt to the server, the server verifies it with the Amazon Receipt Verification Service, credits Sparks exactly once per receipt, and only then does the app mark the purchase fulfilled. Unfulfilled purchases are picked up again on the next launch.
 * Modes: fake for development and tests, sandbox for App Tester, production for the Appstore.
+* Pricing target: about 150% markup on video cost after Amazon's 20% share (about $1.15 to $1.45 per Spark), which breaks even at roughly 1.5% conversion with 1000 daily users. See docs/economics.md.
 
 ## Architecture
 
