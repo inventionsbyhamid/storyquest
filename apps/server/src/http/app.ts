@@ -10,6 +10,8 @@ import {
   type ErrorResponse,
   FinishResponse,
   PrefetchRequest,
+  ReportRequest,
+  ReportResponse,
   SceneView,
   ShareView,
   StartStoryRequest,
@@ -208,6 +210,21 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     },
   );
 
+  app.post<{ Params: { id: string } }>(
+    '/v1/nodes/:id/report',
+    {
+      config: {
+        rateLimit: { max: 10, timeWindow: '1 hour', keyGenerator: (request) => `report|${deviceHeader(request) ?? request.ip}` },
+      },
+    },
+    async (request) => {
+      const device = requireDevice(request);
+      const body = parse(ReportRequest, request.body);
+      services.moderation.report(idParam(request.params.id), device, body.reason, body.storyId ?? null);
+      return parse(ReportResponse, { ok: true });
+    },
+  );
+
   app.post<{ Params: { id: string } }>('/v1/stories/:id/choose', async (request) => {
     const storyId = idParam(request.params.id);
     const body = parse(ChooseRequest, request.body);
@@ -252,7 +269,9 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     reply.header('cache-control', 'public, max-age=60');
     const email = config.SUPPORT_EMAIL.replace(/[<>"&]/g, '');
     const contact = email ? `<a href="mailto:${email}">${email}</a>` : '';
-    return renderSharePage(views.share(story), views.shareUrl(story.shareSlug!), contact);
+    const subject = encodeURIComponent(`Report story ${story.shareSlug}`);
+    const reportLink = email ? `<a href="mailto:${email}?subject=${subject}">Report this story</a>` : '';
+    return renderSharePage(views.share(story), views.shareUrl(story.shareSlug!), contact, reportLink);
   });
 
   const requireAdmin = (request: FastifyRequest) => {
@@ -314,6 +333,23 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
       return reply.code(202).send(engine.warmTree(idParam(request.params.id), depth, force));
     },
   );
+
+  app.get('/v1/admin/reports', async (request) => {
+    requireAdmin(request);
+    return { reports: services.moderation.listReports() };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/admin/nodes/:id/restore', async (request) => {
+    requireAdmin(request);
+    const node = services.moderation.restore(idParam(request.params.id));
+    return { nodeId: node.id, hidden: node.hiddenAt !== null };
+  });
+
+  app.delete<{ Params: { id: string } }>('/v1/admin/nodes/:id', async (request) => {
+    requireAdmin(request);
+    const node = await services.moderation.remove(idParam(request.params.id));
+    return { nodeId: node.id, hidden: true, deletedAt: node.deletedAt };
+  });
 
   app.get<{ Params: { id: string } }>('/v1/admin/ideas/:id/warm', async (request) => {
     requireAdmin(request);

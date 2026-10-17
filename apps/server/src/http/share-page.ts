@@ -48,6 +48,10 @@ li.scene{display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:cente
 li.scene:hover,li.scene.playing{background:var(--raised)}
 li.scene:focus-visible{outline:3px solid var(--marigold);outline-offset:2px}
 li.scene img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--raised)}
+li.scene.removed{cursor:default}
+li.scene.removed:hover{background:none}
+div.gone{width:160px;aspect-ratio:16/9;border-radius:10px;border:2px dashed var(--line);display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:14px}
+p.gone{color:var(--dim);font-size:15px}
 .num{font-size:15px;color:var(--dim)}
 .cap{margin:2px 0 0}
 li.choice{margin:2px 0 2px 84px;padding:6px 0 6px 18px;border-left:2px solid var(--line);color:var(--dim);font-size:15px}
@@ -55,13 +59,14 @@ li.choice strong{color:var(--paper);font-weight:600}
 li.choice span{display:block}
 footer{margin-top:52px;padding-top:24px;border-top:1px solid var(--line);color:var(--dim);font-size:15px}
 footer a{color:var(--dim)}
-@media (max-width:560px){li.scene{grid-template-columns:116px 1fr}li.scene img{width:116px}li.choice{margin-left:60px}}
+@media (max-width:560px){li.scene{grid-template-columns:116px 1fr}li.scene img,div.gone{width:116px}li.choice{margin-left:60px}}
 `;
 
-export function renderSharePage(view: ShareView, shareUrl: string, contact = ''): string {
+export function renderSharePage(view: ShareView, shareUrl: string, contact = '', reportLink = ''): string {
   const title = escapeHtml(view.title);
-  const first = view.scenes[0];
+  const first = view.scenes.find((scene) => !scene.removed);
   const playlist = view.movieStatus !== 'ready';
+  const removedAny = view.scenes.some((scene) => scene.removed);
   const source = view.movieUrl ?? first?.clipUrl ?? '';
   // A rarest choice is only worth a headline once it is actually rare.
   const rare = view.stats.rarestChoice && view.stats.rarestChoice.percent < 50 ? view.stats.rarestChoice : null;
@@ -76,8 +81,12 @@ export function renderSharePage(view: ShareView, shareUrl: string, contact = '')
         i > 0 && scene.choiceTaken
           ? `<li class="choice">They chose <strong>${escapeHtml(scene.choiceTaken)}</strong>${stat ? `<span>${escapeHtml(choicePhrase(stat))}</span>` : ''}</li>`
           : '';
+      const number = `<div class="num">Scene ${i + 1} of ${view.scenes.length}</div>`;
+      if (scene.removed) {
+        return `${choice}<li class="scene removed"><div class="gone">Removed</div><div>${number}<p class="cap">${escapeHtml(scene.caption ?? '')}</p><p class="cap gone">This scene was removed.</p></div></li>`;
+      }
       const poster = scene.posterUrl ? `<img src="${escapeHtml(scene.posterUrl)}" alt="" loading="lazy">` : '<img alt="">';
-      return `${choice}<li class="scene" tabindex="0" data-index="${i}">${poster}<div><div class="num">Scene ${i + 1} of ${view.scenes.length}</div><p class="cap">${escapeHtml(scene.caption ?? '')}</p></div></li>`;
+      return `${choice}<li class="scene" tabindex="0" data-index="${i}">${poster}<div>${number}<p class="cap">${escapeHtml(scene.caption ?? '')}</p></div></li>`;
     })
     .join('');
 
@@ -107,7 +116,7 @@ ${view.movieUrl ? `<meta property="og:video" content="${escapeHtml(view.movieUrl
 <h1>${title}</h1>
 <p class="sub">${escapeHtml(`A story one family steered with their TV remote${formatDate(view.createdAt) ? `, ${formatDate(view.createdAt)}` : ''}.`)}</p>
 <div class="plate"><video id="player" controls playsinline preload="metadata" src="${escapeHtml(source)}"${first?.posterUrl ? ` poster="${escapeHtml(first.posterUrl)}"` : ''}></video></div>
-${playlist ? '<p class="note">The full movie is still being put together, so here are the scenes in order.</p>' : ''}
+${playlist ? `<p class="note">${removedAny ? 'Some scenes of this story were removed, so here are the others in order.' : 'The full movie is still being put together, so here are the scenes in order.'}</p>` : ''}
 <ul class="facts">
 <li>${families === 1 ? '1 family has played this story.' : `${families} families have played this story.`}</li>
 <li>${endings === 1 ? '1 ending has been discovered so far.' : `${endings} endings have been discovered so far.`}</li>
@@ -115,7 +124,7 @@ ${rare ? `<li>${escapeHtml(choicePhrase(rare))}: ${escapeHtml(rare.label)}.</li>
 </ul>
 <h2>Their path</h2>
 <ol>${steps}</ol>
-<footer>Made with StoryQuest on Fire TV. ${contact ? `To report this story, contact ${contact}.` : ''} <a href="/privacy">Privacy</a></footer>
+<footer>Made with StoryQuest on Fire TV. ${contact ? `To report this story, contact ${contact}.` : ''} ${reportLink} <a href="/privacy">Privacy</a></footer>
 </main>
 <script type="application/json" id="scenes">${jsonForScript(view.scenes)}</script>
 <script>
@@ -123,19 +132,21 @@ ${rare ? `<li>${escapeHtml(choicePhrase(rare))}: ${escapeHtml(rare.label)}.</li>
   var scenes = JSON.parse(document.getElementById('scenes').textContent);
   var player = document.getElementById('player');
   var playlist = ${playlist ? 'true' : 'false'};
-  var items = document.querySelectorAll('li.scene');
+  var items = document.querySelectorAll('li.scene[data-index]');
   var current = 0;
   function mark(i){ items.forEach(function(el){ el.classList.toggle('playing', Number(el.dataset.index) === i); }); }
+  function next(i){ while (i < scenes.length && scenes[i].removed) i++; return i; }
   function play(i){
-    if (!scenes[i]) return;
+    if (!scenes[i] || scenes[i].removed) return;
     current = i;
     if (playlist) { player.src = scenes[i].clipUrl; if (scenes[i].posterUrl) player.poster = scenes[i].posterUrl; }
     player.play().catch(function(){});
     mark(i);
   }
   if (playlist) {
-    player.addEventListener('ended', function(){ if (current < scenes.length - 1) play(current + 1); });
-    mark(0);
+    player.addEventListener('ended', function(){ play(next(current + 1)); });
+    current = next(0);
+    mark(current);
   }
   items.forEach(function(el){
     el.addEventListener('click', function(){

@@ -4,6 +4,7 @@ import type { Config } from './config';
 import { openDatabase, type Db } from './db/database';
 import { Repository } from './db/repo';
 import { DailyIdeas } from './engine/daily';
+import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
 import { Media } from './media';
@@ -32,6 +33,7 @@ export interface Services {
   engine: StoryEngine;
   daily: DailyIdeas;
   wallet: Wallet;
+  moderation: Moderation;
   now: () => Date;
 }
 
@@ -134,5 +136,7 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   });
   const daily = new DailyIdeas({ config, repo, director, safety, engine, log: log.child({ module: 'daily' }), now });
 
-  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, now };
+  const moderation = new Moderation({ repo, store, log: log.child({ module: 'moderation' }) });
+
+  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, now };
 }

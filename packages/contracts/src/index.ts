@@ -140,6 +140,8 @@ export const ShareScene = z.object({
   clipUrl: z.string(),
   posterUrl: z.string().nullable(),
   choiceTaken: z.string().nullable(),
+  /** True when the scene was reported and taken down; clipUrl is then empty. */
+  removed: z.boolean().optional(),
 });
 export type ShareScene = z.infer<typeof ShareScene>;
 
@@ -188,6 +190,18 @@ export const VerifyPurchaseResponse = z.object({
   alreadyProcessed: z.boolean(),
 });
 export type VerifyPurchaseResponse = z.infer<typeof VerifyPurchaseResponse>;
+
+export const ReportReason = z.enum(['scary', 'inappropriate', 'broken', 'other']);
+export type ReportReason = z.infer<typeof ReportReason>;
+
+export const ReportRequest = z.object({
+  reason: ReportReason,
+  storyId: z.string().max(64).optional(),
+});
+export type ReportRequest = z.infer<typeof ReportRequest>;
+
+export const ReportResponse = z.object({ ok: z.literal(true) });
+export type ReportResponse = z.infer<typeof ReportResponse>;
 
 export const ErrorCode = z.enum([
   'bad_request',

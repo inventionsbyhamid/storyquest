@@ -89,12 +89,18 @@ export class DailyIdeas {
   listForHome(): { date: string; ideas: IdeaRecord[] } {
     const { repo, config } = this.deps;
     const today = this.today();
-    const ready = (idea: IdeaRecord) => repo.getNode(idea.rootNodeId)?.status === 'ready';
+    const ready = (idea: IdeaRecord) => {
+      const root = repo.getNode(idea.rootNodeId);
+      return root?.status === 'ready' && !root.hiddenAt;
+    };
+    const hidden = (idea: IdeaRecord) => Boolean(repo.getNode(idea.rootNodeId)?.hiddenAt);
     const oldest = utcDay(new Date(this.deps.now().getTime() - (config.IDEA_LIFETIME_DAYS - 1) * DAY_MS));
 
     let date = today;
     // Today's ideas show while their opening is still being made; older ones only once playable.
-    let ideas = repo.listIdeasBetween(oldest, today).filter((idea) => idea.date === today || ready(idea));
+    let ideas = repo
+      .listIdeasBetween(oldest, today)
+      .filter((idea) => (idea.date === today && !hidden(idea)) || ready(idea));
     if (!ideas.some(ready)) {
       const fallback = repo.latestDateWithReadyIdeas();
       if (fallback && fallback < oldest) {

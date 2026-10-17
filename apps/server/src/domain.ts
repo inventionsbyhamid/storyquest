@@ -119,6 +119,10 @@ export interface NodeRecord {
   timings: NodeTimings | null;
   costSeconds: number | null;
   charge: Charge | null;
+  /** Set when the scene was reported or taken down. Hidden scenes are never offered again. */
+  hiddenAt: string | null;
+  /** Set when an admin deleted the scene's media for good. */
+  deletedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

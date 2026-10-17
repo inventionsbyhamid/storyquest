@@ -137,6 +137,21 @@ const MIGRATIONS: string[] = [
     last_seen TEXT NOT NULL
   );
   `,
+  `
+  ALTER TABLE nodes ADD COLUMN hidden_at TEXT;
+  ALTER TABLE nodes ADD COLUMN deleted_at TEXT;
+
+  CREATE TABLE reports (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    node_id TEXT NOT NULL REFERENCES nodes(id),
+    device_id TEXT NOT NULL,
+    story_id TEXT,
+    reason TEXT NOT NULL CHECK (reason IN ('scary', 'inappropriate', 'broken', 'other')),
+    created_at TEXT NOT NULL,
+    UNIQUE (node_id, device_id)
+  );
+  CREATE INDEX reports_node ON reports(node_id);
+  `,
 ];
 
 export function openDatabase(file: string): Db {

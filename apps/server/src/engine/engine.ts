@@ -14,6 +14,7 @@ import {
   MESSAGES,
   notFound,
   notReady,
+  pathClosed,
   unsafeInput,
 } from './errors';
 import { JobQueue, type Priority } from './queue';
@@ -104,6 +105,7 @@ export class StoryEngine {
       const idea = repo.getIdea(request.ideaId);
       if (!idea) throw notFound();
       const root = repo.getNode(idea.rootNodeId)!;
+      if (root.hiddenAt) throw pathClosed();
       if (root.status === 'failed' && this.budgetExhausted()) throw budgetExhausted();
       const story = repo.transaction(() => {
         repo.incrementIdeaPlays(idea.id);
@@ -167,13 +169,15 @@ export class StoryEngine {
     const currentId = story.path[story.path.length - 1]!;
     let replaced: NodeRecord | null = null;
     if (request.fromNodeId !== currentId) {
-      // When a scene fails to generate, the family may choose again from the scene before it.
+      // When a scene fails to generate or is taken down, the family may choose again from the scene before it.
       const current = repo.getNode(currentId)!;
-      if (current.status !== 'failed' || current.parentId !== request.fromNodeId) throw conflict(MESSAGES.staleChoice);
+      const stuck = current.status === 'failed' || current.hiddenAt !== null;
+      if (!stuck || current.parentId !== request.fromNodeId) throw conflict(MESSAGES.staleChoice);
       replaced = current;
     }
 
     const from = repo.getNode(request.fromNodeId)!;
+    if (from.hiddenAt) throw pathClosed();
     if (from.status !== 'ready') throw notReady();
     if (from.isEnding) throw conflict(MESSAGES.atEnding);
 
@@ -181,6 +185,7 @@ export class StoryEngine {
     if (request.kind === 'preset') {
       if (request.index >= from.choices.length) throw badRequest(MESSAGES.noSuchChoice);
       const existing = repo.getPresetChildren(from.id).find((child) => child.choiceIndex === request.index);
+      if (existing?.hiddenAt) throw pathClosed();
       if ((!existing || existing.status === 'failed') && this.budgetExhausted()) throw budgetExhausted();
     } else {
       customText = clipText(sanitizeUserText(request.text), 200);
@@ -268,7 +273,7 @@ export class StoryEngine {
     const { repo, wallet } = this.deps;
     const node = repo.getNode(nodeId);
     if (!node) throw notFound();
-    if (node.ownerStoryId === null) return node;
+    if (node.ownerStoryId === null || node.hiddenAt) return node;
     const story = repo.getStory(node.ownerStoryId);
     if (!story || (deviceId !== null && story.deviceId !== deviceId)) throw notFound();
     if (node.status !== 'ready') throw notReady();
@@ -370,7 +375,7 @@ export class StoryEngine {
   private prefetch(nodeId: string): void {
     const { repo } = this.deps;
     const node = repo.getNode(nodeId);
-    if (!node || node.status !== 'ready' || node.isEnding) return;
+    if (!node || node.status !== 'ready' || node.isEnding || node.hiddenAt) return;
     // Private scenes cost real money, so they are only prepared on request through prepareChoice.
     if (node.ownerStoryId !== null) return;
     if (!node.wantChildren && node.warm <= 0) return;

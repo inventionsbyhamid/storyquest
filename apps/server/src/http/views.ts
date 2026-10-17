@@ -2,12 +2,14 @@ import type {
   ChoiceView,
   FinishResponse,
   IdeaView,
+  MovieStatus,
   SceneView,
   ShareScene,
   ShareView,
   StoryView,
 } from '@storyquest/contracts';
 import { isPaid, type IdeaRecord, type NodeRecord, type StoryRecord } from '../domain';
+import { MESSAGES } from '../engine/errors';
 import { choiceLabel } from '../engine/scenes';
 import type { Services } from '../services';
 
@@ -40,6 +42,26 @@ export class Views {
   scene(node: NodeRecord): SceneView {
     const { repo } = this.services;
     const tree = repo.getTree(node.treeId)!;
+    // A scene that was taken down looks like a failed one, so the TV offers another choice from the scene before.
+    if (node.hiddenAt) {
+      return {
+        id: node.id,
+        treeId: node.treeId,
+        depth: node.depth,
+        sceneNumber: node.depth + 1,
+        totalScenes: tree.totalScenes,
+        status: 'failed',
+        caption: null,
+        clipUrl: null,
+        posterUrl: null,
+        lastFrameUrl: null,
+        durationMs: null,
+        isEnding: false,
+        choices: [],
+        generationMs: node.timings?.totalMs ?? null,
+        error: MESSAGES.sceneRemoved,
+      };
+    }
     const ready = node.status === 'ready';
     let choices: ChoiceView[] = [];
     if (ready && !node.isEnding) {
@@ -47,12 +69,13 @@ export class Views {
       choices = node.choices.map((label, index) => {
         const child = children.find((candidate) => candidate.choiceIndex === index) ?? null;
         const free = node.ownerStoryId === null || (child !== null && isPaid(child));
+        const playable = child?.status === 'ready' && !child.hiddenAt;
         return {
           index,
           label,
           nodeId: child?.id ?? null,
-          ready: child?.status === 'ready',
-          posterUrl: child?.status === 'ready' ? this.url(child.posterPath) : null,
+          ready: playable,
+          posterUrl: playable ? this.url(child.posterPath) : null,
           sparks: free ? 0 : this.services.config.SCENE_COST_SPARKS,
         };
       });
@@ -78,7 +101,7 @@ export class Views {
 
   idea(idea: IdeaRecord): IdeaView {
     const root = this.services.repo.getNode(idea.rootNodeId);
-    const ready = root?.status === 'ready';
+    const ready = root?.status === 'ready' && !root.hiddenAt;
     return {
       id: idea.id,
       date: idea.date,
@@ -93,13 +116,22 @@ export class Views {
     };
   }
 
+  /** The stitched movie is only offered while every scene in it is still up. */
+  private movie(story: StoryRecord): { movieStatus: MovieStatus; movieUrl: string | null } {
+    const removed = story.path.some((id) => this.services.repo.getNode(id)?.hiddenAt);
+    if (removed) return { movieStatus: 'failed', movieUrl: null };
+    return {
+      movieStatus: story.movieStatus ?? 'pending',
+      movieUrl: story.movieStatus === 'ready' ? this.url(story.moviePath) : null,
+    };
+  }
+
   finish(story: StoryRecord): FinishResponse {
     return {
       story: this.story(story),
       shareSlug: story.shareSlug!,
       shareUrl: this.shareUrl(story.shareSlug!),
-      movieStatus: story.movieStatus ?? 'pending',
-      movieUrl: story.movieStatus === 'ready' ? this.url(story.moviePath) : null,
+      ...this.movie(story),
       stats: this.services.engine.stats(story),
     };
   }
@@ -109,22 +141,23 @@ export class Views {
     const tree = repo.getTree(story.treeId)!;
     const nodes = story.path.map((id) => repo.getNode(id)).filter((node): node is NodeRecord => node !== null);
     const scenes: ShareScene[] = nodes
-      .filter((node) => node.status === 'ready' && node.clipPath)
+      .filter((node) => node.hiddenAt || (node.status === 'ready' && node.clipPath))
       .map((node) => {
         const parent = nodes.find((candidate) => candidate.id === node.parentId) ?? null;
+        const choiceTaken = parent ? choiceLabel(parent, node) : null;
+        if (node.hiddenAt) return { caption: node.caption, clipUrl: '', posterUrl: null, choiceTaken, removed: true };
         return {
           caption: node.caption,
           clipUrl: this.url(node.clipPath)!,
           posterUrl: this.url(node.posterPath),
-          choiceTaken: parent ? choiceLabel(parent, node) : null,
+          choiceTaken,
         };
       });
     return {
       slug: story.shareSlug!,
       title: tree.title,
       createdAt: story.finishedAt ?? story.createdAt,
-      movieStatus: story.movieStatus ?? 'pending',
-      movieUrl: story.movieStatus === 'ready' ? this.url(story.moviePath) : null,
+      ...this.movie(story),
       scenes,
       stats: this.services.engine.stats(story),
     };

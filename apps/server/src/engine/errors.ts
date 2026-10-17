@@ -24,6 +24,9 @@ export const MESSAGES = {
     'We could not reach Amazon to confirm your purchase. It will be added the next time you open StoryQuest.',
   purchasesOff: 'Purchases are not available right now.',
   badIapUser: 'That Amazon user id does not look right.',
+  pathClosed: 'That path is closed. Please pick another choice.',
+  sceneRemoved: 'This scene was removed. Please pick another choice.',
+  cannotRestore: 'This scene was deleted for good and cannot be restored.',
   internal: 'Something went wrong on our side. Please try again.',
   unauthorized: 'That token is not valid.',
 } as const;
@@ -48,6 +51,7 @@ export const unsafeInput = () => new AppError('unsafe_input', 422, MESSAGES.unsa
 export const budgetExhausted = () => new AppError('budget_exhausted', 429, MESSAGES.budget);
 export const rateLimited = (message: string = MESSAGES.rateLimited) => new AppError('rate_limited', 429, message);
 export const paymentRequired = () => new AppError('payment_required', 402, MESSAGES.needSparks);
+export const pathClosed = () => new AppError('not_found', 409, MESSAGES.pathClosed);
 export const purchaseInvalid = () => new AppError('purchase_invalid', 422, MESSAGES.purchaseInvalid);
 
 /** A failure while generating a scene. Non retryable ones fail the node straight away. */

@@ -78,6 +78,8 @@ interface NodeRow {
   timings: string | null;
   cost_seconds: number | null;
   charge: string | null;
+  hidden_at: string | null;
+  deleted_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -155,6 +157,8 @@ const toNode = (row: NodeRow): NodeRecord => ({
   timings: row.timings ? (JSON.parse(row.timings) as NodeTimings) : null,
   costSeconds: row.cost_seconds,
   charge: row.charge ? (JSON.parse(row.charge) as Charge) : null,
+  hiddenAt: row.hidden_at,
+  deletedAt: row.deleted_at,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -362,7 +366,7 @@ export class Repository {
   latestDateWithReadyIdeas(): string | null {
     const row = this.stmt(
       `SELECT ideas.date FROM ideas JOIN nodes ON nodes.id = ideas.root_node_id
-       WHERE nodes.status = 'ready' ORDER BY ideas.date DESC LIMIT 1`,
+       WHERE nodes.status = 'ready' AND nodes.hidden_at IS NULL ORDER BY ideas.date DESC LIMIT 1`,
     ).get() as { date: string } | undefined;
     return row?.date ?? null;
   }
@@ -631,6 +635,72 @@ export class Repository {
   countStoriesForTree(treeId: string): number {
     const row = this.stmt('SELECT COUNT(*) AS n FROM stories WHERE tree_id = ?').get(treeId) as { n: number };
     return row.n;
+  }
+
+  // Reports and moderation
+
+  /** One report per device per scene. Returns false when this device already reported it. */
+  addReport(input: { nodeId: string; deviceId: string; storyId: string | null; reason: string }): boolean {
+    const info = this.stmt(
+      `INSERT INTO reports (node_id, device_id, story_id, reason, created_at) VALUES (?, ?, ?, ?, ?)
+       ON CONFLICT (node_id, device_id) DO NOTHING`,
+    ).run(input.nodeId, input.deviceId, input.storyId, input.reason, this.timestamp());
+    return info.changes === 1;
+  }
+
+  hideNode(id: string): boolean {
+    const info = this.stmt('UPDATE nodes SET hidden_at = ?, updated_at = ? WHERE id = ? AND hidden_at IS NULL').run(
+      this.timestamp(),
+      this.timestamp(),
+      id,
+    );
+    return info.changes === 1;
+  }
+
+  /** Puts a hidden scene back. Scenes whose media was deleted stay hidden. */
+  restoreNode(id: string): boolean {
+    const info = this.stmt(
+      'UPDATE nodes SET hidden_at = NULL, updated_at = ? WHERE id = ? AND hidden_at IS NOT NULL AND deleted_at IS NULL',
+    ).run(this.timestamp(), id);
+    return info.changes === 1;
+  }
+
+  markNodeDeleted(id: string): void {
+    const now = this.timestamp();
+    this.stmt(
+      `UPDATE nodes SET hidden_at = COALESCE(hidden_at, ?), deleted_at = ?, clip_path = NULL, poster_path = NULL,
+         last_frame_path = NULL, updated_at = ? WHERE id = ?`,
+    ).run(now, now, now, id);
+  }
+
+  listStoriesThrough(nodeId: string): StoryRecord[] {
+    const rows = this.stmt('SELECT * FROM stories WHERE path LIKE ?').all(`%"${nodeId}"%`) as StoryRow[];
+    return rows.map(toStory);
+  }
+
+  listReports() {
+    const rows = this.stmt(
+      `SELECT r.node_id, COUNT(*) AS reports, MIN(r.created_at) AS first_reported_at, MAX(r.created_at) AS last_reported_at,
+         SUM(r.reason = 'scary') AS scary, SUM(r.reason = 'inappropriate') AS inappropriate,
+         SUM(r.reason = 'broken') AS broken, SUM(r.reason = 'other') AS other
+       FROM reports r GROUP BY r.node_id ORDER BY last_reported_at DESC`,
+    ).all() as {
+      node_id: string;
+      reports: number;
+      first_reported_at: string;
+      last_reported_at: string;
+      scary: number;
+      inappropriate: number;
+      broken: number;
+      other: number;
+    }[];
+    return rows.map((row) => ({
+      node: this.getNode(row.node_id)!,
+      reports: row.reports,
+      reasons: { scary: row.scary, inappropriate: row.inappropriate, broken: row.broken, other: row.other },
+      firstReportedAt: row.first_reported_at,
+      lastReportedAt: row.last_reported_at,
+    }));
   }
 
   // Usage, wallets and purchases
