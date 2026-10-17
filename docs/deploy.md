@@ -46,4 +46,15 @@ curl https://your-domain/healthz
 curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://your-domain/v1/admin/daily
 ```
 
+Before a demo or a judging period, pin your best stories and render every preset path so they play instantly and cannot fail:
+
+```bash
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" https://your-domain/v1/admin/ideas/<ideaId>/feature
+curl -X POST -H "Authorization: Bearer $ADMIN_TOKEN" "https://your-domain/v1/admin/ideas/<ideaId>/warm?depth=6&force=true"
+curl -H "Authorization: Bearer $ADMIN_TOKEN" https://your-domain/v1/admin/ideas/<ideaId>/warm   # progress
+curl -H "Authorization: Bearer $ADMIN_TOKEN" https://your-domain/v1/admin/stats                 # spend and queue
+```
+
+A full six scene tree is 63 clips. If today's stories cannot be made (an outage or the budget cap), the app keeps showing the most recent stories that are ready.
+
 Then build the Fire TV app against it: set `API_BASE_URL` in `apps/vega/src/config.ts` and run `yarn build:vega`.
