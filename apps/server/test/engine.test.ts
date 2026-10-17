@@ -213,7 +213,7 @@ describe('custom choices', () => {
 
     const stats = r.services.engine.stats(r.services.repo.getStory(story.id)!);
     expect(stats.choices[0]).toMatchObject({ custom: true, label: 'the puppy learns to fly, with a jet pack' });
-    expect(stats.rarestChoice).toBeNull();
+    expect(stats.rarestChoice).toMatchObject({ custom: true, label: 'the puppy learns to fly, with a jet pack' });
   });
 
   it('turns away unsafe text with unsafe_input', async () => {

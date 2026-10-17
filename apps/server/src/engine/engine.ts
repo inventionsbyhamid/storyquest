@@ -233,7 +233,8 @@ export class StoryEngine {
       const parent = nodes[i - 1]!;
       const node = nodes[i]!;
       const label = choiceLabel(parent, node) ?? '';
-      if (node.customText !== null) {
+      // Anything on a private path was seen by this family only, so it has no share of families.
+      if (node.customText !== null || node.ownerStoryId !== null) {
         choices.push({ sceneNumber: parent.depth + 1, label, percent: 0, custom: true });
         continue;
       }
@@ -243,10 +244,12 @@ export class StoryEngine {
     }
 
     const presets = choices.filter((choice) => !choice.custom);
-    const rarestChoice = presets.reduce<ChoiceStat | null>(
-      (rarest, choice) => (rarest === null || choice.percent < rarest.percent ? choice : rarest),
-      null,
-    );
+    const rarestChoice =
+      choices.find((choice) => choice.custom) ??
+      presets.reduce<ChoiceStat | null>(
+        (rarest, choice) => (rarest === null || choice.percent < rarest.percent ? choice : rarest),
+        null,
+      );
     const idea = story.ideaId ? repo.getIdea(story.ideaId) : null;
     return {
       choices,
