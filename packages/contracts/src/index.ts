@@ -1,0 +1,174 @@
+import { z } from 'zod';
+
+export const Audience = z.enum(['kids', 'family', 'grownups']);
+export type Audience = z.infer<typeof Audience>;
+
+export const Mood = z.enum(['funny', 'adventure', 'cozy', 'mystery', 'spooky']);
+export type Mood = z.infer<typeof Mood>;
+
+export const NodeStatus = z.enum(['pending', 'generating', 'ready', 'failed']);
+export type NodeStatus = z.infer<typeof NodeStatus>;
+
+export const ChoiceView = z.object({
+  index: z.number().int().min(0).max(1),
+  label: z.string(),
+  nodeId: z.string().nullable(),
+  ready: z.boolean(),
+  posterUrl: z.string().nullable(),
+});
+export type ChoiceView = z.infer<typeof ChoiceView>;
+
+export const SceneView = z.object({
+  id: z.string(),
+  treeId: z.string(),
+  depth: z.number().int(),
+  sceneNumber: z.number().int(),
+  totalScenes: z.number().int(),
+  status: NodeStatus,
+  caption: z.string().nullable(),
+  clipUrl: z.string().nullable(),
+  posterUrl: z.string().nullable(),
+  lastFrameUrl: z.string().nullable(),
+  durationMs: z.number().nullable(),
+  isEnding: z.boolean(),
+  choices: z.array(ChoiceView),
+  generationMs: z.number().nullable(),
+  error: z.string().nullable(),
+});
+export type SceneView = z.infer<typeof SceneView>;
+
+export const IdeaView = z.object({
+  id: z.string(),
+  date: z.string(),
+  title: z.string(),
+  logline: z.string(),
+  audience: Audience,
+  moods: z.array(Mood),
+  posterUrl: z.string().nullable(),
+  trailerUrl: z.string().nullable(),
+  plays: z.number().int(),
+  ready: z.boolean(),
+});
+export type IdeaView = z.infer<typeof IdeaView>;
+
+export const TodayResponse = z.object({
+  date: z.string(),
+  ideas: z.array(IdeaView),
+});
+export type TodayResponse = z.infer<typeof TodayResponse>;
+
+export const PromptText = z.string().trim().min(3).max(240);
+
+export const StartStoryRequest = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('idea'), ideaId: z.string() }),
+  z.object({
+    kind: z.literal('custom'),
+    prompt: PromptText,
+    moods: z.array(Mood).max(3).default([]),
+    audience: Audience.default('family'),
+  }),
+]);
+export type StartStoryRequest = z.input<typeof StartStoryRequest>;
+
+export const StoryStatus = z.enum(['active', 'finished']);
+export type StoryStatus = z.infer<typeof StoryStatus>;
+
+export const StoryView = z.object({
+  id: z.string(),
+  title: z.string(),
+  audience: Audience,
+  ideaId: z.string().nullable(),
+  currentNodeId: z.string(),
+  path: z.array(z.string()),
+  status: StoryStatus,
+  shareSlug: z.string().nullable(),
+});
+export type StoryView = z.infer<typeof StoryView>;
+
+export const ChooseRequest = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('preset'),
+    fromNodeId: z.string(),
+    index: z.number().int().min(0).max(1),
+  }),
+  z.object({
+    kind: z.literal('custom'),
+    fromNodeId: z.string(),
+    text: z.string().trim().min(2).max(200),
+  }),
+]);
+export type ChooseRequest = z.infer<typeof ChooseRequest>;
+
+export const ChooseResponse = z.object({
+  story: StoryView,
+  nextNodeId: z.string(),
+});
+export type ChooseResponse = z.infer<typeof ChooseResponse>;
+
+export const ChoiceStat = z.object({
+  sceneNumber: z.number().int(),
+  label: z.string(),
+  percent: z.number().min(0).max(100),
+  custom: z.boolean(),
+});
+export type ChoiceStat = z.infer<typeof ChoiceStat>;
+
+export const StoryStats = z.object({
+  choices: z.array(ChoiceStat),
+  rarestChoice: ChoiceStat.nullable(),
+  endingsDiscovered: z.number().int(),
+  familiesPlayed: z.number().int(),
+});
+export type StoryStats = z.infer<typeof StoryStats>;
+
+export const MovieStatus = z.enum(['pending', 'ready', 'failed']);
+export type MovieStatus = z.infer<typeof MovieStatus>;
+
+export const FinishResponse = z.object({
+  story: StoryView,
+  shareSlug: z.string(),
+  shareUrl: z.string(),
+  movieStatus: MovieStatus,
+  movieUrl: z.string().nullable(),
+  stats: StoryStats,
+});
+export type FinishResponse = z.infer<typeof FinishResponse>;
+
+export const ShareScene = z.object({
+  caption: z.string().nullable(),
+  clipUrl: z.string(),
+  posterUrl: z.string().nullable(),
+  choiceTaken: z.string().nullable(),
+});
+export type ShareScene = z.infer<typeof ShareScene>;
+
+export const ShareView = z.object({
+  slug: z.string(),
+  title: z.string(),
+  createdAt: z.string(),
+  movieStatus: MovieStatus,
+  movieUrl: z.string().nullable(),
+  scenes: z.array(ShareScene),
+  stats: StoryStats,
+});
+export type ShareView = z.infer<typeof ShareView>;
+
+export const ErrorCode = z.enum([
+  'bad_request',
+  'not_found',
+  'rate_limited',
+  'budget_exhausted',
+  'unsafe_input',
+  'generation_failed',
+  'not_ready',
+  'internal',
+]);
+export type ErrorCode = z.infer<typeof ErrorCode>;
+
+export const ErrorResponse = z.object({
+  error: z.object({ code: ErrorCode, message: z.string() }),
+});
+export type ErrorResponse = z.infer<typeof ErrorResponse>;
+
+export const DEVICE_HEADER = 'x-device-id';
+export const API_VERSION = 'v1';

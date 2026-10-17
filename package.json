@@ -1,0 +1,36 @@
+{
+  "name": "storyquest",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "packageManager": "yarn@4.5.0",
+  "resolutions": {
+    "js-yaml": "^3.15.1",
+    "min-document": "^2.19.1",
+    "logkitty": "^0.7.1",
+    "node-fetch": "^2.6.7",
+    "ws": "^8.21.0"
+  },
+  "scripts": {
+    "dev": "yarn workspace @multi-tv/expo-multi-tv start",
+    "dev:web": "yarn workspace @multi-tv/expo-multi-tv web",
+    "dev:android": "yarn workspace @multi-tv/expo-multi-tv android",
+    "dev:vega": "yarn workspace @multi-tv/vega start",
+    "dev:server": "yarn workspace @storyquest/server dev",
+    "build:vega": "yarn workspace @multi-tv/vega run build",
+    "build:vega:debug": "yarn workspace @multi-tv/vega run build:debug",
+    "build:server": "yarn workspace @storyquest/server build",
+    "test": "yarn workspace @storyquest/server test && yarn workspace @multi-tv/shared-ui test",
+    "typecheck": "yarn workspaces foreach -A -pt run typecheck",
+    "check-secrets": "node scripts/check-secrets.mjs",
+    "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md}\"",
+    "prepare": "husky"
+  },
+  "devDependencies": {
+    "husky": "^9.1.6",
+    "prettier": "^3.3.3"
+  }
+}
