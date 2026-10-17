@@ -1,13 +1,18 @@
-export const spacing = {
-  xs: 8,    // Minimum spacing
-  sm: 12,   // Small spacing
-  md: 20,   // Medium spacing
-  lg: 32,   // Large spacing
-  xl: 48,   // Extra large spacing
-  xxl: 64,  // Section spacing
-  xxxl: 96, // Screen edge spacing
+import { scaledPixels } from '../hooks/useScale';
 
-  // Touch target minimums for TV (Fire TV recommends 48dp minimum)
-  touchTarget: 48,
-  focusPadding: 4,  // Space between element and focus indicator
+export const spacing = {
+  xs: 8,
+  sm: 12,
+  md: 20,
+  lg: 32,
+  xl: 48,
+  xxl: 64,
+  xxxl: 96,
+};
+
+export const radii = {
+  sm: scaledPixels(12),
+  md: scaledPixels(20),
+  lg: scaledPixels(28),
+  pill: 999,
 };

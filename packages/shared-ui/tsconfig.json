@@ -1,11 +1,15 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "declaration": true,
-    "declarationMap": true,
-    "outDir": "./dist"
+    "noEmit": true,
+    "lib": ["es2020"],
+    "types": [],
+    "baseUrl": ".",
+    "paths": {
+      "@storyquest/contracts": ["../contracts/src/index.ts"],
+      "*": ["../../apps/expo-multi-tv/node_modules/*", "../../apps/expo-multi-tv/node_modules/@types/*"]
+    }
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.test.tsx"]
+  "exclude": ["node_modules", "dist", "src/**/*.kepler.ts", "src/**/*.vega.tsx"]
 }

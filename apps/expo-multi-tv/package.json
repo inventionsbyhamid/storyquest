@@ -13,7 +13,7 @@
     "lint": "expo lint",
     "prebuild": "EXPO_TV=1 expo prebuild --clean",
     "clean": "rm -rf node_modules",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit -p tsconfig.typecheck.json"
   },
   "jest": {
     "preset": "jest-expo",
@@ -25,7 +25,7 @@
     "@expo/metro-runtime": "~4.0.0",
     "@expo/vector-icons": "^14.0.0",
     "@multi-tv/shared-ui": "workspace:*",
-    "@react-navigation/drawer": "^7.0.0",
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.0.0",
     "@react-navigation/native-stack": "^7.0.0",
     "@typescript-eslint/eslint-plugin": "^8.12.2",
@@ -46,9 +46,11 @@
     "react-native": "npm:react-native-tvos@~0.81.0-0",
     "react-native-gesture-handler": "^2.31.2",
     "react-native-keyevent": "^0.3.2",
+    "react-native-qrcode-svg": "^6.3.15",
     "react-native-reanimated": "3.19.5",
     "react-native-safe-area-context": "~5.4.0",
     "react-native-screens": "^4.24.0",
+    "react-native-svg": "15.12.1",
     "react-native-video": "^6.8.0",
     "react-native-web": "~0.19.10",
     "react-tv-space-navigation": "6.0.0-beta1"

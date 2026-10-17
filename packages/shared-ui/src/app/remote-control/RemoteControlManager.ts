@@ -10,26 +10,42 @@ const KEY_MAPPING: Record<string, SupportedKeys> = {
   ArrowDown: SupportedKeys.Down,
   Enter: SupportedKeys.Enter,
   Backspace: SupportedKeys.Back,
-  GoBack: SupportedKeys.Back, // For LG WebOS Magic Remote
+  Escape: SupportedKeys.Back,
+  GoBack: SupportedKeys.Back,
+  MediaPlayPause: SupportedKeys.PlayPause,
+  Space: SupportedKeys.PlayPause,
 };
+
+interface WebKeyboardEvent {
+  code: string;
+  key: string;
+  target: unknown;
+}
+
+function isEditable(target: unknown): boolean {
+  const element = target as { tagName?: string; isContentEditable?: boolean } | null;
+  if (!element) return false;
+  return element.tagName === 'INPUT' || element.tagName === 'TEXTAREA' || element.isContentEditable === true;
+}
 
 class RemoteControlManager implements RemoteControlManagerInterface {
   private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
 
   constructor() {
     if (Platform.OS === 'web') {
-      window.addEventListener('keydown', this.handleKeyDown);
+      (
+        globalThis as unknown as { addEventListener: (type: string, cb: (e: WebKeyboardEvent) => void) => void }
+      ).addEventListener('keydown', this.handleKeyDown);
     }
   }
 
-  private handleKeyDown = (event: KeyboardEvent): void => {
+  private handleKeyDown = (event: WebKeyboardEvent): void => {
+    if (isEditable(event.target)) return;
     const mappedKey = KEY_MAPPING[event.code] || KEY_MAPPING[event.key];
-    if (mappedKey) {
-      this.eventEmitter.emit('keyDown', mappedKey);
-    }
+    if (mappedKey) this.eventEmitter.emit('keyDown', mappedKey);
   };
 
-  addKeydownListener = (listener: (event: SupportedKeys) => void): ((event: SupportedKeys) => void) => {
+  addKeydownListener = (listener: (event: SupportedKeys) => void) => {
     this.eventEmitter.on('keyDown', listener);
     return listener;
   };

@@ -1,6 +1,25 @@
 {
-    "extends": "@tsconfig/react-native/tsconfig.json",
-    "compilerOptions": {
-        "types": ["jest", "@amazon-devices/react-native-kepler"], /* Override "jest", "react-native" from @tsconfig/react-native */
-    },
+  "extends": "@tsconfig/react-native/tsconfig.json",
+  "compilerOptions": {
+    "types": ["jest", "@amazon-devices/react-native-kepler"],
+    "moduleSuffixes": [".vega", ".kepler", ""],
+    "baseUrl": ".",
+    "paths": {
+      "@multi-tv/shared-ui": ["../../packages/shared-ui/src/index.ts"],
+      "@multi-tv/shared-ui/*": ["../../packages/shared-ui/*"],
+      "@storyquest/contracts": ["../../packages/contracts/src/index.ts"],
+      "@react-navigation/*": ["./node_modules/@amazon-devices/react-navigation__*"],
+      "react-native-gesture-handler": ["./node_modules/@amazon-devices/react-native-gesture-handler"],
+      "react-native-reanimated": ["./node_modules/@amazon-devices/react-native-reanimated"],
+      "react-native-safe-area-context": ["./node_modules/@amazon-devices/react-native-safe-area-context"],
+      "react-native-screens": ["./node_modules/@amazon-devices/react-native-screens"],
+      "react-native-svg": ["./node_modules/@amazon-devices/react-native-svg"],
+      "react-native-qrcode-svg": ["./node_modules/@amazon-devices/react-native-qrcode-svg"],
+      "@react-native-async-storage/async-storage": [
+        "./node_modules/@amazon-devices/react-native-async-storage__async-storage"
+      ],
+      "*": ["./node_modules/*", "./node_modules/@types/*"]
+    }
+  },
+  "include": ["src/**/*", "index.js"]
 }

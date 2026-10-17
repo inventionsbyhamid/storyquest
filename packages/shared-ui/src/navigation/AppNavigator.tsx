@@ -1,45 +1,44 @@
-import React, { useEffect, StrictMode } from 'react';
-import { NavigationContainer, DarkTheme } from '@react-navigation/native';
-import { Platform } from 'react-native';
-import { MenuProvider } from '../components/MenuContext';
-import { GoBackConfiguration } from '../app/remote-control/GoBackConfiguration';
-import RootNavigator from './RootNavigator';
+import React from 'react';
+import { DarkTheme, NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { colors } from '../theme';
+import HomeScreen from '../screens/HomeScreen';
+import CreateScreen from '../screens/CreateScreen';
+import StoryScreen from '../screens/StoryScreen';
+import EndScreen from '../screens/EndScreen';
+import MovieScreen from '../screens/MovieScreen';
+import type { RootStackParamList } from './types';
 
-export interface AppNavigatorProps {
-  fontsLoaded?: boolean;
-  onReady?: () => void;
-}
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function AppNavigator({ fontsLoaded = true, onReady }: AppNavigatorProps) {
-  useEffect(() => {
-    // Import remote control config for TV platforms
-    if (Platform.isTV) {
-      try {
-        require('../app/configureRemoteControl');
-      } catch (error) {
-        console.warn('Remote control configuration not available:', error);
-      }
-    }
-  }, []);
+const theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: colors.accent,
+    background: colors.background,
+    card: colors.background,
+    text: colors.text,
+    border: colors.border,
+  },
+};
 
-  useEffect(() => {
-    if (fontsLoaded && onReady) {
-      onReady();
-    }
-  }, [fontsLoaded, onReady]);
+const screenOptions = {
+  headerShown: false,
+  animation: 'fade' as const,
+  contentStyle: { backgroundColor: colors.background },
+};
 
-  if (!fontsLoaded) {
-    return null;
-  }
-
+export default function AppNavigator() {
   return (
-    <StrictMode>
-      <NavigationContainer theme={DarkTheme}>
-        <MenuProvider>
-          <GoBackConfiguration />
-          <RootNavigator />
-        </MenuProvider>
-      </NavigationContainer>
-    </StrictMode>
+    <NavigationContainer theme={theme}>
+      <Stack.Navigator initialRouteName="Home" screenOptions={screenOptions}>
+        <Stack.Screen name="Home" component={HomeScreen} />
+        <Stack.Screen name="Create" component={CreateScreen} />
+        <Stack.Screen name="Story" component={StoryScreen} />
+        <Stack.Screen name="End" component={EndScreen} />
+        <Stack.Screen name="Movie" component={MovieScreen} />
+      </Stack.Navigator>
+    </NavigationContainer>
   );
 }

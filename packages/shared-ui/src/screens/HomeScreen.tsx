@@ -1,327 +1,323 @@
-import { StyleSheet, View, Image, Text } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useCallback, useMemo, useRef, useState, useEffect } from 'react';
-import { DrawerActions, useIsFocused } from '@react-navigation/native';
-import { useMenuContext } from '../components/MenuContext';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
+import { useIsFocused, useNavigation } from '@react-navigation/native';
 import {
-  SpatialNavigationFocusableView,
+  DefaultFocus,
   SpatialNavigationRoot,
   SpatialNavigationScrollView,
-  SpatialNavigationNode,
-  SpatialNavigationVirtualizedList,
-  SpatialNavigationVirtualizedListRef,
-  DefaultFocus,
+  SpatialNavigationView,
 } from 'react-tv-space-navigation';
-import { Direction } from '@bam.tech/lrud';
+import type { IdeaView, TodayResponse } from '@storyquest/contracts';
+import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
+import { audienceLabel, formatPlays, moodLabel } from '../story/format';
+import { messageForError } from '../story/messages';
+import { colors, safeZones, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
-import { RootStackParamList } from '../navigation/types';
-import { fetchMoviesData, CardData } from '../data/moviesData';
-import { colors, safeZones } from '../theme';
-import PlatformLinearGradient from '../components/PlatformLinearGradient';
-import { getOpenDrawerDirection } from '../utils/rtl';
+import { prefetchImage } from '../utils/prefetch';
+import { Button } from '../components/Button';
+import { HeroBackdrop } from '../components/home/HeroBackdrop';
+import { CARD_GAP, CARD_HEIGHT, CARD_WIDTH, IdeaCard, MakeYourOwnCard } from '../components/home/StoryCards';
+import { PeopleIcon, SparkleIcon } from '../components/Icons';
+import { MotionContext } from '../components/Motion';
+import { Notice } from '../components/Notice';
+import { Pill } from '../components/Pill';
+import { SkeletonBlock, usePulse } from '../components/Skeleton';
+import { Wordmark } from '../components/Wordmark';
+import type { ScreenNavigation } from '../navigation/types';
 
-type HomeScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'DrawerNavigator'>;
+type LoadState =
+  | { status: 'loading' }
+  | { status: 'ready'; today: TodayResponse }
+  | { status: 'error'; message: string };
 
-// Memoized MovieItem component to prevent unnecessary re-renders and optimize image source
-const MovieItem = React.memo(
-  ({
-    item,
-    isFocused,
-    styles,
-  }: {
-    item: CardData;
-    isFocused: boolean;
-    styles: any;
-  }) => {
-    const imageSource = useMemo(() => ({ uri: item.headerImage }), [item.headerImage]);
+const SIDE = scaledPixels(safeZones.titleSafe.horizontal);
 
+const HeroText = React.memo(({ idea }: { idea: IdeaView | null }) => {
+  if (!idea) {
     return (
-      <View style={[styles.highlightThumbnail, isFocused && styles.highlightThumbnailFocused]}>
-        <Image
-          source={imageSource}
-          style={styles.cardImage}
-          resizeMode="cover"
-          onError={(error) => console.log('Image load error:', item.title, error.nativeEvent.error)}
-          onLoad={() => console.log('Image loaded:', item.title)}
-        />
-      </View>
-    );
-  },
-);
-
-export default function HomeScreen() {
-  const navigation = useNavigation<HomeScreenNavigationProp>();
-  const { isOpen: isMenuOpen, toggleMenu } = useMenuContext();
-  const trendingRef = useRef<SpatialNavigationVirtualizedListRef>(null);
-  const classicsRef = useRef<SpatialNavigationVirtualizedListRef>(null);
-  const hipAndModernRef = useRef<SpatialNavigationVirtualizedListRef>(null);
-  const [focusedIndex, setFocusedIndex] = useState(0);
-  const [moviesData, setMoviesData] = useState<CardData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const isFocused = useIsFocused();
-  const isActive = isFocused && !isMenuOpen;
-
-  // Fetch movies from catalog on mount
-  useEffect(() => {
-    const loadMovies = async () => {
-      try {
-        setIsLoading(true);
-        const movies = await fetchMoviesData();
-        console.log('Fetched movies:', movies.length);
-        console.log('First movie:', movies[0]);
-        setMoviesData(movies);
-      } catch (error) {
-        console.error('Failed to load movies:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadMovies();
-  }, []);
-
-  const focusedItem = useMemo(() => moviesData[focusedIndex] || null, [focusedIndex, moviesData]);
-
-  // Memoize header image source to prevent unnecessary re-renders
-  const headerImageSource = useMemo(
-    () => (focusedItem ? { uri: focusedItem.headerImage } : undefined),
-    [focusedItem?.headerImage],
-  );
-
-  const renderHeader = useCallback(
-    () => {
-      if (!focusedItem) return null;
-
-      return (
-        <View style={gridStyles.header}>
-          <Image
-            style={gridStyles.headerImage}
-            source={headerImageSource}
-            resizeMode="cover"
-          />
-          {/* Linear gradient scrim for left overlay */}
-          <PlatformLinearGradient
-            colors={['rgba(0,0,0,0.9)', 'rgba(0,0,0,0.7)', 'rgba(0,0,0,0.3)', 'transparent']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={gridStyles.gradientLeft}
-          />
-          <View style={gridStyles.headerTextContainer}>
-            <Text style={gridStyles.headerTitle}>{focusedItem.title}</Text>
-            <Text style={gridStyles.headerDescription} numberOfLines={3}>
-              {focusedItem.description}
-            </Text>
-          </View>
-        </View>
-      );
-    },
-    [headerImageSource, focusedItem],
-  );
-
-  const onDirectionHandledWithoutMovement = useCallback(
-    (movement: Direction) => {
-      if (movement === getOpenDrawerDirection() && focusedIndex === 0) {
-        navigation.dispatch(DrawerActions.openDrawer());
-        toggleMenu(true);
-      }
-    },
-    [toggleMenu, focusedIndex, navigation],
-  );
-
-  const renderItem = useCallback(
-    ({ item, index }: { item: CardData; index: number }) => (
-      <SpatialNavigationFocusableView
-        onSelect={() => {
-          navigation.navigate('Details', {
-            title: item.title,
-            description: item.description,
-            headerImage: item.headerImage,
-            movie: item.movie,
-            category: item.category,
-            genres: item.genres,
-            releaseYear: item.releaseYear,
-            rating: item.rating,
-            ratingCount: item.ratingCount,
-            contentRating: item.contentRating,
-            duration: item.duration,
-          });
-        }}
-        onFocus={() => setFocusedIndex(index)}
-      >
-        {({ isFocused }) => <MovieItem item={item} isFocused={isFocused} styles={gridStyles} />}
-      </SpatialNavigationFocusableView>
-    ),
-    [navigation],
-  );
-
-  const renderScrollableRow = useCallback(
-    (title: string, _ref: React.RefObject<SpatialNavigationVirtualizedListRef>) => {
-      return (
-        <View style={gridStyles.highlightsContainer}>
-          <Text style={gridStyles.highlightsTitle}>{title}</Text>
-          <SpatialNavigationNode>
-            <DefaultFocus>
-              <SpatialNavigationVirtualizedList
-                data={moviesData}
-                orientation="horizontal"
-                renderItem={renderItem}
-                itemSize={scaledPixels(440)}
-                onEndReachedThresholdItemsNumber={3}
-              />
-            </DefaultFocus>
-          </SpatialNavigationNode>
-        </View>
-      );
-    },
-    [moviesData, renderItem],
-  );
-
-  // Show loading state while fetching data
-  if (isLoading || moviesData.length === 0) {
-    return (
-      <View style={gridStyles.container}>
-        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
-          <Text style={{ color: colors.text, fontSize: scaledPixels(24) }}>Loading movies...</Text>
-        </View>
+      <View style={styles.heroText}>
+        <Pill text="Your idea" tone="violet" icon={<SparkleIcon size={scaledPixels(22)} color="#CFC7FF" />} />
+        <Text style={styles.heroTitle}>Make your own story</Text>
+        <Text style={styles.heroLogline} numberOfLines={3}>
+          Tell us what you feel like watching. Say it with the remote microphone or type it, and we will film the first
+          scene for your family.
+        </Text>
       </View>
     );
   }
+  return (
+    <View style={styles.heroText}>
+      <View style={styles.tags}>
+        <Pill text={audienceLabel(idea.audience)} tone="accent" style={styles.tag} />
+        {idea.moods.map((mood) => (
+          <Pill key={mood} text={moodLabel(mood)} style={styles.tag} />
+        ))}
+        {!idea.ready && <Pill text="Warming up" tone="violet" style={styles.tag} />}
+      </View>
+      <Text style={styles.heroTitle} numberOfLines={2}>
+        {idea.title}
+      </Text>
+      <Text style={styles.heroLogline} numberOfLines={3}>
+        {idea.logline}
+      </Text>
+      <View style={styles.plays}>
+        <PeopleIcon size={scaledPixels(32)} color={colors.accent} />
+        <Text style={styles.playsText}>{formatPlays(idea.plays)}</Text>
+      </View>
+    </View>
+  );
+});
+
+const HomeSkeleton = () => {
+  const pulse = usePulse();
+  return (
+    <>
+      <View style={styles.heroText}>
+        <SkeletonBlock
+          pulse={pulse}
+          style={[styles.skeletonLine, { width: scaledPixels(260), height: scaledPixels(36) }]}
+        />
+        <SkeletonBlock
+          pulse={pulse}
+          style={[styles.skeletonLine, { width: scaledPixels(820), height: scaledPixels(64) }]}
+        />
+        <SkeletonBlock
+          pulse={pulse}
+          style={[styles.skeletonLine, { width: scaledPixels(760), height: scaledPixels(32) }]}
+        />
+        <SkeletonBlock
+          pulse={pulse}
+          style={[styles.skeletonLine, { width: scaledPixels(600), height: scaledPixels(32) }]}
+        />
+      </View>
+      <View style={styles.rowArea}>
+        <Text style={styles.rowTitle}>Tonight's Stories</Text>
+        <View style={[styles.rowContent, styles.skeletonRow]}>
+          {Array.from({ length: 5 }, (_, i) => (
+            <SkeletonBlock key={i} pulse={pulse} style={styles.skeletonCard} />
+          ))}
+        </View>
+      </View>
+    </>
+  );
+};
+
+interface StoryRowProps {
+  ideas: IdeaView[];
+  openingId: string | null;
+  onFocusIndex: (index: number) => void;
+  onSelectIdea: (idea: IdeaView) => void;
+  onMakeYourOwn: () => void;
+}
+
+const StoryRow = React.memo(({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn }: StoryRowProps) => (
+  <View style={styles.rowArea}>
+    <Text style={styles.rowTitle}>Tonight's Stories</Text>
+    <SpatialNavigationScrollView horizontal offsetFromStart={SIDE + CARD_WIDTH + CARD_GAP} style={styles.scroll}>
+      <SpatialNavigationView direction="horizontal" style={styles.rowContent}>
+        <DefaultFocus enable={ideas.length === 0}>
+          <MakeYourOwnCard onFocusIndex={onFocusIndex} onSelect={onMakeYourOwn} />
+        </DefaultFocus>
+        {ideas.map((idea, i) => (
+          <DefaultFocus key={idea.id} enable={i === 0}>
+            <IdeaCard
+              idea={idea}
+              index={i + 1}
+              opening={openingId === idea.id}
+              onFocusIndex={onFocusIndex}
+              onSelectIdea={onSelectIdea}
+            />
+          </DefaultFocus>
+        ))}
+      </SpatialNavigationView>
+    </SpatialNavigationScrollView>
+  </View>
+));
+
+export default function HomeScreen() {
+  const navigation = useNavigation<ScreenNavigation<'Home'>>();
+  const isFocused = useIsFocused();
+  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
+  const [attempt, setAttempt] = useState(0);
+  const [focusedIndex, setFocusedIndex] = useState(1);
+  const [openingId, setOpeningId] = useState<string | null>(null);
+  const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  const opening = useRef(false);
+  const hasIdeas = load.status === 'ready';
+
+  // Loads on first visit and on retry; refreshes quietly whenever the family comes back home.
+  useEffect(() => {
+    if (!isFocused) return;
+    const controller = new AbortController();
+    const quiet = hasIdeas;
+    if (!quiet) setLoad({ status: 'loading' });
+    api
+      .getToday({ signal: controller.signal })
+      .then((today) => {
+        today.ideas.forEach((idea) => prefetchImage(resolveMediaUrl(idea.posterUrl)));
+        setLoad({ status: 'ready', today });
+      })
+      .catch((error) => {
+        if (isAbortError(error) || quiet) return;
+        setLoad({ status: 'error', message: messageForError(toApiError(error).code, 'today') });
+      });
+    return () => controller.abort();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [attempt, isFocused]);
+
+  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  const dismissNotice = useCallback(() => setNotice(null), []);
+  const makeYourOwn = useCallback(() => navigation.navigate('Create'), [navigation]);
+
+  const openIdea = useCallback(
+    async (idea: IdeaView) => {
+      if (opening.current) return;
+      opening.current = true;
+      setOpeningId(idea.id);
+      try {
+        const story = await api.startStory({ kind: 'idea', ideaId: idea.id });
+        navigation.navigate('Story', {
+          storyId: story.id,
+          title: story.title,
+          nodeId: story.currentNodeId,
+          posterUrl: resolveMediaUrl(idea.posterUrl),
+          origin: { ideaId: idea.id },
+        });
+      } catch (error) {
+        setNotice({ id: Date.now(), text: messageForError(toApiError(error).code, 'start') });
+      } finally {
+        opening.current = false;
+        setOpeningId(null);
+      }
+    },
+    [navigation],
+  );
+
+  const ideas = load.status === 'ready' ? load.today.ideas : [];
+  const focusedIdea = focusedIndex > 0 ? (ideas[focusedIndex - 1] ?? null) : null;
+  const heroPoster = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
 
   return (
-    <SpatialNavigationRoot isActive={isActive} onDirectionHandledWithoutMovement={onDirectionHandledWithoutMovement}>
-      <View style={gridStyles.container}>
-        {renderHeader()}
-        <SpatialNavigationScrollView offsetFromStart={scaledPixels(60)} style={gridStyles.scrollContent}>
-          {renderScrollableRow('Trending Movies', trendingRef)}
-          {renderScrollableRow('Classics', classicsRef)}
-          {renderScrollableRow('Hip and Modern', hipAndModernRef)}
-        </SpatialNavigationScrollView>
-      </View>
+    <SpatialNavigationRoot isActive={isFocused} key={load.status}>
+      <MotionContext.Provider value={isFocused}>
+        <View style={styles.screen}>
+          <HeroBackdrop uri={load.status === 'ready' ? heroPoster : null} />
+          <View style={styles.header}>
+            <Wordmark />
+          </View>
+
+          {load.status === 'loading' && <HomeSkeleton />}
+
+          {load.status === 'error' && (
+            <View style={styles.heroText}>
+              <Text style={styles.heroTitle}>Tonight's stories are hiding</Text>
+              <Text style={styles.heroLogline}>{load.message}</Text>
+              <DefaultFocus>
+                <Button label="Try again" variant="primary" onSelect={retry} style={styles.retry} />
+              </DefaultFocus>
+            </View>
+          )}
+
+          {load.status === 'ready' && (
+            <>
+              <HeroText idea={focusedIdea} />
+              <StoryRow
+                ideas={ideas}
+                openingId={openingId}
+                onFocusIndex={setFocusedIndex}
+                onSelectIdea={openIdea}
+                onMakeYourOwn={makeYourOwn}
+              />
+            </>
+          )}
+
+          {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} />}
+        </View>
+      </MotionContext.Provider>
     </SpatialNavigationRoot>
   );
 }
 
-const gridStyles = StyleSheet.create({
-  container: {
+const styles = StyleSheet.create({
+  screen: {
     flex: 1,
     backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flex: 1,
-    marginBottom: scaledPixels(safeZones.actionSafe.vertical),
-  },
-  highlightsTitle: {
-    color: colors.text,
-    fontSize: scaledPixels(40),
-    fontWeight: 'bold',
-    marginBottom: scaledPixels(16),
-    marginTop: scaledPixels(20),
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  headerTitle: {
-    color: colors.text,
-    fontSize: scaledPixels(56),
-    fontWeight: 'bold',
-    marginBottom: scaledPixels(16),
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 12,
-  },
-  headerDescription: {
-    color: colors.text,
-    fontSize: scaledPixels(28),
-    fontWeight: '500',
-    lineHeight: scaledPixels(40),
-    textShadowColor: 'rgba(0, 0, 0, 0.9)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
-  },
-  thumbnailTextContainer: {
-    position: 'absolute',
-    bottom: 0,
-    start: 0,
-    end: 0,
-    backgroundColor: colors.scrimDark,
-    paddingHorizontal: scaledPixels(16),
-    paddingVertical: scaledPixels(12),
-    borderBottomStartRadius: scaledPixels(8),
-    borderBottomEndRadius: scaledPixels(8),
-  },
-  thumbnailText: {
-    color: colors.text,
-    fontSize: scaledPixels(24),
-    fontWeight: '600',
-    textAlign: 'center',
-    lineHeight: scaledPixels(32),
-  },
-  highlightThumbnail: {
-    width: scaledPixels(420),
-    height: scaledPixels(260),
-    marginEnd: scaledPixels(20),
-    backgroundColor: colors.card,
-    borderRadius: scaledPixels(12),
-    borderWidth: scaledPixels(5),
-    borderColor: 'transparent',
     overflow: 'hidden',
   },
-  highlightThumbnailFocused: {
-    borderColor: colors.focusBorder,
-    borderWidth: scaledPixels(6),
-    transform: [{ scale: 1.1 }],
-    shadowColor: colors.focus,
-    shadowOffset: {
-      width: 0,
-      height: 0,
-    },
-    shadowOpacity: 0.9,
-    shadowRadius: scaledPixels(20),
-    elevation: 15,
-  },
-  highlightsContainer: {
-    paddingHorizontal: scaledPixels(safeZones.actionSafe.horizontal),
-    paddingVertical: scaledPixels(16),
-    height: scaledPixels(400),
-  },
-  thumbnailPlaceholder: {
-    backgroundColor: colors.cardElevated,
-    width: '100%',
-    height: '100%',
-    borderRadius: scaledPixels(8),
-  },
   header: {
-    width: '100%',
-    height: scaledPixels(700),
-    position: 'relative',
-  },
-  headerImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  gradientLeft: {
     position: 'absolute',
-    start: 0,
-    top: 0,
-    bottom: 0,
-    width: '65%',
-  },
-  headerTextContainer: {
-    position: 'absolute',
-    start: scaledPixels(safeZones.titleSafe.horizontal),
     top: scaledPixels(safeZones.titleSafe.vertical),
-    bottom: scaledPixels(safeZones.titleSafe.vertical),
-    justifyContent: 'center',
-    width: '55%',
+    left: SIDE,
   },
-  highlightsList: {
-    paddingStart: scaledPixels(20),
+  heroText: {
+    position: 'absolute',
+    top: scaledPixels(176),
+    left: SIDE,
+    width: scaledPixels(940),
   },
-  cardImage: {
-    width: '100%',
-    height: '100%',
-    borderRadius: scaledPixels(8),
+  tags: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+  },
+  tag: {
+    marginRight: scaledPixels(12),
+    marginBottom: scaledPixels(8),
+  },
+  heroTitle: {
+    ...type.hero,
+    color: colors.text,
+    marginTop: scaledPixels(18),
+  },
+  heroLogline: {
+    ...type.bodyLarge,
+    color: colors.textMuted,
+    marginTop: scaledPixels(18),
+  },
+  plays: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: scaledPixels(24),
+  },
+  playsText: {
+    ...type.body,
+    color: colors.text,
+    marginLeft: scaledPixels(12),
+  },
+  retry: {
+    marginTop: scaledPixels(36),
+  },
+  rowArea: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: scaledPixels(safeZones.titleSafe.vertical + 6),
+  },
+  rowTitle: {
+    ...type.heading,
+    color: colors.text,
+    marginLeft: SIDE,
+    marginBottom: scaledPixels(22),
+  },
+  scroll: {
+    flexGrow: 0,
+  },
+  rowContent: {
+    paddingLeft: SIDE,
+    paddingRight: SIDE,
+    paddingVertical: scaledPixels(18),
+  },
+  skeletonRow: {
+    flexDirection: 'row',
+  },
+  skeletonCard: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: scaledPixels(20),
+    marginRight: CARD_GAP,
+    marginBottom: scaledPixels(56),
+  },
+  skeletonLine: {
+    borderRadius: scaledPixels(12),
+    marginBottom: scaledPixels(20),
   },
 });

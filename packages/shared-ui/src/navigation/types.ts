@@ -1,27 +1,36 @@
+import type { Audience, Mood } from '@storyquest/contracts';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
+
+export interface StoryOrigin {
+  ideaId: string | null;
+  prompt?: string;
+  moods?: Mood[];
+  audience?: Audience;
+}
+
 export type RootStackParamList = {
-  DrawerNavigator: undefined;
-  Details: {
+  Home: undefined;
+  Create: undefined;
+  Story: {
+    storyId: string;
     title: string;
-    description: string;
-    headerImage: string;
-    movie: string;
-    category?: string;
-    genres?: string[];
-    releaseYear?: number;
-    rating?: number;
-    ratingCount?: number;
-    contentRating?: string;
-    duration?: number;
+    nodeId: string;
+    posterUrl: string | null;
+    origin: StoryOrigin;
   };
-  Player: {
-    movie: string;
-    headerImage: string;
+  End: {
+    storyId: string;
+    title: string;
+    stillUrl: string | null;
+    origin: StoryOrigin;
+  };
+  Movie: {
+    url: string;
+    title: string;
+    posterUrl: string | null;
   };
 };
 
-export type DrawerParamList = {
-  Home: undefined;
-  Explore: undefined;
-  TV: undefined;
-  Settings: undefined;
-};
+export type ScreenNavigation<T extends keyof RootStackParamList> = NativeStackNavigationProp<RootStackParamList, T>;
+export type ScreenRoute<T extends keyof RootStackParamList> = RouteProp<RootStackParamList, T>;

@@ -12,12 +12,12 @@ const KEY_MAPPING: Record<string, SupportedKeys> = {
   swipeLeft: SupportedKeys.Left,
   swipeRight: SupportedKeys.Right,
   swipeUp: SupportedKeys.Up,
-  swipeDown: SupportedKeys.Down
+  swipeDown: SupportedKeys.Down,
 };
 
 class RemoteControlManager implements RemoteControlManagerInterface {
   private eventEmitter = mitt<{ keyDown: SupportedKeys }>();
-  private tvEventSubscription: EventSubscription;
+  private tvEventSubscription?: EventSubscription;
 
   constructor() {
     this.tvEventSubscription = TVEventHandler.addListener(this.handleKeyDown);
@@ -32,7 +32,7 @@ class RemoteControlManager implements RemoteControlManagerInterface {
     }
   };
 
-  addKeydownListener = (listener: (event: SupportedKeys) => void): ((event: SupportedKeys) => void) => {
+  addKeydownListener = (listener: (event: SupportedKeys) => void) => {
     this.eventEmitter.on('keyDown', listener);
     return listener;
   };
@@ -46,7 +46,7 @@ class RemoteControlManager implements RemoteControlManagerInterface {
   };
 
   cleanup = (): void => {
-    this.tvEventSubscription.remove();
+    this.tvEventSubscription?.remove();
   };
 }
 

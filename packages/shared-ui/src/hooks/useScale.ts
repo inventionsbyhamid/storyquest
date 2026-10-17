@@ -1,13 +1,10 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-// SPDX-License-Identifier: MIT-0
+import { Dimensions, PixelRatio } from 'react-native';
 
-import {create} from 'react-native-pixel-perfect';
+// Layouts are designed at 1920x1080 and scaled by the screen diagonal, like the sample did.
+const DESIGN_DIAGONAL = Math.hypot(1920, 1080);
+const viewport = Dimensions.get('window');
+const ratio = Math.hypot(viewport.width, viewport.height) / DESIGN_DIAGONAL;
 
-const designResolution = {
-  width: 1920,
-  height: 1080
-} 
-
-export const scaledPixels = create(designResolution)
-
-
+export function scaledPixels(size: number): number {
+  return PixelRatio.roundToNearestPixel(size * ratio);
+}

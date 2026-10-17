@@ -3,12 +3,16 @@
   "version": "1.0.0",
   "private": true,
   "main": "src/index.ts",
-  "types": "src/index.d.ts",
+  "types": "src/index.ts",
   "scripts": {
     "lint": "eslint src --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
-    "test": "jest",
+    "test": "vitest run",
     "clean": "rm -rf node_modules"
+  },
+  "dependencies": {
+    "@storyquest/contracts": "workspace:*",
+    "mitt": "^3.0.1"
   },
   "peerDependencies": {
     "@react-navigation/native": "*",
@@ -16,7 +20,8 @@
     "react-native": "*"
   },
   "devDependencies": {
-    "@types/react": "~19.1.0",
-    "typescript": "~5.7.0"
+    "typescript": "~5.7.0",
+    "vite": "^7.1.0",
+    "vitest": "^5.0.5"
   }
 }

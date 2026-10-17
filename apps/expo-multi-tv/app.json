@@ -50,15 +50,22 @@
       ],
       "./plugins/withFmtXcode26Fix"
     ],
-    "name": "MultiTVSample",
-    "slug": "MultiTVSample",
-    "scheme": "com.anonymous.MultiTVSample",
+    "name": "StoryQuest",
+    "slug": "storyquest",
+    "scheme": "storyquest",
     "android": {
-      "package": "com.anonymous.MultiTVSample"
+      "package": "com.storyquest.tv"
     },
     "ios": {
-      "bundleIdentifier": "com.anonymous.MultiTVSample"
+      "bundleIdentifier": "com.storyquest.tv"
     },
-    "newArchEnabled": false
+    "newArchEnabled": false,
+    "backgroundColor": "#0B0D1A",
+    "web": {
+      "name": "StoryQuest",
+      "shortName": "StoryQuest",
+      "backgroundColor": "#0B0D1A",
+      "themeColor": "#0B0D1A"
+    }
   }
 }

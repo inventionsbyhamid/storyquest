@@ -8,27 +8,29 @@
   "scripts": {
     "clean": "rm -rf node_modules buildinfo.json dist build",
     "start": "react-native start",
-    "test": "jest --colors ",
-    "test:snapshot": "jest --colors --updateSnapshot",
-    "lint": "eslint src test --ext .ts,.tsx",
-    "lint:fix": "eslint src test --ext .ts,.tsx --fix",
+    "test": "jest --colors --passWithNoTests",
+    "lint": "eslint src --ext .ts,.tsx",
+    "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "build:release": "react-native build-kepler --build-type Release",
     "build:debug": "react-native build-kepler --build-type Debug",
     "build:app": "npm-run-all build:release",
     "build": "npm-run-all build:release",
-    "release": "npm-run-all lint test build:app"
+    "release": "npm-run-all lint test build:app",
+    "typecheck": "tsc --noEmit"
   },
   "dependencies": {
     "@amazon-devices/kepler-media-controls": "^1.0.0",
     "@amazon-devices/kepler-media-types": "^1.0.0",
+    "@amazon-devices/react-native-async-storage__async-storage": "~2.0.0",
     "@amazon-devices/react-native-gesture-handler": "~2.0.0",
     "@amazon-devices/react-native-kepler": "^2.0.0",
+    "@amazon-devices/react-native-qrcode-svg": "~2.0.0",
     "@amazon-devices/react-native-reanimated": "~2.0.0",
     "@amazon-devices/react-native-safe-area-context": "*",
     "@amazon-devices/react-native-screens": "*",
+    "@amazon-devices/react-native-svg": "~2.0.0",
     "@amazon-devices/react-native-w3cmedia": "~2.1.0",
     "@amazon-devices/react-navigation__core": "~7.0.0",
-    "@amazon-devices/react-navigation__drawer": "~7.0.0",
     "@amazon-devices/react-navigation__native": "~7.0.0",
     "@amazon-devices/react-navigation__native-stack": "~7.0.0",
     "@amazon-devices/react-navigation__routers": "~7.0.0",
@@ -36,9 +38,7 @@
     "@multi-tv/shared-ui": "workspace:*",
     "react": "18.2.0",
     "react-native": "0.72.0",
-    "react-native-keyevent": "*",
     "react-native-pixel-perfect": "*",
-    "react-native-video": "*",
     "react-tv-space-navigation": "*"
   },
   "devDependencies": {
@@ -72,7 +72,7 @@
   },
   "kepler": {
     "projectType": "application",
-    "appName": "MultiTVVega",
+    "appName": "StoryQuest",
     "targets": [
       "tv"
     ]

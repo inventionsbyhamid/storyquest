@@ -1,0 +1,12 @@
+{
+  "//": "Typecheck only. Metro reads tsconfig.json paths, so these mappings must not live there.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "paths": {
+      "@/*": ["./*"],
+      "@multi-tv/shared-ui": ["../../packages/shared-ui/src/index.ts"],
+      "@storyquest/contracts": ["../../packages/contracts/src/index.ts"],
+      "*": ["./node_modules/@types/*", "./node_modules/*"]
+    }
+  }
+}

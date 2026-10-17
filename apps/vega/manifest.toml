@@ -1,13 +1,9 @@
-#
-# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-# SPDX-License-Identifier: MIT-0
-#
 schema-version = 1
 
 [package]
-title = "Multi TV Vega App"
+title = "StoryQuest"
 version = "0.1.0"
-id = "com.giolaq.multitv.vega"
+id = "com.storyquest.tv"
 
 [os.version]
 min = "1.2"
@@ -15,12 +11,13 @@ target = "1.2"
 
 [components]
 [[components.interactive]]
-id = "com.giolaq.multitv.vega.main"
+id = "com.storyquest.tv.main"
 runtime-module = "/com.amazon.kepler.keplerscript.runtime.loader_2@IKeplerScript_2_0"
 launch-type = "singleton"
 categories = [
     "com.amazon.category.main",
-    "com.amazon.category.kepler.media"
+    "com.amazon.category.kepler.media",
+    "com.amazon.category.kva"
 ]
 
 ## ------------------------------------------------------------------------------
@@ -28,7 +25,7 @@ categories = [
 ## ------------------------------------------------------------------------------
 [processes]
 [[processes.group]]
-component-ids = ["com.giolaq.multitv.vega.main"]
+component-ids = ["com.storyquest.tv.main"]
 
 ## ------------------------------------------------------------------------------
 ## Wants - Optional capabilities
@@ -123,12 +120,6 @@ id = "com.amazon.privilege.security.file-sharing" # Required for DRM video playb
 id = "com.amazon.network.privilege.net-info"
 
 # ------------------------------------------------------------------------------
-# Content Launcher
-# ------------------------------------------------------------------------------
-[[needs.module]]
-id = "/com.amazon.kepler.media@IContentLauncher1"
-
-# ------------------------------------------------------------------------------
 # Vega OS version
 # ------------------------------------------------------------------------------
 [[needs.module]]
@@ -143,19 +134,19 @@ id = "/com.amazon.vega.os@IVega_1_2"
 id = "com.amazon.gipc.uuid.*"
 
 [[offers.interaction]]
-id = "com.giolaq.multitv.vega.main"
+id = "com.storyquest.tv.main"
 
 [[offers.module]]
-id = "/com.giolaq.multitv.vega.main@IMod1"
+id = "/com.storyquest.tv.main@IMod1"
 includes-messages = [
-    "pkg://com.giolaq.multitv.vega.main"
+    "pkg://com.storyquest.tv.main"
 ]
 
 ## ------------------------------------------------------------------------------
 ## Message
 ## ------------------------------------------------------------------------------
 [[message]]
-uri = "pkg://com.giolaq.multitv.vega.main"
+uri = "pkg://com.storyquest.tv.main"
 sender-privileges = ["*"]
 receiver-privileges = ["self"]
 
@@ -164,17 +155,9 @@ receiver-privileges = ["self"]
 ## ------------------------------------------------------------------------------
 [[extras]]
 key = "interface.provider"
-component-id = "com.giolaq.multitv.vega.main"
+component-id = "com.storyquest.tv.main"
 
 [extras.value.application]
-# ------------------------------------------------------------------------------
-# Content Launcher
-# ------------------------------------------------------------------------------
-[[extras.value.application.interface]]
-interface_name = "com.amazon.kepler.media.IContentLauncherServer"
-attribute_options = ["partner-id"]
-static-values = { partner-id = "MULTI_TV" }
-
 # ------------------------------------------------------------------------------
 # Vega Media Controls (VMC)
 # ------------------------------------------------------------------------------

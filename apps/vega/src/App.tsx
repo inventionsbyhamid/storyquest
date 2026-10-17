@@ -1,11 +1,8 @@
-// Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
-// SPDX-License-Identifier: MIT-0
-
 import React from 'react';
-import VegaAppNavigator from './navigation/VegaAppNavigator';
-import '../../../packages/shared-ui/src/app/configureRemoteControl';
+import {AppNavigator, setApiBaseUrl} from '@multi-tv/shared-ui';
+import '@multi-tv/shared-ui/src/app/configureRemoteControl';
+import {API_BASE_URL} from './config';
 
-export const App = () => {
-  return <VegaAppNavigator fontsLoaded={true} />;
-};
- 
+setApiBaseUrl(API_BASE_URL);
+
+export const App = () => <AppNavigator />;

@@ -1,0 +1,56 @@
+import type { ErrorCode } from '@storyquest/contracts';
+
+export type ClientErrorCode = 'network' | 'timeout' | 'aborted' | 'invalid_response';
+export type ApiErrorCode = ErrorCode | ClientErrorCode;
+
+export class ApiError extends Error {
+  readonly code: ApiErrorCode;
+  readonly status: number | null;
+
+  constructor(code: ApiErrorCode, message: string, status: number | null = null) {
+    super(message);
+    Object.setPrototypeOf(this, ApiError.prototype);
+    this.name = 'ApiError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+export function isApiError(error: unknown): error is ApiError {
+  if (error instanceof ApiError) return true;
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { name?: unknown }).name === 'ApiError' &&
+    typeof (error as { code?: unknown }).code === 'string'
+  );
+}
+
+export function isAbortError(error: unknown): boolean {
+  return isApiError(error) && error.code === 'aborted';
+}
+
+export function toApiError(error: unknown): ApiError {
+  if (isApiError(error)) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  return new ApiError('network', message);
+}
+
+const TRANSIENT: ReadonlySet<ApiErrorCode> = new Set<ApiErrorCode>([
+  'network',
+  'timeout',
+  'internal',
+  'rate_limited',
+  'not_ready',
+]);
+
+export function isTransient(error: unknown): boolean {
+  return isApiError(error) && TRANSIENT.has(error.code);
+}
+
+export function codeForStatus(status: number): ErrorCode {
+  if (status === 400 || status === 422) return 'bad_request';
+  if (status === 404) return 'not_found';
+  if (status === 429) return 'rate_limited';
+  return 'internal';
+}
