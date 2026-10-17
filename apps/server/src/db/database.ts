@@ -103,6 +103,40 @@ const MIGRATIONS: string[] = [
   ALTER TABLE trees ADD COLUMN warm_depth INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE trees ADD COLUMN warm_force INTEGER NOT NULL DEFAULT 0;
   `,
+  `
+  ALTER TABLE usage ADD COLUMN free_used INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE nodes ADD COLUMN charge TEXT;
+
+  CREATE TABLE wallets (
+    wallet_key TEXT PRIMARY KEY,
+    sparks INTEGER NOT NULL DEFAULT 0 CHECK (sparks >= 0),
+    free_sparks INTEGER NOT NULL DEFAULT 0 CHECK (free_sparks >= 0),
+    purchased INTEGER NOT NULL DEFAULT 0,
+    spent INTEGER NOT NULL DEFAULT 0,
+    free_spent INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+
+  CREATE TABLE purchases (
+    receipt_id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    sku TEXT NOT NULL,
+    sparks INTEGER NOT NULL,
+    mode TEXT NOT NULL,
+    test_transaction INTEGER NOT NULL DEFAULT 0,
+    raw TEXT NOT NULL,
+    created_at TEXT NOT NULL
+  );
+  CREATE INDEX purchases_user ON purchases(user_id);
+
+  CREATE TABLE devices (
+    device_id TEXT PRIMARY KEY,
+    scenes_seen INTEGER NOT NULL DEFAULT 0,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL
+  );
+  `,
 ];
 
 export function openDatabase(file: string): Db {

@@ -36,7 +36,7 @@ const ConfigSchema = z
     VIDEO_RESOLUTION: z.enum(['480P', '768P', '1080P']).default('768P'),
     SCENE_SECONDS: int(8, 1, 30),
     PROMPT_EXPANSION: z.enum(['disabled', 'balanced', 'quality']).default('disabled'),
-    VIDEO_PRICE_PER_SECOND: z.coerce.number().nonnegative().default(0.026),
+    VIDEO_PRICE_PER_SECOND: z.coerce.number().nonnegative().default(0.04),
     FAKE_VIDEO_DELAY_MS: int(2500, 0, 120_000),
     FAKE_VIDEO_SIZE: z
       .string()
@@ -53,7 +53,20 @@ const ConfigSchema = z
     SCENES_PER_STORY: int(6, 2, 12),
     MAX_PARALLEL_JOBS: int(6, 1, 64),
     WARM_DEPTH: int(1, 0, 4),
-    DEVICE_DAILY_CUSTOM_LIMIT: int(12, 0, 10_000),
+    // A hard safety cap on private scenes per TV per day, paid or free.
+    DEVICE_DAILY_CUSTOM_LIMIT: int(60, 0, 10_000),
+    IDEA_LIFETIME_DAYS: int(1, 1, 60),
+    SCENE_COST_SPARKS: int(1, 0, 1_000),
+    WELCOME_FREE_SPARKS: int(1, 0, 1_000),
+    DAILY_FREE_SPARKS: int(0, 0, 1_000),
+    // The welcome scene only unlocks after a TV has watched this many scenes.
+    FREE_SPARK_UNLOCK_AFTER_SCENES: int(0, 0, 10_000),
+    SPARK_PRODUCTS: z
+      .string()
+      .regex(/^[A-Za-z0-9._]+:[1-9]\d*(,[A-Za-z0-9._]+:[1-9]\d*)*$/, 'must look like sku:sparks,sku:sparks')
+      .default('storyquest.sparks.10:10,storyquest.sparks.25:25'),
+    IAP_MODE: z.enum(['fake', 'sandbox', 'production']).default('fake'),
+    AMAZON_IAP_SHARED_SECRET: z.string().optional(),
     DAILY_VIDEO_SECONDS_CAP: int(900, 0, 100_000_000),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
@@ -72,6 +85,11 @@ const ConfigSchema = z
     const [width, height] = env.FAKE_VIDEO_SIZE.split('x').map(Number) as [number, number];
     return {
       ...env,
+      sparkProducts: env.SPARK_PRODUCTS.split(',').map((entry) => {
+        const [sku, sparks] = entry.split(':') as [string, string];
+        return { sku, sparks: Number(sparks) };
+      }),
+      purchasesEnabled: env.IAP_MODE === 'fake' || Boolean(env.AMAZON_IAP_SHARED_SECRET),
       bedrockToken: env.BEDROCK_API_KEY ?? env.AWS_BEARER_TOKEN_BEDROCK,
       fakeVideoWidth: width - (width % 2),
       fakeVideoHeight: height - (height % 2),

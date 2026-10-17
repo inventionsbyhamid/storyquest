@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ChoiceStat, StoryStats } from '@storyquest/contracts';
-import { utcDay, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
+import { isPaid, utcDay, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
 import { newFileTag, newId, newShareSlug } from '../ids';
 import { errorDetails } from '../log';
 import { clipText, provisionalTitle, sanitizeUserText } from '../text';
@@ -14,11 +14,13 @@ import {
   MESSAGES,
   notFound,
   notReady,
-  rateLimited,
   unsafeInput,
 } from './errors';
 import { JobQueue, type Priority } from './queue';
+import type { Wallet } from '../wallet/wallet';
 import { choiceLabel, forcedWarm, SceneGenerator, type SceneGeneratorDeps } from './scenes';
+
+export type EngineDeps = SceneGeneratorDeps & { wallet: Wallet };
 
 export type StartStory =
   | { kind: 'idea'; ideaId: string }
@@ -50,7 +52,7 @@ export class StoryEngine {
   private readonly movies = new Set<Promise<void>>();
   private stopping = false;
 
-  constructor(private readonly deps: SceneGeneratorDeps) {
+  constructor(private readonly deps: EngineDeps) {
     this.events.setMaxListeners(0);
     this.generator = new SceneGenerator(deps);
     this.queue = new JobQueue(deps.config.MAX_PARALLEL_JOBS, (id) => this.runJob(id), deps.log);
@@ -96,8 +98,8 @@ export class StoryEngine {
 
   // Stories
 
-  async startStory(deviceId: string, request: StartStory): Promise<StoryRecord> {
-    const { repo, config } = this.deps;
+  async startStory(deviceId: string, request: StartStory, iapUserId: string | null = null): Promise<StoryRecord> {
+    const { repo, config, wallet } = this.deps;
     if (request.kind === 'idea') {
       const idea = repo.getIdea(request.ideaId);
       if (!idea) throw notFound();
@@ -105,6 +107,7 @@ export class StoryEngine {
       if (root.status === 'failed' && this.budgetExhausted()) throw budgetExhausted();
       const story = repo.transaction(() => {
         repo.incrementIdeaPlays(idea.id);
+        repo.addSceneSeen(deviceId);
         return repo.insertStory({ deviceId, treeId: idea.treeId, ideaId: idea.id, path: [root.id] });
       });
       this.arrive(root.id);
@@ -114,9 +117,9 @@ export class StoryEngine {
     const prompt = clipText(sanitizeUserText(request.prompt), 240);
     await this.assertSafeInput(prompt, request.audience);
     if (this.budgetExhausted()) throw budgetExhausted();
-    this.consumeCustom(deviceId);
 
     const story = repo.transaction(() => {
+      const charge = wallet.charge({ deviceId, userId: iapUserId });
       const tree = repo.insertTree({
         title: provisionalTitle(prompt),
         logline: clipText(prompt, 160),
@@ -136,7 +139,9 @@ export class StoryEngine {
         ownerStoryId: storyId,
         depth: 0,
         wantChildren: true,
+        charge,
       });
+      repo.addSceneSeen(deviceId);
       return repo.insertStory({ id: storyId, deviceId, treeId: tree.id, ideaId: null, path: [root.id] });
     });
     this.enqueue(story.path[0]!, 'high');
@@ -149,8 +154,13 @@ export class StoryEngine {
     return story;
   }
 
-  async choose(storyId: string, deviceId: string | null, request: Choose): Promise<{ story: StoryRecord; nextNodeId: string }> {
-    const { repo } = this.deps;
+  async choose(
+    storyId: string,
+    deviceId: string | null,
+    request: Choose,
+    iapUserId: string | null = null,
+  ): Promise<{ story: StoryRecord; nextNodeId: string }> {
+    const { repo, wallet } = this.deps;
     const story = this.ownedStory(storyId, deviceId);
     if (story.status !== 'active') throw conflict(MESSAGES.storyFinished);
 
@@ -167,27 +177,35 @@ export class StoryEngine {
     if (from.status !== 'ready') throw notReady();
     if (from.isEnding) throw conflict(MESSAGES.atEnding);
 
-    let next: NodeRecord;
+    let customText: string | null = null;
     if (request.kind === 'preset') {
       if (request.index >= from.choices.length) throw badRequest(MESSAGES.noSuchChoice);
       const existing = repo.getPresetChildren(from.id).find((child) => child.choiceIndex === request.index);
       if ((!existing || existing.status === 'failed') && this.budgetExhausted()) throw budgetExhausted();
-      next = repo.getOrCreatePresetChild(from, request.index, 0).node;
     } else {
-      const text = clipText(sanitizeUserText(request.text), 200);
+      customText = clipText(sanitizeUserText(request.text), 200);
       const tree = repo.getTree(from.treeId)!;
-      await this.assertSafeInput(text, tree.audience);
+      await this.assertSafeInput(customText, tree.audience);
       if (this.budgetExhausted()) throw budgetExhausted();
-      this.consumeCustom(story.deviceId);
-      next = repo.createCustomChild(from, text, story.id);
     }
 
-    const path = replaced ? [...story.path.slice(0, -1), next.id] : [...story.path, next.id];
-    repo.transaction(() => {
-      repo.setStoryPath(story.id, path);
-      const repeat = replaced?.id === next.id;
-      if (next.choiceIndex !== null && !repeat) repo.addPicks(next.id, 1);
+    // Paying, creating the scene and moving the story forward happen together or not at all.
+    // Shared scenes are free; a scene filmed only for this family costs Sparks the first time it is chosen.
+    const payer = { deviceId: story.deviceId, userId: iapUserId };
+    const next = repo.transaction(() => {
+      let node: NodeRecord;
+      if (request.kind === 'preset') {
+        node = repo.getOrCreatePresetChild(from, request.index, 0).node;
+        if (node.ownerStoryId !== null && !isPaid(node)) repo.setNodeCharge(node.id, wallet.charge(payer));
+      } else {
+        node = repo.createCustomChild(from, customText!, story.id, wallet.charge(payer));
+      }
+      repo.setStoryPath(story.id, replaced ? [...story.path.slice(0, -1), node.id] : [...story.path, node.id]);
+      repo.addSceneSeen(story.deviceId);
+      const repeat = replaced?.id === node.id;
+      if (node.choiceIndex !== null && !repeat) repo.addPicks(node.id, 1);
       if (replaced && replaced.choiceIndex !== null && !repeat) repo.addPicks(replaced.id, -1);
+      return node;
     });
     this.arrive(next.id);
     return { story: repo.getStory(story.id)!, nextNodeId: next.id };
@@ -236,6 +254,29 @@ export class StoryEngine {
       endingsDiscovered: repo.countReadyEndings(story.treeId),
       familiesPlayed: idea ? idea.plays : repo.countStoriesForTree(story.treeId),
     };
+  }
+
+  /**
+   * Films one private choice ahead of time while the family looks at it, but
+   * only if they could pay for it. Nothing is charged until they choose it.
+   * Shared scenes are already prepared, so this does nothing for them.
+   */
+  prepareChoice(nodeId: string, index: number, deviceId: string | null, iapUserId: string | null): NodeRecord {
+    const { repo, wallet } = this.deps;
+    const node = repo.getNode(nodeId);
+    if (!node) throw notFound();
+    if (node.ownerStoryId === null) return node;
+    const story = repo.getStory(node.ownerStoryId);
+    if (!story || (deviceId !== null && story.deviceId !== deviceId)) throw notFound();
+    if (node.status !== 'ready') throw notReady();
+    if (node.isEnding || index >= node.choices.length) throw badRequest(MESSAGES.noSuchChoice);
+
+    const existing = repo.getPresetChildren(node.id).find((child) => child.choiceIndex === index);
+    if (existing) return node;
+    if (this.budgetExhausted() || !wallet.canAfford({ deviceId: story.deviceId, userId: iapUserId })) return node;
+    const { node: child, created } = repo.getOrCreatePresetChild(node, index, 0);
+    if (created) this.enqueue(child.id, 'high');
+    return node;
   }
 
   // Warming
@@ -327,6 +368,8 @@ export class StoryEngine {
     const { repo } = this.deps;
     const node = repo.getNode(nodeId);
     if (!node || node.status !== 'ready' || node.isEnding) return;
+    // Private scenes cost real money, so they are only prepared on request through prepareChoice.
+    if (node.ownerStoryId !== null) return;
     if (!node.wantChildren && node.warm <= 0) return;
     const tree = repo.getTree(node.treeId)!;
     if (node.depth + 1 >= tree.totalScenes) return;
@@ -380,12 +423,6 @@ export class StoryEngine {
     const story = this.deps.repo.getStory(storyId);
     if (!story || (deviceId !== null && story.deviceId !== deviceId)) throw notFound();
     return story;
-  }
-
-  private consumeCustom(deviceId: string): void {
-    const { repo, config } = this.deps;
-    const allowed = repo.tryConsumeCustom(utcDay(this.deps.now()), deviceId, config.DEVICE_DAILY_CUSTOM_LIMIT);
-    if (!allowed) throw rateLimited(MESSAGES.customLimit);
   }
 
   private async assertSafeInput(text: string, audience: Audience): Promise<void> {

@@ -158,6 +158,17 @@ describe('today fallback', () => {
   });
 });
 
+describe('story lifetime', () => {
+  it('lists the ideas of the last IDEA_LIFETIME_DAYS days, newest first', async () => {
+    const { app, services } = await bootServer({ DAILY_IDEAS: '1', IDEA_LIFETIME_DAYS: '3' });
+    for (const date of ['2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17']) await services.daily.ensure(date);
+    await services.engine.idle();
+    const home = await today(app);
+    expect(home.date).toBe('2026-10-17');
+    expect(home.ideas.map((idea) => idea.date)).toEqual(['2026-10-17', '2026-10-16', '2026-10-15']);
+  });
+});
+
 describe('featured stories', () => {
   it('appends pinned ideas from earlier days after today, without duplicates and up to the cap', async () => {
     const { app, services } = await bootServer();

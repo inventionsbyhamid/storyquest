@@ -5,15 +5,18 @@ import type {
   Audience,
   Bible,
   Character,
+  Charge,
   IdeaRecord,
   Mood,
   MovieStatus,
   NodeRecord,
   NodeStatus,
   NodeTimings,
+  PurchaseRecord,
   StoryRecord,
   StoryStatus,
   TreeRecord,
+  WalletRecord,
 } from '../domain';
 
 interface TreeRow {
@@ -74,6 +77,7 @@ interface NodeRow {
   error_code: string | null;
   timings: string | null;
   cost_seconds: number | null;
+  charge: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -150,6 +154,7 @@ const toNode = (row: NodeRow): NodeRecord => ({
   errorCode: row.error_code,
   timings: row.timings ? (JSON.parse(row.timings) as NodeTimings) : null,
   costSeconds: row.cost_seconds,
+  charge: row.charge ? (JSON.parse(row.charge) as Charge) : null,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
 });
@@ -191,6 +196,7 @@ export interface NewNode {
   depth: number;
   warm?: number;
   wantChildren?: boolean;
+  charge?: Charge | null;
 }
 
 export interface NewStory {
@@ -329,6 +335,15 @@ export class Repository {
     return row ? toIdea(row) : null;
   }
 
+  /** Ideas from a range of dates, newest day first. */
+  listIdeasBetween(fromDate: string, toDate: string): IdeaRecord[] {
+    const rows = this.stmt('SELECT * FROM ideas WHERE date >= ? AND date <= ? ORDER BY date DESC, position').all(
+      fromDate,
+      toDate,
+    ) as IdeaRow[];
+    return rows.map(toIdea);
+  }
+
   listIdeas(date: string): IdeaRecord[] {
     const rows = this.stmt('SELECT * FROM ideas WHERE date = ? ORDER BY position').all(date) as IdeaRow[];
     return rows.map(toIdea);
@@ -372,8 +387,8 @@ export class Repository {
     const id = input.id ?? newId('nd');
     const now = this.timestamp();
     this.stmt(
-      `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, warm, want_children, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, warm, want_children, charge, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.treeId,
@@ -384,6 +399,7 @@ export class Repository {
       input.depth,
       input.warm ?? 0,
       input.wantChildren ? 1 : 0,
+      input.charge ? JSON.stringify(input.charge) : null,
       now,
       now,
     );
@@ -422,7 +438,7 @@ export class Repository {
     });
   }
 
-  createCustomChild(parent: NodeRecord, text: string, storyId: string): NodeRecord {
+  createCustomChild(parent: NodeRecord, text: string, storyId: string, charge: Charge | null = null): NodeRecord {
     return this.insertNode({
       treeId: parent.treeId,
       parentId: parent.id,
@@ -431,6 +447,7 @@ export class Repository {
       ownerStoryId: storyId,
       depth: parent.depth + 1,
       wantChildren: true,
+      charge,
     });
   }
 
@@ -616,15 +633,171 @@ export class Repository {
     return row.n;
   }
 
-  // Usage and spend
+  // Usage, wallets and purchases
 
-  tryConsumeCustom(day: string, deviceId: string, limit: number): boolean {
-    if (limit <= 0) return false;
+  getUsage(day: string, deviceId: string): { customCount: number; freeUsed: number } {
+    const row = this.stmt('SELECT custom_count, free_used FROM usage WHERE day = ? AND device_id = ?').get(day, deviceId) as
+      | { custom_count: number; free_used: number }
+      | undefined;
+    return { customCount: row?.custom_count ?? 0, freeUsed: row?.free_used ?? 0 };
+  }
+
+  addUsage(day: string, deviceId: string, delta: { custom: number; freeUsed: number }): void {
+    this.transaction(() => {
+      this.stmt('INSERT INTO usage (day, device_id) VALUES (?, ?) ON CONFLICT (day, device_id) DO NOTHING').run(day, deviceId);
+      this.stmt(
+        'UPDATE usage SET custom_count = MAX(0, custom_count + ?), free_used = MAX(0, free_used + ?) WHERE day = ? AND device_id = ?',
+      ).run(delta.custom, delta.freeUsed, day, deviceId);
+    });
+  }
+
+  getWallet(key: string): WalletRecord | null {
+    const row = this.stmt('SELECT * FROM wallets WHERE wallet_key = ?').get(key) as
+      | { wallet_key: string; sparks: number; free_sparks: number; purchased: number; spent: number; free_spent: number }
+      | undefined;
+    if (!row) return null;
+    return {
+      key: row.wallet_key,
+      sparks: row.sparks,
+      freeSparks: row.free_sparks,
+      purchased: row.purchased,
+      spent: row.spent,
+      freeSpent: row.free_spent,
+    };
+  }
+
+  createWallet(key: string, freeSparks: number): WalletRecord {
+    const now = this.timestamp();
+    this.stmt(
+      'INSERT INTO wallets (wallet_key, free_sparks, created_at, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT (wallet_key) DO NOTHING',
+    ).run(key, freeSparks, now, now);
+    return this.getWallet(key)!;
+  }
+
+  /** Moves Sparks in or out of a wallet. CHECK constraints stop any balance going below zero. */
+  changeWallet(
+    key: string,
+    change: { sparks?: number; freeSparks?: number; purchased?: number; spent?: number; freeSpent?: number },
+  ): void {
     const info = this.stmt(
-      `INSERT INTO usage (day, device_id, custom_count) VALUES (?, ?, 1)
-       ON CONFLICT (day, device_id) DO UPDATE SET custom_count = custom_count + 1 WHERE custom_count < ?`,
-    ).run(day, deviceId, limit);
-    return info.changes === 1;
+      `UPDATE wallets SET sparks = sparks + ?, free_sparks = free_sparks + ?, purchased = purchased + ?,
+         spent = spent + ?, free_spent = free_spent + ?, updated_at = ? WHERE wallet_key = ?`,
+    ).run(
+      change.sparks ?? 0,
+      change.freeSparks ?? 0,
+      change.purchased ?? 0,
+      change.spent ?? 0,
+      change.freeSpent ?? 0,
+      this.timestamp(),
+      key,
+    );
+    if (info.changes !== 1) throw new Error(`wallet ${key} does not exist`);
+  }
+
+  addSceneSeen(deviceId: string): void {
+    const now = this.timestamp();
+    this.stmt(
+      `INSERT INTO devices (device_id, scenes_seen, first_seen, last_seen) VALUES (?, 1, ?, ?)
+       ON CONFLICT (device_id) DO UPDATE SET scenes_seen = scenes_seen + 1, last_seen = excluded.last_seen`,
+    ).run(deviceId, now, now);
+  }
+
+  scenesSeen(deviceId: string): number {
+    const row = this.stmt('SELECT scenes_seen FROM devices WHERE device_id = ?').get(deviceId) as
+      | { scenes_seen: number }
+      | undefined;
+    return row?.scenes_seen ?? 0;
+  }
+
+  setNodeCharge(nodeId: string, charge: Charge | null): void {
+    this.stmt('UPDATE nodes SET charge = ? WHERE id = ?').run(charge ? JSON.stringify(charge) : null, nodeId);
+  }
+
+  getPurchase(receiptId: string): PurchaseRecord | null {
+    const row = this.stmt('SELECT * FROM purchases WHERE receipt_id = ?').get(receiptId) as
+      | {
+          receipt_id: string;
+          user_id: string;
+          sku: string;
+          sparks: number;
+          mode: string;
+          test_transaction: number;
+          raw: string;
+          created_at: string;
+        }
+      | undefined;
+    if (!row) return null;
+    return {
+      receiptId: row.receipt_id,
+      userId: row.user_id,
+      sku: row.sku,
+      sparks: row.sparks,
+      mode: row.mode,
+      testTransaction: row.test_transaction === 1,
+      raw: row.raw,
+      createdAt: row.created_at,
+    };
+  }
+
+  /** Records a verified receipt and credits its Sparks to the wallet. False if the receipt was already used. */
+  creditPurchase(walletKey: string, purchase: Omit<PurchaseRecord, 'createdAt'>): boolean {
+    return this.transaction(() => {
+      const info = this.stmt(
+        `INSERT INTO purchases (receipt_id, user_id, sku, sparks, mode, test_transaction, raw, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (receipt_id) DO NOTHING`,
+      ).run(
+        purchase.receiptId,
+        purchase.userId,
+        purchase.sku,
+        purchase.sparks,
+        purchase.mode,
+        purchase.testTransaction ? 1 : 0,
+        purchase.raw,
+        this.timestamp(),
+      );
+      if (info.changes === 0) return false;
+      this.changeWallet(walletKey, { sparks: purchase.sparks, purchased: purchase.sparks });
+      return true;
+    });
+  }
+
+  /** Gives back whatever a node was paid with. Safe to call more than once. */
+  refundCharge(nodeId: string): Charge | null {
+    return this.transaction(() => {
+      const charge = this.getNode(nodeId)?.charge;
+      if (!charge || charge.refunded) return null;
+      this.addUsage(charge.day, charge.deviceId, { custom: -1, freeUsed: -charge.daily });
+      if (charge.welcome || charge.sparks) {
+        this.changeWallet(charge.walletKey, {
+          freeSparks: charge.welcome,
+          freeSpent: -charge.welcome,
+          sparks: charge.sparks,
+          spent: -charge.sparks,
+        });
+      }
+      this.setNodeCharge(nodeId, { ...charge, refunded: true });
+      return charge;
+    });
+  }
+
+  walletTotals() {
+    const wallets = this.stmt(
+      `SELECT COUNT(*) AS wallets, COALESCE(SUM(wallet_key LIKE 'user:%'), 0) AS users, COALESCE(SUM(sparks), 0) AS balance,
+         COALESCE(SUM(spent), 0) AS spent, COALESCE(SUM(free_spent), 0) AS freeSpent FROM wallets`,
+    ).get() as { wallets: number; users: number; balance: number; spent: number; freeSpent: number };
+    const sold = this.stmt(
+      'SELECT COUNT(*) AS purchases, COALESCE(SUM(sparks), 0) AS sparks, COALESCE(SUM(test_transaction), 0) AS tests FROM purchases',
+    ).get() as { purchases: number; sparks: number; tests: number };
+    return {
+      wallets: wallets.wallets,
+      userWallets: wallets.users,
+      purchases: sold.purchases,
+      testPurchases: sold.tests,
+      sparksSold: sold.sparks,
+      sparksSpent: wallets.spent,
+      freeSparksSpent: wallets.freeSpent,
+      sparksOutstanding: wallets.balance,
+    };
   }
 
   spendSeconds(day: string): number {

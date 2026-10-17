@@ -22,6 +22,7 @@ const REFRESH_MS = 10 * 60_000;
 const RETRY_MIN_MS = 10 * 60_000;
 const RETRY_MAX_MS = 60 * 60_000;
 const FEATURED_EXTRA = 3;
+const DAY_MS = 24 * 60 * 60_000;
 
 /**
  * Makes sure today's shared stories exist. Concurrent calls share one run and
@@ -81,19 +82,22 @@ export class DailyIdeas {
   }
 
   /**
-   * What Home shows: today's ideas, or the latest day that has playable ones
-   * while today's are not ready, followed by featured ideas from earlier days.
+   * What Home shows: ideas from the last IDEA_LIFETIME_DAYS days, newest
+   * first. If none of them can be played yet, the latest day that has playable
+   * ones stands in. Featured ideas from earlier days follow.
    */
   listForHome(): { date: string; ideas: IdeaRecord[] } {
     const { repo, config } = this.deps;
     const today = this.today();
     const ready = (idea: IdeaRecord) => repo.getNode(idea.rootNodeId)?.status === 'ready';
+    const oldest = utcDay(new Date(this.deps.now().getTime() - (config.IDEA_LIFETIME_DAYS - 1) * DAY_MS));
 
     let date = today;
-    let ideas = repo.listIdeas(today);
+    // Today's ideas show while their opening is still being made; older ones only once playable.
+    let ideas = repo.listIdeasBetween(oldest, today).filter((idea) => idea.date === today || ready(idea));
     if (!ideas.some(ready)) {
       const fallback = repo.latestDateWithReadyIdeas();
-      if (fallback && fallback !== today) {
+      if (fallback && fallback < oldest) {
         date = fallback;
         ideas = repo.listIdeas(fallback).filter(ready);
       }
@@ -101,7 +105,8 @@ export class DailyIdeas {
 
     const listed = new Set(ideas.map((idea) => idea.id));
     const featured = repo.listFeatured().filter((idea) => idea.date < today && !listed.has(idea.id) && ready(idea));
-    return { date, ideas: [...ideas, ...featured].slice(0, config.DAILY_IDEAS + FEATURED_EXTRA) };
+    const cap = config.DAILY_IDEAS * config.IDEA_LIFETIME_DAYS + FEATURED_EXTRA;
+    return { date, ideas: [...ideas, ...featured].slice(0, cap) };
   }
 
   private async attempt(date: string): Promise<number> {

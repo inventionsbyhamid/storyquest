@@ -7,7 +7,7 @@ import type {
   ShareView,
   StoryView,
 } from '@storyquest/contracts';
-import type { IdeaRecord, NodeRecord, StoryRecord } from '../domain';
+import { isPaid, type IdeaRecord, type NodeRecord, type StoryRecord } from '../domain';
 import { choiceLabel } from '../engine/scenes';
 import type { Services } from '../services';
 
@@ -46,12 +46,14 @@ export class Views {
       const children = repo.getPresetChildren(node.id);
       choices = node.choices.map((label, index) => {
         const child = children.find((candidate) => candidate.choiceIndex === index) ?? null;
+        const free = node.ownerStoryId === null || (child !== null && isPaid(child));
         return {
           index,
           label,
           nodeId: child?.id ?? null,
           ready: child?.status === 'ready',
           posterUrl: child?.status === 'ready' ? this.url(child.posterPath) : null,
+          sparks: free ? 0 : this.services.config.SCENE_COST_SPARKS,
         };
       });
     }

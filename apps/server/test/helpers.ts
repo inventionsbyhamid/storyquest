@@ -21,6 +21,8 @@ export function testConfig(dataDir: string, env: Record<string, string> = {}): C
     DAILY_IDEAS: '2',
     WARM_DEPTH: '1',
     MAX_PARALLEL_JOBS: '4',
+    // Plenty of free scenes so story tests are not about money; the wallet tests set their own.
+    DAILY_FREE_SPARKS: '20',
     ...env,
   });
 }

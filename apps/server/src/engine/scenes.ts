@@ -89,6 +89,7 @@ export class SceneGenerator {
     const started = performance.now();
     const day = utcDay(this.deps.now());
     let reservedSeconds = 0;
+    let videoMade = false;
     let partialFiles: string[] = [];
     const timings: NodeTimings = { directorMs: 0, videoMs: 0, mediaMs: 0, totalMs: 0 };
 
@@ -143,6 +144,7 @@ export class SceneGenerator {
         timings.directorMs += Math.round(performance.now() - directorStarted);
         rendered = await render(draft.scene);
       }
+      videoMade = true;
       const scene = draft.scene;
       timings.videoMs = Math.round(performance.now() - videoStarted);
       if (rendered.inferenceMs !== null) timings.inferenceMs = rendered.inferenceMs;
@@ -174,7 +176,15 @@ export class SceneGenerator {
     } catch (err) {
       if (reservedSeconds) repo.addVideoSeconds(day, -reservedSeconds);
       await Promise.all(partialFiles.map((file) => rm(file, { force: true })));
-      return this.handleFailure(nodeId, err);
+      const outcome = this.handleFailure(nodeId, err);
+      // A family should not pay for a scene that never got as far as video.
+      if (outcome === 'failed' && !videoMade) {
+        const refund = repo.refundCharge(nodeId);
+        if (refund) {
+          log.info({ nodeId, daily: refund.daily, welcome: refund.welcome, sparks: refund.sparks }, 'refunded a failed private scene');
+        }
+      }
+      return outcome;
     }
   }
 

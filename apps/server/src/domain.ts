@@ -59,6 +59,38 @@ export interface NodeTimings {
   inferenceMs?: number;
 }
 
+/** How a private scene was paid for, so it can be given back if nothing gets filmed. */
+export interface Charge {
+  day: string;
+  deviceId: string;
+  walletKey: string;
+  daily: number;
+  welcome: number;
+  sparks: number;
+  refunded?: boolean;
+}
+
+/** Keyed by `user:<Amazon IAP user id>`, or `device:<device id>` for TVs that have not sent one. */
+export interface WalletRecord {
+  key: string;
+  sparks: number;
+  freeSparks: number;
+  purchased: number;
+  spent: number;
+  freeSpent: number;
+}
+
+export interface PurchaseRecord {
+  receiptId: string;
+  userId: string;
+  sku: string;
+  sparks: number;
+  mode: string;
+  testTransaction: boolean;
+  raw: string;
+  createdAt: string;
+}
+
 export interface NodeRecord {
   id: string;
   treeId: string;
@@ -86,6 +118,7 @@ export interface NodeRecord {
   errorCode: string | null;
   timings: NodeTimings | null;
   costSeconds: number | null;
+  charge: Charge | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -102,6 +135,10 @@ export interface StoryRecord {
   movieStatus: MovieStatus | null;
   createdAt: string;
   finishedAt: string | null;
+}
+
+export function isPaid(node: NodeRecord): boolean {
+  return Boolean(node.charge && !node.charge.refunded);
 }
 
 export function utcDay(date: Date): string {

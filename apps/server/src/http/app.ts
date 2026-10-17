@@ -5,14 +5,19 @@ import {
   ChooseRequest,
   ChooseResponse,
   DEVICE_HEADER,
+  IAP_USER_HEADER,
   type ErrorCode,
   type ErrorResponse,
   FinishResponse,
+  PrefetchRequest,
   SceneView,
   ShareView,
   StartStoryRequest,
   StoryView,
   TodayResponse,
+  VerifyPurchaseRequest,
+  VerifyPurchaseResponse,
+  WalletView,
 } from '@storyquest/contracts';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Config } from '../config';
@@ -58,6 +63,15 @@ function requireDevice(request: FastifyRequest): string {
 function optionalDevice(request: FastifyRequest): string | null {
   const device = deviceHeader(request);
   return device && DEVICE_ID.test(device) ? device : null;
+}
+
+const IAP_USER_ID = /^[\x21-\x7E]{1,256}$/;
+
+function iapUser(request: FastifyRequest): string | null {
+  const value = request.headers[IAP_USER_HEADER];
+  if (value === undefined || value === '') return null;
+  if (typeof value !== 'string' || !IAP_USER_ID.test(value)) throw badRequest(MESSAGES.badIapUser);
+  return value;
 }
 
 function idParam(value: string): string {
@@ -156,7 +170,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   app.post('/v1/stories', { config: { rateLimit: { max: 20, timeWindow: '1 minute', keyGenerator: rateKey } } }, async (request) => {
     const device = requireDevice(request);
     const body = parse(StartStoryRequest, request.body);
-    const story = await engine.startStory(device, body);
+    const story = await engine.startStory(device, body, iapUser(request));
     return parse(StoryView, views.story(story));
   });
 
@@ -180,6 +194,16 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     return parse(SceneView, views.scene(node));
   });
 
+  app.post<{ Params: { id: string } }>(
+    '/v1/nodes/:id/prefetch',
+    { config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: rateKey } } },
+    async (request) => {
+      const body = parse(PrefetchRequest, request.body);
+      const node = engine.prepareChoice(idParam(request.params.id), body.index, optionalDevice(request), iapUser(request));
+      return parse(SceneView, views.scene(node));
+    },
+  );
+
   app.post<{ Params: { id: string } }>('/v1/stories/:id/choose', async (request) => {
     const storyId = idParam(request.params.id);
     const body = parse(ChooseRequest, request.body);
@@ -187,7 +211,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
       const limit = await customChoiceLimit(request);
       if (!limit.isAllowed && limit.isExceeded) throw rateLimited();
     }
-    const result = await engine.choose(storyId, optionalDevice(request), body);
+    const result = await engine.choose(storyId, optionalDevice(request), body, iapUser(request));
     return parse(ChooseResponse, { story: views.story(result.story), nextNodeId: result.nextNodeId });
   });
 
@@ -195,6 +219,21 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     const story = await engine.finish(idParam(request.params.id), optionalDevice(request));
     return parse(FinishResponse, views.finish(story));
   });
+
+  app.get('/v1/wallet', async (request) => {
+    const device = requireDevice(request);
+    return parse(WalletView, services.wallet.view({ deviceId: device, userId: iapUser(request) }));
+  });
+
+  app.post(
+    '/v1/purchases/verify',
+    { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: rateKey } } },
+    async (request) => {
+      const body = parse(VerifyPurchaseRequest, request.body);
+      const result = await services.wallet.verifyPurchase(optionalDevice(request), body);
+      return parse(VerifyPurchaseResponse, result);
+    },
+  );
 
   app.get<{ Params: { slug: string } }>('/v1/share/:slug', async (request) => {
     const story = SLUG.test(request.params.slug) ? repo.getStoryBySlug(request.params.slug) : null;
@@ -244,6 +283,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
       estimatedVideoCostUsd: Math.round(stats.videoSecondsToday * config.VIDEO_PRICE_PER_SECOND * 100) / 100,
       queue: engine.queueSize,
       daily: daily.retryState,
+      wallet: { ...repo.walletTotals(), iapMode: config.IAP_MODE, purchasesEnabled: config.purchasesEnabled },
       featured: repo.listFeatured().map((idea) => idea.id),
       providers: { director: services.director.name, video: services.video.name, safety: services.safety.name },
     };

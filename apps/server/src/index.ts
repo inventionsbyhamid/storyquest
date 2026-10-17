@@ -17,6 +17,8 @@ app.log.info(
     sceneSeconds: config.SCENE_SECONDS,
     scenesPerStory: config.SCENES_PER_STORY,
     adminRoutes: Boolean(config.ADMIN_TOKEN),
+    iapMode: config.IAP_MODE,
+    purchasesEnabled: config.purchasesEnabled,
   },
   'starting StoryQuest server',
 );

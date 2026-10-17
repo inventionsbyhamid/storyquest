@@ -142,12 +142,23 @@ describe('budget and usage', () => {
     expect(repo.spendSeconds('2026-10-18')).toBe(0);
   });
 
-  it('counts custom generations per device per day', () => {
-    expect(repo.tryConsumeCustom('2026-10-17', 'tv1', 2)).toBe(true);
-    expect(repo.tryConsumeCustom('2026-10-17', 'tv1', 2)).toBe(true);
-    expect(repo.tryConsumeCustom('2026-10-17', 'tv1', 2)).toBe(false);
-    expect(repo.tryConsumeCustom('2026-10-17', 'tv2', 2)).toBe(true);
-    expect(repo.tryConsumeCustom('2026-10-18', 'tv1', 2)).toBe(true);
-    expect(repo.tryConsumeCustom('2026-10-18', 'tv3', 0)).toBe(false);
+  it('keeps usage per device per day and never below zero', () => {
+    repo.addUsage('2026-10-17', 'tv1', { custom: 1, freeUsed: 1 });
+    repo.addUsage('2026-10-17', 'tv1', { custom: 1, freeUsed: 0 });
+    expect(repo.getUsage('2026-10-17', 'tv1')).toEqual({ customCount: 2, freeUsed: 1 });
+    expect(repo.getUsage('2026-10-18', 'tv1')).toEqual({ customCount: 0, freeUsed: 0 });
+    repo.addUsage('2026-10-17', 'tv2', { custom: -1, freeUsed: -1 });
+    expect(repo.getUsage('2026-10-17', 'tv2')).toEqual({ customCount: 0, freeUsed: 0 });
+  });
+
+  it('credits a receipt once and refuses to overdraw a wallet', () => {
+    repo.createWallet('user:amzn1', 1);
+    const purchase = { receiptId: 'fake-1', userId: 'amzn1', sku: 'storyquest.sparks.10', sparks: 10, mode: 'fake', testTransaction: true, raw: '{}' };
+    expect(repo.creditPurchase('user:amzn1', purchase)).toBe(true);
+    expect(repo.creditPurchase('user:amzn1', purchase)).toBe(false);
+    expect(repo.getWallet('user:amzn1')).toMatchObject({ sparks: 10, freeSparks: 1, purchased: 10, spent: 0 });
+    expect(() => repo.changeWallet('user:amzn1', { sparks: -11 })).toThrow(/CHECK/);
+    expect(() => repo.changeWallet('user:amzn1', { freeSparks: -2 })).toThrow(/CHECK/);
+    expect(repo.getWallet('user:amzn1')!.sparks).toBe(10);
   });
 });

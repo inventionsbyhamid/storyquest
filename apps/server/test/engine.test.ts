@@ -201,10 +201,15 @@ describe('custom choices', () => {
     expect(node).toMatchObject({ choiceIndex: null, ownerStoryId: story.id, customText: 'the puppy learns to fly, with a jet pack' });
     expect(node.caption).toContain('the puppy learns to fly');
 
+    // Private scenes cost money, so nothing below them is filmed until the TV asks for one choice.
     await r.services.engine.idle();
-    const privateChildren = r.services.repo.getPresetChildren(node.id);
-    expect(privateChildren).toHaveLength(2);
-    expect(privateChildren.every((child) => child.ownerStoryId === story.id)).toBe(true);
+    expect(r.services.repo.getPresetChildren(node.id)).toHaveLength(0);
+    r.services.engine.prepareChoice(node.id, 1, DEVICE, null);
+    r.services.engine.prepareChoice(node.id, 1, DEVICE, null);
+    await r.services.engine.idle();
+    const prepared = r.services.repo.getPresetChildren(node.id);
+    expect(prepared).toHaveLength(1);
+    expect(prepared[0]).toMatchObject({ choiceIndex: 1, ownerStoryId: story.id, status: 'ready', charge: null });
 
     const stats = r.services.engine.stats(r.services.repo.getStory(story.id)!);
     expect(stats.choices[0]).toMatchObject({ custom: true, label: 'the puppy learns to fly, with a jet pack' });
@@ -373,6 +378,7 @@ describe('failures', () => {
       store: r.services.store,
       log: silentLogger,
       now: () => new Date(),
+      wallet: r.services.wallet,
     });
     engine.start();
     const node = await engine.waitForNode(idea.rootNodeId, 20_000);

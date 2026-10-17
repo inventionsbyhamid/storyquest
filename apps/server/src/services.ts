@@ -17,6 +17,8 @@ import { FakeVideo } from './providers/video/fake';
 import { FalVideo } from './providers/video/fal';
 import type { VideoProvider } from './providers/video/types';
 import { MediaStore } from './storage';
+import { AmazonReceiptVerifier, FakeReceiptVerifier, type ReceiptVerifier } from './wallet/receipts';
+import { Wallet } from './wallet/wallet';
 
 export interface Services {
   config: Config;
@@ -29,6 +31,7 @@ export interface Services {
   safety: SafetyChecker;
   engine: StoryEngine;
   daily: DailyIdeas;
+  wallet: Wallet;
   now: () => Date;
 }
 
@@ -36,6 +39,7 @@ export interface ServiceOverrides {
   director?: Director;
   video?: VideoProvider;
   safety?: SafetyChecker;
+  receipts?: ReceiptVerifier | null;
   now?: () => Date;
   databaseFile?: string;
 }
@@ -89,6 +93,18 @@ function createSafety(config: Config, log: Logger): SafetyChecker {
   return wordlist;
 }
 
+function createReceiptVerifier(config: Config, log: Logger, now: () => Date): ReceiptVerifier | null {
+  if (config.IAP_MODE === 'fake') return new FakeReceiptVerifier(now);
+  if (!config.AMAZON_IAP_SHARED_SECRET) {
+    log.warn({ mode: config.IAP_MODE }, 'AMAZON_IAP_SHARED_SECRET is not set, so purchases are turned off');
+    return null;
+  }
+  return new AmazonReceiptVerifier(
+    { mode: config.IAP_MODE, sharedSecret: config.AMAZON_IAP_SHARED_SECRET },
+    log.child({ module: 'receipts' }),
+  );
+}
+
 export function createServices(config: Config, log: Logger, overrides: ServiceOverrides = {}): Services {
   const dataDir = resolve(config.DATA_DIR);
   mkdirSync(dataDir, { recursive: true });
@@ -101,6 +117,9 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const video = overrides.video ?? createVideo(config, media, log);
   const safety = overrides.safety ?? createSafety(config, log);
 
+  const receipts = overrides.receipts !== undefined ? overrides.receipts : createReceiptVerifier(config, log, now);
+  const wallet = new Wallet({ config, repo, verifier: receipts, log: log.child({ module: 'wallet' }), now });
+
   const engine = new StoryEngine({
     config,
     repo,
@@ -111,8 +130,9 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
     store,
     log: log.child({ module: 'engine' }),
     now,
+    wallet,
   });
   const daily = new DailyIdeas({ config, repo, director, safety, engine, log: log.child({ module: 'daily' }), now });
 
-  return { config, db, repo, store, media, director, video, safety, engine, daily, now };
+  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, now };
 }
