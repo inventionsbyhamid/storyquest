@@ -34,12 +34,13 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     PORT=8080 \
     HOST=0.0.0.0 \
-    FONT_FILE=/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf
+    FONT_FILE=/app/apps/server/site/static/fraunces.ttf
 WORKDIR /app/apps/server
 COPY --from=deps /app/node_modules /app/node_modules
 COPY --from=deps /app/apps/server/node_modules ./node_modules
 COPY --from=build /app/apps/server/dist ./dist
 COPY apps/server/package.json ./
+COPY apps/server/site ./site
 RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME /data

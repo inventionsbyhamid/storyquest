@@ -25,6 +25,7 @@ import { AppError, badRequest, MESSAGES, notFound, rateLimited } from '../engine
 import { PATH_ID, SLUG } from '../ids';
 import { createServices, type ServiceOverrides, type Services } from '../services';
 import { renderNotFoundPage, renderSharePage } from './share-page';
+import { registerSite } from './site';
 import { Views } from './views';
 
 /** Structural so it accepts schemas from the contracts package's own copy of zod. */
@@ -136,7 +137,8 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     max: 600,
     timeWindow: '1 minute',
     keyGenerator: rateKey,
-    allowList: (request) => request.url.startsWith('/media/') || request.url === '/healthz',
+    allowList: (request) =>
+      request.url.startsWith('/media/') || request.url.startsWith('/static/') || request.url === '/healthz',
   });
   const customChoiceLimit = app.createRateLimit({ max: 10, timeWindow: '1 minute', keyGenerator: rateKey });
 
@@ -152,6 +154,8 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     maxAge: '365d',
     immutable: true,
   });
+
+  await registerSite(app, config);
 
   app.get('/healthz', async () => ({
     ok: true,
@@ -246,7 +250,9 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     reply.type('text/html; charset=utf-8');
     if (!story) return reply.code(404).send(renderNotFoundPage());
     reply.header('cache-control', 'public, max-age=60');
-    return renderSharePage(views.share(story), views.shareUrl(story.shareSlug!));
+    const email = config.SUPPORT_EMAIL.replace(/[<>"&]/g, '');
+    const contact = email ? `<a href="mailto:${email}">${email}</a>` : '';
+    return renderSharePage(views.share(story), views.shareUrl(story.shareSlug!), contact);
   });
 
   const requireAdmin = (request: FastifyRequest) => {

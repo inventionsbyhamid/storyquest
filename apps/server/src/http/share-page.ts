@@ -21,40 +21,44 @@ function formatDate(iso: string): string {
   return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric', timeZone: 'UTC' });
 }
 
+const MARK = '<svg viewBox="0 0 120 120" aria-hidden="true"><g fill="none" stroke="#F0A830" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="34" stroke-width="12"/><path d="M58 62 C66 70 72 76 80 82" stroke-width="12"/><path d="M80 82 C88 86 96 86 106 80" stroke-width="8"/><path d="M80 82 C84 90 84 98 80 108" stroke-width="8"/></g><circle cx="107" cy="79" r="7" fill="#F0A830"/><circle cx="79.5" cy="109" r="7" fill="#F0A830"/></svg>';
+
 const STYLES = `
-:root{color-scheme:dark;--bg:#07070c;--panel:#12121c;--line:#24243a;--text:#f3efe6;--muted:#a9a3b8;--gold:#f5c26b;--rose:#ff8fa3}
+@font-face{font-family:"Fraunces";src:url("/static/fraunces.ttf") format("truetype");font-display:swap}
+:root{color-scheme:dark;--ink:#1C2240;--raised:#262D52;--line:#3A4270;--paper:#F1E6CF;--dim:#B6AE9C;--marigold:#F0A830}
 *{box-sizing:border-box}
-html,body{margin:0;background:var(--bg);color:var(--text)}
-body{font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:radial-gradient(1200px 600px at 50% -10%,#2a1f4d 0%,transparent 60%),radial-gradient(900px 500px at 100% 0%,#4a2a1a 0%,transparent 55%),var(--bg);min-height:100vh}
-main{max-width:880px;margin:0 auto;padding:28px 16px 48px}
-.brand{letter-spacing:.24em;text-transform:uppercase;font-size:12px;color:var(--gold);font-weight:600}
-h1{font-family:"Iowan Old Style","Palatino Linotype",Georgia,serif;font-weight:600;font-size:clamp(32px,7vw,56px);line-height:1.05;margin:10px 0 6px}
-.sub{color:var(--muted);margin:0 0 22px}
-.screen{position:relative;border-radius:18px;overflow:hidden;background:#000;box-shadow:0 30px 80px rgba(0,0,0,.6),0 0 0 1px var(--line)}
-video{display:block;width:100%;aspect-ratio:16/9;background:#000}
-.note{color:var(--muted);font-size:14px;margin:10px 2px 0}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin:24px 0 8px}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px 16px}
-.stat b{display:block;font-size:26px;color:var(--gold);font-family:Georgia,serif}
-.stat span{color:var(--muted);font-size:14px}
-.rare{background:linear-gradient(135deg,#3a2347,#1d1830);border-color:#5b3a6e}
-.rare b{font-size:18px;color:var(--rose)}
-h2{font-family:Georgia,serif;font-weight:600;font-size:24px;margin:34px 0 14px}
+html,body{margin:0;background:var(--ink);color:var(--paper)}
+body{font:17px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:28px 20px 56px}
+a{color:var(--paper);text-decoration-color:var(--marigold);text-underline-offset:3px}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none}
+.brand svg{width:30px;height:30px}
+.brand span{font-family:"Fraunces",Georgia,serif;font-size:22px}
+h1,h2{font-family:"Fraunces",Georgia,serif;font-weight:normal;line-height:1.15}
+h1{font-size:clamp(34px,7vw,56px);margin:28px 0 8px;letter-spacing:-.5px}
+h2{font-size:26px;margin:44px 0 16px}
+.sub{color:var(--dim);margin:0 0 24px}
+.plate{background:var(--paper);padding:10px;border-radius:18px}
+video{display:block;width:100%;aspect-ratio:16/9;background:var(--raised);border-radius:10px}
+.note{color:var(--dim);font-size:15px;margin:12px 2px 0}
+.facts{margin:24px 0 0;padding:0;list-style:none;color:var(--dim)}
+.facts li{margin:4px 0}
 ol{list-style:none;margin:0;padding:0}
-li.scene{display:grid;grid-template-columns:150px 1fr;gap:14px;align-items:center;padding:12px;border-radius:14px;cursor:pointer;border:1px solid transparent}
-li.scene:hover,li.scene.playing{background:var(--panel);border-color:var(--line)}
-li.scene img{width:150px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:#1a1a26}
-.num{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+li.scene{display:grid;grid-template-columns:160px 1fr;gap:16px;align-items:center;padding:10px;border-radius:14px;cursor:pointer;border:2px solid transparent}
+li.scene:hover,li.scene.playing{background:var(--raised)}
+li.scene:focus-visible{outline:3px solid var(--marigold);outline-offset:2px}
+li.scene img{width:160px;aspect-ratio:16/9;object-fit:cover;border-radius:10px;background:var(--raised)}
+.num{font-size:15px;color:var(--dim)}
 .cap{margin:2px 0 0}
-li.choice{margin:2px 0 2px 76px;padding:6px 0 6px 18px;border-left:2px dashed var(--line);color:var(--muted);font-size:14px}
-li.choice strong{color:var(--text);font-weight:600}
-li.choice em{display:block;font-style:normal;color:var(--gold)}
-footer{margin-top:44px;text-align:center;color:var(--muted);font-size:14px}
-footer strong{color:var(--text)}
-@media (max-width:560px){li.scene{grid-template-columns:110px 1fr}li.scene img{width:110px}li.choice{margin-left:54px}}
+li.choice{margin:2px 0 2px 84px;padding:6px 0 6px 18px;border-left:2px solid var(--line);color:var(--dim);font-size:15px}
+li.choice strong{color:var(--paper);font-weight:600}
+li.choice span{display:block}
+footer{margin-top:52px;padding-top:24px;border-top:1px solid var(--line);color:var(--dim);font-size:15px}
+footer a{color:var(--dim)}
+@media (max-width:560px){li.scene{grid-template-columns:116px 1fr}li.scene img{width:116px}li.choice{margin-left:60px}}
 `;
 
-export function renderSharePage(view: ShareView, shareUrl: string): string {
+export function renderSharePage(view: ShareView, shareUrl: string, contact = ''): string {
   const title = escapeHtml(view.title);
   const first = view.scenes[0];
   const playlist = view.movieStatus !== 'ready';
@@ -70,16 +74,13 @@ export function renderSharePage(view: ShareView, shareUrl: string): string {
       const stat = view.stats.choices[i - 1];
       const choice =
         i > 0 && scene.choiceTaken
-          ? `<li class="choice">They chose <strong>${escapeHtml(scene.choiceTaken)}</strong>${stat ? `<em>${escapeHtml(choicePhrase(stat))}</em>` : ''}</li>`
+          ? `<li class="choice">They chose <strong>${escapeHtml(scene.choiceTaken)}</strong>${stat ? `<span>${escapeHtml(choicePhrase(stat))}</span>` : ''}</li>`
           : '';
       const poster = scene.posterUrl ? `<img src="${escapeHtml(scene.posterUrl)}" alt="" loading="lazy">` : '<img alt="">';
-      return `${choice}<li class="scene" data-index="${i}">${poster}<div><div class="num">Scene ${i + 1}</div><p class="cap">${escapeHtml(scene.caption ?? '')}</p></div></li>`;
+      return `${choice}<li class="scene" tabindex="0" data-index="${i}">${poster}<div><div class="num">Scene ${i + 1} of ${view.scenes.length}</div><p class="cap">${escapeHtml(scene.caption ?? '')}</p></div></li>`;
     })
     .join('');
 
-  const rareCard = rare
-    ? `<div class="stat rare"><span>Rarest choice</span><b>${escapeHtml(rare.label)}</b><span>${escapeHtml(choicePhrase(rare))}</span></div>`
-    : '';
   const families = view.stats.familiesPlayed;
   const endings = view.stats.endingsDiscovered;
 
@@ -102,19 +103,19 @@ ${view.movieUrl ? `<meta property="og:video" content="${escapeHtml(view.movieUrl
 </head>
 <body>
 <main>
-<div class="brand">StoryQuest</div>
+<a class="brand" href="/">${MARK}<span>StoryQuest</span></a>
 <h1>${title}</h1>
 <p class="sub">${escapeHtml(`A story one family steered with their TV remote${formatDate(view.createdAt) ? `, ${formatDate(view.createdAt)}` : ''}.`)}</p>
-<div class="screen"><video id="player" controls playsinline preload="metadata" src="${escapeHtml(source)}"${first?.posterUrl ? ` poster="${escapeHtml(first.posterUrl)}"` : ''}></video></div>
+<div class="plate"><video id="player" controls playsinline preload="metadata" src="${escapeHtml(source)}"${first?.posterUrl ? ` poster="${escapeHtml(first.posterUrl)}"` : ''}></video></div>
 ${playlist ? '<p class="note">The full movie is still being put together, so here are the scenes in order.</p>' : ''}
-<div class="stats">
-<div class="stat"><b>${families}</b><span>${families === 1 ? 'family played this story' : 'families played this story'}</span></div>
-<div class="stat"><b>${endings}</b><span>${endings === 1 ? 'ending discovered so far' : 'endings discovered so far'}</span></div>
-${rareCard}
-</div>
+<ul class="facts">
+<li>${families === 1 ? '1 family has played this story.' : `${families} families have played this story.`}</li>
+<li>${endings === 1 ? '1 ending has been discovered so far.' : `${endings} endings have been discovered so far.`}</li>
+${rare ? `<li>${escapeHtml(choicePhrase(rare))}: ${escapeHtml(rare.label)}.</li>` : ''}
+</ul>
 <h2>Their path</h2>
 <ol>${steps}</ol>
-<footer>Made with <strong>StoryQuest</strong> on Fire TV</footer>
+<footer>Made with StoryQuest on Fire TV. ${contact ? `To report this story, contact ${contact}.` : ''} <a href="/privacy">Privacy</a></footer>
 </main>
 <script type="application/json" id="scenes">${jsonForScript(view.scenes)}</script>
 <script>
@@ -152,7 +153,7 @@ export function renderNotFoundPage(): string {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Story not found | StoryQuest</title><style>${STYLES}</style></head>
-<body><main><div class="brand">StoryQuest</div><h1>We could not find that story</h1>
+<body><main><a class="brand" href="/">${MARK}<span>StoryQuest</span></a><h1>We could not find that story</h1>
 <p class="sub">The link may be mistyped. Scan the code on your TV again to get a fresh one.</p>
-<footer>Made with <strong>StoryQuest</strong> on Fire TV</footer></main></body></html>`;
+<footer>Made with StoryQuest on Fire TV.</footer></main></body></html>`;
 }

@@ -14,17 +14,8 @@ export interface FakeVideoOptions {
 
 const FPS = 24;
 
-function hsl(hue: number, saturation: number, lightness: number): string {
-  const a = saturation * Math.min(lightness, 1 - lightness);
-  const channel = (n: number) => {
-    const k = (n + hue / 30) % 12;
-    const value = lightness - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
-    return Math.round(value * 255)
-      .toString(16)
-      .padStart(2, '0');
-  };
-  return `0x${channel(0)}${channel(8)}${channel(4)}`;
-}
+// Flat printed inks from the app palette, one per scene, so stand in clips stay calm and gradient free.
+const TONES = ['0x262D52', '0x2A3A4C', '0x3A2F4E', '0x2F3C36', '0x3D3346'];
 
 function escapeFilterValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/,/g, '\\,');
@@ -46,7 +37,7 @@ function wrap(text: string, width: number, maxLines: number): string {
 }
 
 /**
- * Renders a stand in clip with ffmpeg: a soft gradient for opening scenes, or
+ * Renders a stand in clip with ffmpeg: a flat ink frame for opening scenes, or
  * a slow push in on the previous last frame so chained scenes look continuous.
  * The caption only shows mid clip, which keeps the first and last frames clean.
  */
@@ -62,6 +53,7 @@ export class FakeVideo implements VideoProvider {
     const { width, height } = this.options;
     const seconds = request.seconds;
     const seed = hashString(request.prompt);
+    const tone = TONES[seed % TONES.length]!;
     const textFile = `${request.outPath}.txt`;
     await writeFile(textFile, wrap(request.caption || request.prompt, 46, 2));
 
@@ -69,26 +61,22 @@ export class FakeVideo implements VideoProvider {
     const showText = `enable='between(t,0.4,${Math.max(0.5, seconds - 0.6).toFixed(2)})'`;
     const px = (fraction: number) => Math.max(1, Math.round(height * fraction));
     const overlay = [
-      `drawtext=${font}textfile=${escapeFilterValue(textFile)}:fontcolor=white:fontsize=${px(1 / 18)}:line_spacing=${px(1 / 90)}:box=1:boxcolor=black@0.35:boxborderw=${px(1 / 40)}:x=(w-text_w)/2:y=h/8:${showText}`,
-      `drawtext=${font}text=preview:fontcolor=white@0.85:fontsize=${px(1 / 30)}:box=1:boxcolor=black@0.4:boxborderw=${px(1 / 90)}:x=w-text_w-${px(1 / 30)}:y=${px(1 / 30)}:${showText}`,
+      `drawbox=x=0:y=0:w=iw:h=ih:color=${tone}@1:t=fill:enable='gte(t,0.4)'`,
+      `drawtext=${font}textfile=${escapeFilterValue(textFile)}:fontcolor=0xF1E6CF:fontsize=${px(1 / 14)}:line_spacing=${px(1 / 60)}:x=(w-text_w)/2:y=(h-text_h)/2:${showText}`,
+      `drawtext=${font}text=Preview scene:fontcolor=0xB6AE9C:fontsize=${px(1 / 32)}:x=w-text_w-${px(1 / 20)}:y=h-text_h-${px(1 / 20)}:${showText}`,
     ].join(',');
 
     const inputs: string[] = [];
     let video: string;
     if (request.startFramePath) {
       inputs.push('-loop', '1', '-framerate', String(FPS), '-t', String(seconds), '-i', request.startFramePath);
-      const hueDrift = seed % 2 === 0 ? 4 : -4;
       video =
         `[0:v]scale=${width}:${height}:force_original_aspect_ratio=increase,crop=${width}:${height},` +
         `zoompan=z='1+0.0008*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${width}x${height}:fps=${FPS},` +
-        `hue=h='t*${hueDrift}',format=yuv420p,${overlay}[v]`;
+        `format=yuv420p,${overlay}[v]`;
     } else {
-      const hue = seed % 360;
-      const c0 = hsl(hue, 0.55, 0.32);
-      const c1 = hsl((hue + 70) % 360, 0.65, 0.62);
-      const small = `${Math.max(16, Math.round(width / 8))}x${Math.max(16, Math.round(height / 8))}`;
-      inputs.push('-f', 'lavfi', '-i', `gradients=s=${small}:r=${FPS}:d=${seconds}:c0=${c0}:c1=${c1}:nb_colors=2:speed=0.02:seed=${seed % 100000}`);
-      video = `[0:v]scale=${width}:${height}:flags=bilinear,format=yuv420p,${overlay}[v]`;
+      inputs.push('-f', 'lavfi', '-i', `color=c=${tone}:s=${width}x${height}:r=${FPS}:d=${seconds}`);
+      video = `[0:v]format=yuv420p,${overlay}[v]`;
     }
     inputs.push(
       '-f', 'lavfi', '-i', `anoisesrc=d=${seconds}:c=pink:a=0.05:r=48000`,

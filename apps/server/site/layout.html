@@ -5,37 +5,51 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{title}}</title>
 <meta name="description" content="{{description}}">
+<link rel="icon" href="/static/mark.svg" type="image/svg+xml">
 <style>
-  :root { --ink: #0b0d1a; --panel: #151a2e; --text: #f4efe6; --muted: #b9b4c8; --amber: #ffb547; --violet: #8c7bff; }
+  @font-face { font-family: "Fraunces"; src: url("/static/fraunces.ttf") format("truetype"); font-display: swap; }
+  :root { --ink: #1C2240; --raised: #262D52; --line: #3A4270; --paper: #F1E6CF; --dim: #B6AE9C; --marigold: #F0A830; color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: radial-gradient(1200px 600px at 80% -10%, #2a2050 0%, var(--ink) 55%); color: var(--text); font: 18px/1.6 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; min-height: 100vh; }
-  a { color: var(--amber); }
-  header, main, footer { max-width: 880px; margin: 0 auto; padding: 24px 20px; }
-  header { display: flex; align-items: center; justify-content: space-between; }
-  .brand { font-weight: 800; font-size: 22px; text-decoration: none; color: var(--text); }
-  .brand span { color: var(--amber); }
-  nav a { margin-left: 18px; color: var(--muted); text-decoration: none; }
-  nav a:hover { color: var(--text); }
-  h1 { font-size: clamp(32px, 6vw, 52px); line-height: 1.1; margin: 24px 0 12px; }
-  h2 { margin-top: 36px; }
-  .lead { font-size: 20px; color: var(--muted); max-width: 640px; }
-  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin: 32px 0; }
-  .card { background: var(--panel); border-radius: 16px; padding: 20px; border: 1px solid #252b45; }
-  .card b { color: var(--amber); display: block; margin-bottom: 6px; }
-  footer { color: var(--muted); font-size: 15px; border-top: 1px solid #252b45; margin-top: 48px; }
-  .updated { color: var(--muted); font-size: 15px; }
+  html, body { margin: 0; background: var(--ink); color: var(--paper); }
+  body { font: 18px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  a { color: var(--paper); text-decoration-color: var(--marigold); text-underline-offset: 3px; }
+  a:focus-visible { outline: 3px solid var(--marigold); outline-offset: 3px; border-radius: 4px; }
+  .wrap { max-width: 760px; margin: 0 auto; padding: 0 24px; }
+  header { padding: 28px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+  .brand { display: flex; align-items: center; gap: 12px; text-decoration: none; }
+  .brand svg { width: 36px; height: 36px; }
+  .brand span { font-family: "Fraunces", Georgia, serif; font-size: 26px; color: var(--paper); }
+  nav { display: flex; gap: 22px; }
+  nav a { color: var(--dim); text-decoration: none; }
+  nav a:hover { color: var(--paper); }
+  main { padding: 24px 0 64px; }
+  h1, h2, h3 { font-family: "Fraunces", Georgia, serif; font-weight: normal; line-height: 1.2; }
+  h1 { font-size: clamp(36px, 6vw, 56px); margin: 16px 0 16px; letter-spacing: -0.5px; }
+  h2 { font-size: 28px; margin: 40px 0 8px; }
+  h3 { font-size: 21px; margin: 28px 0 4px; }
+  .lead { font-size: 21px; color: var(--paper); max-width: 34em; }
+  .points { list-style: none; padding: 0; margin: 40px 0; display: grid; gap: 28px; }
+  .points li { border-left: 3px solid var(--line); padding-left: 18px; }
+  .points b { display: block; font-family: "Fraunces", Georgia, serif; font-weight: normal; font-size: 22px; margin-bottom: 2px; }
+  p, li { color: var(--dim); }
+  .lead, .points b, h1, h2, h3 { color: var(--paper); }
+  .updated { font-size: 15px; }
+  footer { border-top: 1px solid var(--line); padding: 28px 0 48px; font-size: 15px; color: var(--dim); }
 </style>
 </head>
 <body>
+<div class="wrap">
 <header>
-  <a class="brand" href="/">✦ Story<span>Quest</span></a>
+  <a class="brand" href="/" aria-label="StoryQuest home">
+    <svg viewBox="0 0 120 120" aria-hidden="true"><g fill="none" stroke="#F0A830" stroke-linecap="round" stroke-linejoin="round"><circle cx="50" cy="50" r="34" stroke-width="12"/><path d="M58 62 C66 70 72 76 80 82" stroke-width="12"/><path d="M80 82 C88 86 96 86 106 80" stroke-width="8"/><path d="M80 82 C84 90 84 98 80 108" stroke-width="8"/></g><circle cx="107" cy="79" r="7" fill="#F0A830"/><circle cx="79.5" cy="109" r="7" fill="#F0A830"/></svg>
+    <span>StoryQuest</span>
+  </a>
   <nav><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a></nav>
 </header>
 <main>
 {{content}}
 </main>
-<footer>
-  © {{year}} {{company}}. StoryQuest is available on Amazon Fire TV. Questions? <a href="mailto:{{email}}">{{email}}</a>
-</footer>
+<footer>© {{year}} {{company}}. StoryQuest is available on Amazon Fire TV. For help, contact {{contact}}.</footer>
+</div>
 </body>
 </html>
