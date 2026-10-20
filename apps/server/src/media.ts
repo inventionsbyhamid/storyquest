@@ -1,20 +1,23 @@
 import { execFile } from 'node:child_process';
 import { rm, writeFile } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
+import { nightFromPixels } from './tone';
 
 export class MediaCommandError extends Error {
   override name = 'MediaCommandError';
 }
 
-export async function runCommand(command: string, args: string[], timeoutMs: number): Promise<string> {
+function run(command: string, args: string[], timeoutMs: number): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     execFile(
       command,
       args,
-      { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024 },
+      { timeout: timeoutMs, killSignal: 'SIGKILL', maxBuffer: 16 * 1024 * 1024, encoding: 'buffer' },
       (error, stdout, stderr) => {
         if (error) {
-          const reason = error.killed ? `timed out after ${timeoutMs} ms` : stderr.trim().split('\n').slice(-3).join(' | ');
+          const reason = error.killed
+            ? `timed out after ${timeoutMs} ms`
+            : stderr.toString().trim().split('\n').slice(-3).join(' | ');
           reject(new MediaCommandError(`${command} failed: ${reason || error.message}`));
           return;
         }
@@ -22,6 +25,10 @@ export async function runCommand(command: string, args: string[], timeoutMs: num
       },
     );
   });
+}
+
+export async function runCommand(command: string, args: string[], timeoutMs: number): Promise<string> {
+  return (await run(command, args, timeoutMs)).toString();
 }
 
 const FFMPEG = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y'];
@@ -66,6 +73,20 @@ export class Media {
    */
   async lastFrame(input: string, output: string): Promise<void> {
     await this.ffmpeg(['-sseof', '-0.5', '-i', input, '-an', '-update', '1', '-q:v', '2', output]);
+  }
+
+  /** The night color of a picture, or null when it cannot be read. */
+  async tone(image: string): Promise<string | null> {
+    try {
+      const pixels = await run(
+        'ffmpeg',
+        [...FFMPEG, '-i', image, '-vf', 'scale=48:27:flags=area', '-f', 'rawvideo', '-pix_fmt', 'rgb24', 'pipe:1'],
+        15_000,
+      );
+      return pixels.length > 0 ? nightFromPixels(pixels) : null;
+    } catch {
+      return null;
+    }
   }
 
   async stitch(inputs: string[], output: string): Promise<void> {

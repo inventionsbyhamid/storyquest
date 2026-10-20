@@ -177,6 +177,10 @@ const MIGRATIONS: string[] = [
   CREATE INDEX spend_log_day ON spend_log(day);
   CREATE INDEX spend_log_node ON spend_log(node_id);
   `,
+  `
+  ALTER TABLE nodes ADD COLUMN tone TEXT;
+  ALTER TABLE nodes ADD COLUMN end_tone TEXT;
+  `,
 ];
 
 export function openDatabase(file: string): Db {

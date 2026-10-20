@@ -135,7 +135,7 @@ export class SceneGenerator {
       if (rendered.inferenceMs !== null) timings.inferenceMs = rendered.inferenceMs;
 
       const mediaStarted = performance.now();
-      const durationMs = await this.finishMedia(files);
+      const { durationMs, tone, endTone } = await this.finishMedia(files);
       timings.mediaMs = Math.round(performance.now() - mediaStarted);
       timings.totalMs = Math.round(performance.now() - started);
 
@@ -146,6 +146,8 @@ export class SceneGenerator {
         posterPath: store.relative(files.poster),
         lastFramePath: store.relative(files.lastFrame),
         durationMs,
+        tone,
+        endTone,
         timings,
         costSeconds: rendered.billedSeconds,
       });
@@ -186,7 +188,7 @@ export class SceneGenerator {
         { prompt: node.videoPrompt, caption: node.caption ?? '', startFramePath: this.startFrame(parent), outPath: files.raw },
         { task: 'redo', nodeId: node.id, treeId: node.treeId, forced: false },
       );
-      const durationMs = await this.finishMedia(files);
+      const { durationMs, tone, endTone } = await this.finishMedia(files);
       if (repo.countFilmedChildren(node.id) > 0) throw new RedoRefused('has_children', 'a later scene was filmed from it meanwhile');
       const old = [node.clipPath, node.posterPath, node.lastFramePath].filter((file): file is string => Boolean(file));
       repo.replaceNodeMedia(node.id, {
@@ -194,6 +196,8 @@ export class SceneGenerator {
         posterPath: store.relative(files.poster),
         lastFramePath: store.relative(files.lastFrame),
         durationMs,
+        tone,
+        endTone,
         extraCostSeconds: rendered.billedSeconds,
       });
       await Promise.all(old.map((file) => rm(store.absolute(file), { force: true })));
@@ -221,14 +225,15 @@ export class SceneGenerator {
     };
   }
 
-  private async finishMedia(files: { raw: string; clip: string; poster: string; lastFrame: string }): Promise<number> {
+  private async finishMedia(files: { raw: string; clip: string; poster: string; lastFrame: string }) {
     const { media } = this.deps;
     await media.faststart(files.raw, files.clip);
     await rm(files.raw, { force: true });
     const durationMs = await media.probeDurationMs(files.clip);
     await media.poster(files.clip, files.poster, (durationMs / 1000) * 0.4);
     await media.lastFrame(files.clip, files.lastFrame);
-    return durationMs;
+    const [tone, endTone] = await Promise.all([media.tone(files.poster), media.tone(files.lastFrame)]);
+    return { durationMs, tone, endTone };
   }
 
   /**

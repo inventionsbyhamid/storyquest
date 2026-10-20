@@ -1,4 +1,5 @@
 import type { ChoiceStat, ShareView } from '@storyquest/contracts';
+import { mixHex } from '../tone';
 
 // Every visible string on this page follows the house style: no dashes or hyphens.
 
@@ -68,6 +69,11 @@ export function renderSharePage(view: ShareView, shareUrl: string, contact = '',
   const playlist = view.movieStatus !== 'ready';
   const removedAny = view.scenes.some((scene) => scene.removed);
   const source = view.movieUrl ?? first?.clipUrl ?? '';
+  // The page takes the night color of the opening scene, like the TV does.
+  const night = first?.tone && /^#[0-9A-Fa-f]{6}$/.test(first.tone) ? first.tone : null;
+  const toneStyle = night
+    ? `<style>:root{--ink:${night};--raised:${mixHex(night, '#F1E6CF', 0.07)};--line:${mixHex(night, '#F1E6CF', 0.16)}}</style>`
+    : '';
   // A rarest choice is only worth a headline once it is actually rare.
   const rare = view.stats.rarestChoice && view.stats.rarestChoice.percent < 50 ? view.stats.rarestChoice : null;
   const description = rare
@@ -108,7 +114,7 @@ export function renderSharePage(view: ShareView, shareUrl: string, contact = '',
 ${first?.posterUrl ? `<meta property="og:image" content="${escapeHtml(first.posterUrl)}">` : ''}
 ${view.movieUrl ? `<meta property="og:video" content="${escapeHtml(view.movieUrl)}"><meta property="og:video:type" content="video/mp4">` : ''}
 <meta name="twitter:card" content="summary_large_image">
-<style>${STYLES}</style>
+<style>${STYLES}</style>${toneStyle}
 </head>
 <body>
 <main>

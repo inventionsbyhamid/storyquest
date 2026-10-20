@@ -14,8 +14,15 @@ export interface FakeVideoOptions {
 
 const FPS = 24;
 
-// Flat printed inks from the app palette, one per scene, so stand in clips stay calm and gradient free.
-const TONES = ['0x262D52', '0x2A3A4C', '0x3A2F4E', '0x2F3C36', '0x3D3346'];
+// Flat printed inks, a sky and a ground per scene, so stand in clips have real color to pick up.
+const TONES: Array<[string, string]> = [
+  ['0x1F5A63', '0x163F45'],
+  ['0x5B2D52', '0x3F1F39'],
+  ['0x2E5A3A', '0x1F3F28'],
+  ['0x7A3A22', '0x552817'],
+  ['0x7D6420', '0x574616'],
+  ['0x2B3A7A', '0x1E2955'],
+];
 
 function escapeFilterValue(value: string): string {
   return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/:/g, '\\:').replace(/,/g, '\\,');
@@ -53,7 +60,7 @@ export class FakeVideo implements VideoProvider {
     const { width, height } = this.options;
     const seconds = request.seconds;
     const seed = hashString(request.prompt);
-    const tone = TONES[seed % TONES.length]!;
+    const [sky, ground] = TONES[seed % TONES.length]!;
     const textFile = `${request.outPath}.txt`;
     await writeFile(textFile, wrap(request.caption || request.prompt, 46, 2));
 
@@ -61,7 +68,8 @@ export class FakeVideo implements VideoProvider {
     const showText = `enable='between(t,0.4,${Math.max(0.5, seconds - 0.6).toFixed(2)})'`;
     const px = (fraction: number) => Math.max(1, Math.round(height * fraction));
     const overlay = [
-      `drawbox=x=0:y=0:w=iw:h=ih:color=${tone}@1:t=fill:enable='gte(t,0.4)'`,
+      `drawbox=x=0:y=0:w=iw:h=ih:color=${sky}@1:t=fill:enable='gte(t,0.4)'`,
+      `drawbox=x=0:y=ih*0.72:w=iw:h=ih*0.28:color=${ground}@1:t=fill:enable='gte(t,0.4)'`,
       `drawtext=${font}textfile=${escapeFilterValue(textFile)}:fontcolor=0xF1E6CF:fontsize=${px(1 / 14)}:line_spacing=${px(1 / 60)}:x=(w-text_w)/2:y=(h-text_h)/2:${showText}`,
       `drawtext=${font}text=Preview scene:fontcolor=0xB6AE9C:fontsize=${px(1 / 32)}:x=w-text_w-${px(1 / 20)}:y=h-text_h-${px(1 / 20)}:${showText}`,
     ].join(',');
@@ -75,7 +83,7 @@ export class FakeVideo implements VideoProvider {
         `zoompan=z='1+0.0008*on':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1:s=${width}x${height}:fps=${FPS},` +
         `format=yuv420p,${overlay}[v]`;
     } else {
-      inputs.push('-f', 'lavfi', '-i', `color=c=${tone}:s=${width}x${height}:r=${FPS}:d=${seconds}`);
+      inputs.push('-f', 'lavfi', '-i', `color=c=${sky}:s=${width}x${height}:r=${FPS}:d=${seconds}`);
       video = `[0:v]format=yuv420p,${overlay}[v]`;
     }
     inputs.push(

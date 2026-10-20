@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { loadConfig } from './config';
 import { createServer } from './http/app';
+import { backfillTones } from './engine/tones';
 
 if (existsSync('.env')) process.loadEnvFile('.env');
 
@@ -25,6 +26,11 @@ app.log.info(
 
 services.engine.start();
 services.daily.start();
+backfillTones(services)
+  .then((count) => {
+    if (count > 0) app.log.info({ count }, 'worked out night colors for older scenes');
+  })
+  .catch((error: unknown) => app.log.warn({ error: String(error) }, 'night color backfill stopped'));
 await app.listen({ port: config.PORT, host: config.HOST });
 
 let shuttingDown = false;

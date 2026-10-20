@@ -246,8 +246,8 @@ describe('auto prefetch off', () => {
 
     const root = await scene(app, story.currentNodeId);
     expect(root.choices).toEqual([
-      { index: 0, label: root.choices[0]!.label, nodeId: null, ready: false, posterUrl: null, sparks: 0 },
-      { index: 1, label: root.choices[1]!.label, nodeId: null, ready: false, posterUrl: null, sparks: 0 },
+      { index: 0, label: root.choices[0]!.label, nodeId: null, ready: false, posterUrl: null, tone: null, sparks: 0 },
+      { index: 1, label: root.choices[1]!.label, nodeId: null, ready: false, posterUrl: null, tone: null, sparks: 0 },
     ]);
 
     const chosen = ChooseResponse.parse(

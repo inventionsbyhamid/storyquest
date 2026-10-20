@@ -37,6 +37,8 @@ function markReady(id: string): NodeRecord {
     posterPath: 'nodes/x/poster.jpg',
     lastFramePath: 'nodes/x/last.jpg',
     durationMs: 1000,
+    tone: '#2A3550',
+    endTone: null,
     timings: { directorMs: 1, videoMs: 1, mediaMs: 1, totalMs: 3 },
     costSeconds: 1,
   });

@@ -110,6 +110,9 @@ export interface NodeRecord {
   posterPath: string | null;
   lastFramePath: string | null;
   durationMs: number | null;
+  /** The night color of the poster and of the last frame, for the TV backdrop. */
+  tone: string | null;
+  endTone: string | null;
   picks: number;
   wantChildren: boolean;
   warm: number;

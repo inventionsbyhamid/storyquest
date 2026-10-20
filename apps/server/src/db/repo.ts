@@ -69,6 +69,8 @@ interface NodeRow {
   poster_path: string | null;
   last_frame_path: string | null;
   duration_ms: number | null;
+  tone: string | null;
+  end_tone: string | null;
   picks: number;
   want_children: number;
   warm: number;
@@ -148,6 +150,8 @@ const toNode = (row: NodeRow): NodeRecord => ({
   posterPath: row.poster_path,
   lastFramePath: row.last_frame_path,
   durationMs: row.duration_ms,
+  tone: row.tone,
+  endTone: row.end_tone,
   picks: row.picks,
   wantChildren: row.want_children === 1,
   warm: row.warm,
@@ -261,6 +265,8 @@ export interface ReadyScene {
   posterPath: string;
   lastFramePath: string;
   durationMs: number;
+  tone: string | null;
+  endTone: string | null;
   timings: NodeTimings;
   costSeconds: number;
 }
@@ -505,8 +511,8 @@ export class Repository {
   markReady(id: string, scene: ReadyScene): void {
     this.stmt(
       `UPDATE nodes SET status = 'ready', summary = ?, caption = ?, video_prompt = ?, choices = ?, is_ending = ?,
-         new_characters = ?, clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?, timings = ?,
-         cost_seconds = ?, error = NULL, error_code = NULL, updated_at = ?
+         new_characters = ?, clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?, tone = ?,
+         end_tone = ?, timings = ?, cost_seconds = ?, error = NULL, error_code = NULL, updated_at = ?
        WHERE id = ?`,
     ).run(
       scene.summary,
@@ -519,6 +525,8 @@ export class Repository {
       scene.posterPath,
       scene.lastFramePath,
       Math.round(scene.durationMs),
+      scene.tone,
+      scene.endTone,
       JSON.stringify(scene.timings),
       scene.costSeconds,
       this.timestamp(),
@@ -1035,20 +1043,43 @@ export class Repository {
 
   replaceNodeMedia(
     id: string,
-    media: { clipPath: string; posterPath: string; lastFramePath: string; durationMs: number; extraCostSeconds: number },
+    media: {
+      clipPath: string;
+      posterPath: string;
+      lastFramePath: string;
+      durationMs: number;
+      tone: string | null;
+      endTone: string | null;
+      extraCostSeconds: number;
+    },
   ): void {
     this.stmt(
-      `UPDATE nodes SET clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?,
+      `UPDATE nodes SET clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?, tone = ?, end_tone = ?,
          cost_seconds = COALESCE(cost_seconds, 0) + ?, updated_at = ? WHERE id = ?`,
     ).run(
       media.clipPath,
       media.posterPath,
       media.lastFramePath,
       Math.round(media.durationMs),
+      media.tone,
+      media.endTone,
       media.extraCostSeconds,
       this.timestamp(),
       id,
     );
+  }
+
+  /** Ready scenes filmed before night colors were worked out. */
+  listNodesWithoutTone(limit: number): Array<{ id: string; posterPath: string; lastFramePath: string | null }> {
+    const rows = this.stmt(
+      `SELECT id, poster_path, last_frame_path FROM nodes
+       WHERE status = 'ready' AND poster_path IS NOT NULL AND tone IS NULL ORDER BY created_at LIMIT ?`,
+    ).all(limit) as Array<{ id: string; poster_path: string; last_frame_path: string | null }>;
+    return rows.map((row) => ({ id: row.id, posterPath: row.poster_path, lastFramePath: row.last_frame_path }));
+  }
+
+  setTones(id: string, tone: string, endTone: string | null): void {
+    this.stmt('UPDATE nodes SET tone = ?, end_tone = ? WHERE id = ?').run(tone, endTone, id);
   }
 
   /** Pending scenes someone is waiting for: story openings and scenes on a story's path. */

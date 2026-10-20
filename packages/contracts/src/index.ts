@@ -6,6 +6,10 @@ export type Audience = z.infer<typeof Audience>;
 export const Mood = z.enum(['funny', 'adventure', 'cozy', 'mystery', 'spooky']);
 export type Mood = z.infer<typeof Mood>;
 
+/** A dark color picked from a picture, used behind text on the TV. */
+export const Tone = z.string().regex(/^#[0-9A-Fa-f]{6}$/);
+export type Tone = z.infer<typeof Tone>;
+
 export const NodeStatus = z.enum(['pending', 'generating', 'ready', 'failed']);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
@@ -15,6 +19,7 @@ export const ChoiceView = z.object({
   nodeId: z.string().nullable(),
   ready: z.boolean(),
   posterUrl: z.string().nullable(),
+  tone: Tone.nullable().optional(),
   sparks: z.number().int().min(0),
 });
 export type ChoiceView = z.infer<typeof ChoiceView>;
@@ -30,6 +35,9 @@ export const SceneView = z.object({
   clipUrl: z.string().nullable(),
   posterUrl: z.string().nullable(),
   lastFrameUrl: z.string().nullable(),
+  /** Night colors of the poster and of the last frame. */
+  tone: Tone.nullable().optional(),
+  endTone: Tone.nullable().optional(),
   durationMs: z.number().nullable(),
   isEnding: z.boolean(),
   choices: z.array(ChoiceView),
@@ -46,6 +54,7 @@ export const IdeaView = z.object({
   audience: Audience,
   moods: z.array(Mood),
   posterUrl: z.string().nullable(),
+  tone: Tone.nullable().optional(),
   trailerUrl: z.string().nullable(),
   plays: z.number().int(),
   ready: z.boolean(),
@@ -141,6 +150,7 @@ export const ShareScene = z.object({
   caption: z.string().nullable(),
   clipUrl: z.string(),
   posterUrl: z.string().nullable(),
+  tone: Tone.nullable().optional(),
   choiceTaken: z.string().nullable(),
   /** True when the scene was reported and taken down; clipUrl is then empty. */
   removed: z.boolean().optional(),

@@ -76,6 +76,7 @@ export class Views {
           nodeId: child?.id ?? null,
           ready: playable,
           posterUrl: playable ? this.url(child.posterPath) : null,
+          tone: playable ? child.tone : null,
           sparks: free ? 0 : this.services.config.SCENE_COST_SPARKS,
         };
       });
@@ -91,6 +92,8 @@ export class Views {
       clipUrl: ready ? this.url(node.clipPath) : null,
       posterUrl: ready ? this.url(node.posterPath) : null,
       lastFrameUrl: ready ? this.url(node.lastFramePath) : null,
+      tone: ready ? node.tone : null,
+      endTone: ready ? (node.endTone ?? node.tone) : null,
       durationMs: ready ? node.durationMs : null,
       isEnding: ready && node.isEnding,
       choices,
@@ -110,6 +113,7 @@ export class Views {
       audience: idea.audience,
       moods: idea.moods,
       posterUrl: ready ? this.url(root.posterPath) : null,
+      tone: ready ? root.tone : null,
       trailerUrl: ready ? this.url(root.clipPath) : null,
       plays: idea.plays,
       ready,
@@ -150,6 +154,7 @@ export class Views {
           caption: node.caption,
           clipUrl: this.url(node.clipPath)!,
           posterUrl: this.url(node.posterPath),
+          tone: node.tone,
           choiceTaken,
         };
       });

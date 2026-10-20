@@ -93,6 +93,10 @@ describe('HTTP API', () => {
       const scene = await node(app, story.currentNodeId);
       expect(scene.status).toBe('ready');
       expect(scene.clipUrl).toMatch(/^http:\/\/tv\.test\/media\/nodes\//);
+      // Stand in clips are flat colored inks, so their night is never the plain app night.
+      expect(scene.tone).toMatch(/^#[0-9A-F]{6}$/);
+      expect(scene.tone).not.toBe('#1C2240');
+      expect(scene.endTone).toMatch(/^#[0-9A-F]{6}$/);
       expect(scene.sceneNumber).toBe(scene.depth + 1);
       expect(scene.totalScenes).toBe(6);
       expect(scene.generationMs).toBeGreaterThan(0);
@@ -139,6 +143,7 @@ describe('HTTP API', () => {
     expect(page.statusCode).toBe(200);
     expect(page.headers['content-type']).toContain('text/html');
     expect(page.body).toContain('<meta property="og:image"');
+    expect(page.body).toContain(`--ink:${share.scenes[0]!.tone}`);
     expect(page.body).toContain(share.title.replace(/'/g, '&#39;'));
     const text = visibleText(page.body);
     expect(text).toContain('Made with');
