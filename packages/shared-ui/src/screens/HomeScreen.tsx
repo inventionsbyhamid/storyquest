@@ -1,5 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, StyleSheet, Text, View } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import {
   DefaultFocus,
@@ -11,14 +11,14 @@ import type { IdeaView, TodayResponse } from '@storyquest/contracts';
 import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
 import { audienceFact, formatPlays, moodLabel } from '../story/format';
 import { messageForError } from '../story/messages';
-import { colors, radii, screen, space, type } from '../theme';
+import { ToneContext, colors, radii, screen, space, toneFor, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { prefetchImage } from '../utils/prefetch';
 import { isFilmingPaused, reportFilmingPaused } from '../budget/filming';
 import { useFilmingPaused } from '../budget/useFilmingPaused';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
-import { PosterPlate } from '../components/home/PosterPlate';
+import { Billboard } from '../components/home/Billboard';
 import { CARD_GAP, CARD_HEIGHT, CARD_WIDTH, IdeaCard, MakeYourOwnCard } from '../components/home/StoryCards';
 import { MotionContext } from '../components/Motion';
 import { Notice } from '../components/Notice';
@@ -31,8 +31,16 @@ type LoadState =
   | { status: 'ready'; today: TodayResponse }
   | { status: 'error'; message: string };
 
-const PLATE_WIDTH = scaledPixels(760);
-const PLATE_HEIGHT = Math.round((PLATE_WIDTH * 9) / 16) + scaledPixels(20);
+// The hero text settles in when the focused story changes.
+const FadeIn = ({ children }: { children: React.ReactNode }) => {
+  const opacity = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const animation = Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true });
+    animation.start();
+    return () => animation.stop();
+  }, [opacity]);
+  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
+};
 
 interface StoryTextProps {
   idea: IdeaView | null;
@@ -97,9 +105,11 @@ const HomeSkeleton = () => {
         <SkeletonBlock pulse={pulse} style={[styles.line, { width: scaledPixels(720), height: scaledPixels(30) }]} />
         <SkeletonBlock pulse={pulse} style={[styles.line, { width: scaledPixels(520), height: scaledPixels(30) }]} />
       </View>
-      <SkeletonBlock pulse={pulse} style={[styles.plate, styles.skeletonPlate]} />
+      <SkeletonBlock pulse={pulse} style={styles.skeletonBillboard} />
       <View style={styles.rowArea}>
-        <Text style={styles.rowTitle}>Tonight's stories</Text>
+        <View style={styles.rowHeader}>
+          <Text style={styles.rowTitle}>Tonight's stories</Text>
+        </View>
         <View style={[styles.rowContent, styles.skeletonRow]}>
           {Array.from({ length: 5 }, (_, i) => (
             <SkeletonBlock key={i} pulse={pulse} style={styles.skeletonCard} />
@@ -122,7 +132,10 @@ interface StoryRowProps {
 const StoryRow = React.memo(
   ({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn, paused }: StoryRowProps) => (
     <View style={styles.rowArea}>
-      <Text style={styles.rowTitle}>Tonight's stories</Text>
+      <View style={styles.rowHeader}>
+        <Text style={styles.rowTitle}>Tonight's stories</Text>
+        <WalletText />
+      </View>
       <SpatialNavigationScrollView
         horizontal
         offsetFromStart={screen.side + CARD_WIDTH + CARD_GAP}
@@ -201,6 +214,7 @@ export default function HomeScreen() {
           title: story.title,
           nodeId: story.currentNodeId,
           posterUrl: resolveMediaUrl(idea.posterUrl),
+          tone: idea.tone ?? null,
           origin: { ideaId: idea.id },
           audience: story.audience,
         });
@@ -216,52 +230,55 @@ export default function HomeScreen() {
 
   const ideas = load.status === 'ready' ? load.today.ideas : [];
   const focusedIdea = focusedIndex > 0 ? (ideas[focusedIndex - 1] ?? null) : null;
-  const plateUri = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
+  const billboardUri = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
+  const tone = useMemo(() => toneFor(focusedIdea?.tone), [focusedIdea?.tone]);
 
   return (
     <SpatialNavigationRoot isActive={isFocused} key={load.status}>
       <MotionContext.Provider value={isFocused}>
-        <View style={styles.screen}>
-          <View style={styles.header}>
-            <Brand />
-            <WalletText />
-          </View>
-
-          {load.status === 'loading' && <HomeSkeleton />}
-
-          {load.status === 'error' && (
-            <View style={[styles.text, styles.errorText]}>
-              <Text style={styles.title} numberOfLines={1}>
-                The stories did not load
-              </Text>
-              <Text style={styles.logline}>{load.message}</Text>
-              <DefaultFocus>
-                <Button label="Try again" primary onSelect={retry} style={styles.retry} />
-              </DefaultFocus>
+        <ToneContext.Provider value={tone}>
+          <View style={styles.screen}>
+            {load.status === 'ready' && <Billboard uri={billboardUri} page={!focusedIdea} night={tone.night} />}
+            <View style={styles.header}>
+              <Brand />
+              {load.status !== 'ready' && <WalletText />}
             </View>
-          )}
 
-          {load.status === 'ready' && (
-            <>
-              <View style={styles.hero}>
-                <View style={styles.heroText}>
-                  <StoryText idea={focusedIdea} empty={ideas.length === 0} paused={filmingPaused} />
-                </View>
-                <PosterPlate uri={plateUri} page={!focusedIdea} style={styles.heroPlate} />
+            {load.status === 'loading' && <HomeSkeleton />}
+
+            {load.status === 'error' && (
+              <View style={[styles.text, styles.errorText]}>
+                <Text style={styles.title} numberOfLines={1}>
+                  The stories did not load
+                </Text>
+                <Text style={styles.logline}>{load.message}</Text>
+                <DefaultFocus>
+                  <Button label="Try again" primary onSelect={retry} style={styles.retry} />
+                </DefaultFocus>
               </View>
-              <StoryRow
-                ideas={ideas}
-                openingId={openingId}
-                onFocusIndex={setFocusedIndex}
-                onSelectIdea={openIdea}
-                onMakeYourOwn={makeYourOwn}
-                paused={filmingPaused}
-              />
-            </>
-          )}
+            )}
 
-          {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} raised />}
-        </View>
+            {load.status === 'ready' && (
+              <>
+                <View style={styles.hero}>
+                  <FadeIn key={focusedIdea?.id ?? 'make'}>
+                    <StoryText idea={focusedIdea} empty={ideas.length === 0} paused={filmingPaused} />
+                  </FadeIn>
+                </View>
+                <StoryRow
+                  ideas={ideas}
+                  openingId={openingId}
+                  onFocusIndex={setFocusedIndex}
+                  onSelectIdea={openIdea}
+                  onMakeYourOwn={makeYourOwn}
+                  paused={filmingPaused}
+                />
+              </>
+            )}
+
+            {notice && <Notice id={notice.id} text={notice.text} onDismiss={dismissNotice} raised />}
+          </View>
+        </ToneContext.Provider>
       </MotionContext.Provider>
     </SpatialNavigationRoot>
   );
@@ -282,11 +299,27 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
+  skeletonBillboard: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: scaledPixels(1040),
+    height: scaledPixels(585),
+    borderBottomLeftRadius: radii.plate,
+  },
   text: {
     position: 'absolute',
-    top: scaledPixels(196),
+    top: scaledPixels(240),
     left: screen.side,
-    width: scaledPixels(860),
+    width: scaledPixels(720),
+  },
+  hero: {
+    position: 'absolute',
+    top: scaledPixels(150),
+    left: screen.side,
+    width: scaledPixels(720),
+    height: scaledPixels(440),
+    justifyContent: 'flex-end',
   },
   title: {
     ...type.display,
@@ -305,34 +338,7 @@ const styles = StyleSheet.create({
   fact: {
     ...type.body,
     color: colors.paperDim,
-    marginRight: space.xl,
-  },
-  plate: {
-    position: 'absolute',
-    top: scaledPixels(164),
-    right: screen.side,
-    width: PLATE_WIDTH,
-    height: PLATE_HEIGHT,
-  },
-  hero: {
-    position: 'absolute',
-    top: scaledPixels(164),
-    left: screen.side,
-    right: screen.side,
-    height: PLATE_HEIGHT,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  heroText: {
-    flex: 1,
-    marginRight: space.xxl,
-  },
-  heroPlate: {
-    width: PLATE_WIDTH,
-    height: PLATE_HEIGHT,
-  },
-  skeletonPlate: {
-    borderRadius: radii.plate,
+    marginRight: space.lg,
   },
   errorText: {
     width: scaledPixels(1400),
@@ -344,13 +350,18 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     right: 0,
-    top: scaledPixels(664),
+    top: scaledPixels(636),
+  },
+  rowHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginHorizontal: screen.side,
+    marginBottom: space.xs,
   },
   rowTitle: {
     ...type.heading,
     color: colors.paper,
-    marginLeft: screen.side,
-    marginBottom: space.xs,
   },
   scroll: {
     flexGrow: 0,

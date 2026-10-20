@@ -3,7 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import { createGateState, gateReducer, makeQuestion, questionText } from '../gate/question';
 import type { GateAction } from '../gate/question';
-import { colors, radii, space, type } from '../theme';
+import { colors, radii, space, type, useTone } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { Button } from './Button';
 import { Focusable, FocusFrame, FocusScale } from './Focusable';
@@ -19,6 +19,7 @@ interface GrownUpsGateProps {
 // A times table question before anyone types a new idea. Remotes cannot report a long press
 // everywhere, so the check is made of plain presses.
 export function GrownUpsGate({ active, onPass, onCancel }: GrownUpsGateProps) {
+  const tone = useTone();
   const opacity = useRef(new Animated.Value(0)).current;
   const [state, setState] = useState(() => createGateState(makeQuestion()));
   const onPassRef = useRef(onPass);
@@ -43,15 +44,22 @@ export function GrownUpsGate({ active, onPass, onCancel }: GrownUpsGateProps) {
 
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.title}>Grown ups only</Text>
           <Text style={styles.question} accessibilityLiveRegion="polite">
             {question}
           </Text>
           <View style={styles.entry}>
             {Array.from({ length: slots }, (_, i) => (
-              <View key={i} style={[styles.slot, i === state.entry.length && styles.slotNext]}>
+              <View
+                key={i}
+                style={[
+                  styles.slot,
+                  { backgroundColor: tone.night, borderColor: tone.line },
+                  i === state.entry.length && styles.slotNext,
+                ]}
+              >
                 <Text style={styles.slotText}>{state.entry[i] ?? ''}</Text>
               </View>
             ))}
@@ -80,25 +88,27 @@ export function GrownUpsGate({ active, onPass, onCancel }: GrownUpsGateProps) {
   );
 }
 
-const DigitKey = React.memo(({ digit, onPress }: { digit: number; onPress: (digit: number) => void }) => (
-  <Focusable label={String(digit)} onSelect={() => onPress(digit)} style={styles.keySlot}>
-    {(focused) => (
-      <FocusScale focused={focused}>
-        <View style={styles.key}>
-          {focused && <FocusFrame radius={radii.card} />}
-          <Text style={styles.keyText}>{digit}</Text>
-        </View>
-      </FocusScale>
-    )}
-  </Focusable>
-));
+const DigitKey = React.memo(({ digit, onPress }: { digit: number; onPress: (digit: number) => void }) => {
+  const tone = useTone();
+  return (
+    <Focusable label={String(digit)} onSelect={() => onPress(digit)} style={styles.keySlot}>
+      {(focused) => (
+        <FocusScale focused={focused}>
+          <View style={[styles.key, { backgroundColor: tone.night }]}>
+            {focused && <FocusFrame radius={radii.card} />}
+            <Text style={styles.keyText}>{digit}</Text>
+          </View>
+        </FocusScale>
+      )}
+    </Focusable>
+  );
+});
 
 const KEY = scaledPixels(80);
 
 const styles = StyleSheet.create({
   cover: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 60,
@@ -108,7 +118,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingVertical: space.xl,
     borderRadius: radii.card,
-    backgroundColor: colors.inkRaised,
   },
   title: {
     ...type.title,
@@ -130,8 +139,6 @@ const styles = StyleSheet.create({
     marginRight: space.sm,
     borderRadius: radii.card,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
-    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -158,7 +165,6 @@ const styles = StyleSheet.create({
     width: KEY,
     height: scaledPixels(88),
     borderRadius: radii.card,
-    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
   },

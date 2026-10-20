@@ -17,6 +17,8 @@ export type RootStackParamList = {
     title: string;
     nodeId: string;
     posterUrl: string | null;
+    // The night of the opening picture, so the screen is already the story's color while it loads.
+    tone?: string | null;
     origin: StoryOrigin;
     audience?: Audience;
   };
@@ -24,6 +26,7 @@ export type RootStackParamList = {
     storyId: string;
     title: string;
     stillUrl: string | null;
+    tone?: string | null;
     origin: StoryOrigin;
   };
   Movie: {

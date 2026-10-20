@@ -46,9 +46,9 @@ const styles = StyleSheet.create({
     minHeight: scaledPixels(64),
     paddingHorizontal: space.md,
     borderRadius: radii.card,
-    backgroundColor: colors.inkRaised,
+    backgroundColor: colors.surface,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
+    borderColor: colors.surfaceLine,
   },
   check: {
     marginRight: space.xs,

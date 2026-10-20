@@ -46,7 +46,7 @@ import {
   storyReducer,
   waitingLabel,
 } from '../story/storyMachine';
-import { colors } from '../theme';
+import { ToneContext, colors, toneFor } from '../theme';
 import { createClipCache } from '../utils/clipCache';
 import { prefetchImage } from '../utils/prefetch';
 import { endChoiceTiming, logTiming, markChoice } from '../utils/timing';
@@ -101,6 +101,9 @@ export default function StoryScreen() {
   const pathEnded = isPathEnd(state);
   const inPlayback = phase === 'playing' || phase === 'ending';
   const paused = isPlayerPaused(state) || !isFocused || !appActive;
+  // While a clip plays the panels take its poster's night; otherwise the night of the frame left on screen.
+  const night = (scene && (inPlayback ? scene.tone : scene.endTone)) ?? route.params.tone;
+  const tone = useMemo(() => toneFor(night), [night]);
 
   useEffect(
     () => () => {
@@ -267,7 +270,13 @@ export default function StoryScreen() {
     // The end screen asks the server to finish the story, so let pending choices land first.
     Promise.race([syncQueue.idle(), sleep(SYNC_FLUSH_MS)]).then(() => {
       if (!cancelled) {
-        navigation.replace('End', { storyId: session.storyId, title: session.title, stillUrl: state.still, origin });
+        navigation.replace('End', {
+          storyId: session.storyId,
+          title: session.title,
+          stillUrl: state.still,
+          tone: scene?.endTone ?? scene?.tone ?? route.params.tone,
+          origin,
+        });
       }
     });
     return () => {
@@ -492,113 +501,119 @@ export default function StoryScreen() {
   const customCost = wallet?.sceneCost ?? 1;
 
   return (
-    <View style={styles.screen}>
-      <ClipPlayer
-        source={playSource}
-        paused={paused}
-        style={StyleSheet.absoluteFill}
-        onPlaying={onPlaying}
-        onEnded={onEnded}
-        onError={onClipError}
-        onMediaCommand={onMediaCommand}
-      />
-      <StillFrame uri={state.still} visible={isStillVisible(state) || (!state.still && !state.clipStarted)} />
-
-      {scene && (
-        <CaptionBar
-          caption={scene.caption}
-          folio={formatFolio(scene.sceneNumber, scene.totalScenes)}
-          madeIn={formatMadeIn(scene.generationMs)}
-          showToken={captionToken}
+    <ToneContext.Provider value={tone}>
+      <View style={styles.screen}>
+        <ClipPlayer
+          source={playSource}
+          paused={paused}
+          style={StyleSheet.absoluteFill}
+          onPlaying={onPlaying}
+          onEnded={onEnded}
+          onError={onClipError}
+          onMediaCommand={onMediaCommand}
         />
-      )}
+        <StillFrame uri={state.still} visible={isStillVisible(state) || (!state.still && !state.clipStarted)} />
 
-      {pathEnded && !state.menuOpen && (
-        <PathEndPanel active={isFocused} restarting={restarting} onStartOver={startOver} onExit={exitHome} />
-      )}
+        {scene && (
+          <CaptionBar
+            caption={scene.caption}
+            folio={formatFolio(scene.sceneNumber, scene.totalScenes)}
+            madeIn={formatMadeIn(scene.generationMs)}
+            showToken={captionToken}
+          />
+        )}
 
-      {scene && phase === 'choosing' && !pathEnded && (
-        <ChoiceOverlay
-          scene={scene}
-          closedChoices={closedChoices(state)}
-          notFilmedChoices={notFilmedChoices(state)}
-          customPaused={state.filmingPaused}
-          customCost={customCost}
-          freeSparks={wallet?.freeSparks ?? 0}
-          active={layersActive && phase === 'choosing'}
-          onChoose={choose}
-          onSomethingElse={openCustom}
-          onFocusChoice={onFocusChoice}
-        />
-      )}
+        {pathEnded && !state.menuOpen && (
+          <PathEndPanel active={isFocused} restarting={restarting} onStartOver={startOver} onExit={exitHome} />
+        )}
 
-      {phase === 'customInput' && (
-        <CustomChoiceSheet
-          active={layersActive}
-          text={state.customText}
-          error={state.customError}
-          costText={costLabel(wallet, customCost)}
-          onChangeText={changeCustom}
-          onSubmit={submitCustom}
-          onCancel={cancelCustom}
-        />
-      )}
+        {scene && phase === 'choosing' && !pathEnded && (
+          <ChoiceOverlay
+            scene={scene}
+            closedChoices={closedChoices(state)}
+            notFilmedChoices={notFilmedChoices(state)}
+            customPaused={state.filmingPaused}
+            customCost={customCost}
+            freeSparks={wallet?.freeSparks ?? 0}
+            active={layersActive && phase === 'choosing'}
+            onChoose={choose}
+            onSomethingElse={openCustom}
+            onFocusChoice={onFocusChoice}
+          />
+        )}
 
-      {waiting && !state.menuOpen && (
-        <WaitingCard
-          key={`${phase}-${state.requestSeq}`}
-          label={waiting}
-          detail={
-            phase === 'loadingScene' ? session.title : state.waitKind === 'custom' ? 'This takes a few seconds.' : null
-          }
-          delayMs={phase === 'waitingNext' && state.waitKind === 'preset' ? 600 : 400}
-        />
-      )}
+        {phase === 'customInput' && (
+          <CustomChoiceSheet
+            active={layersActive}
+            text={state.customText}
+            error={state.customError}
+            costText={costLabel(wallet, customCost)}
+            onChangeText={changeCustom}
+            onSubmit={submitCustom}
+            onCancel={cancelCustom}
+          />
+        )}
 
-      {inPlayback && state.userPaused && !state.menuOpen && <PausedBadge />}
+        {waiting && !state.menuOpen && (
+          <WaitingCard
+            key={`${phase}-${state.requestSeq}`}
+            label={waiting}
+            detail={
+              phase === 'loadingScene'
+                ? session.title
+                : state.waitKind === 'custom'
+                  ? 'This takes a few seconds.'
+                  : null
+            }
+            delayMs={phase === 'waitingNext' && state.waitKind === 'preset' ? 600 : 400}
+          />
+        )}
 
-      {state.notice && <Notice id={state.notice.id} text={state.notice.text} onDismiss={dismissNotice} />}
+        {inPlayback && state.userPaused && !state.menuOpen && <PausedBadge />}
 
-      {phase === 'error' && state.error && (
-        <StoryErrorPanel
-          message={state.error.message}
-          active={isFocused}
-          onRetry={retry}
-          actionLabel={state.error.code === 'path_closed' ? 'Home' : undefined}
-          actionIcon={state.error.code === 'path_closed' ? 'home' : undefined}
-        />
-      )}
+        {state.notice && <Notice id={state.notice.id} text={state.notice.text} onDismiss={dismissNotice} />}
 
-      {gateOpen && phase === 'choosing' && !state.menuOpen && (
-        <GrownUpsGate active={isFocused && !state.sparksPrompt} onPass={passGate} onCancel={cancelGate} />
-      )}
+        {phase === 'error' && state.error && (
+          <StoryErrorPanel
+            message={state.error.message}
+            active={isFocused}
+            onRetry={retry}
+            actionLabel={state.error.code === 'path_closed' ? 'Home' : undefined}
+            actionIcon={state.error.code === 'path_closed' ? 'home' : undefined}
+          />
+        )}
 
-      {state.sparksPrompt && !state.menuOpen && (
-        <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />
-      )}
+        {gateOpen && phase === 'choosing' && !state.menuOpen && (
+          <GrownUpsGate active={isFocused && !state.sparksPrompt} onPass={passGate} onCancel={cancelGate} />
+        )}
 
-      {state.menuOpen && !state.reportNodeId && (
-        <PauseMenu
-          title={session.title}
-          active={isFocused}
-          restarting={restarting}
-          onResume={resume}
-          onStartOver={startOver}
-          onExit={exitHome}
-          onReport={canReport ? openReport : undefined}
-        />
-      )}
+        {state.sparksPrompt && !state.menuOpen && (
+          <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />
+        )}
 
-      {state.menuOpen && state.reportNodeId && (
-        <ReportSheet
-          active={isFocused}
-          sending={report.sending}
-          error={report.error}
-          onPick={sendReport}
-          onCancel={cancelReport}
-        />
-      )}
-    </View>
+        {state.menuOpen && !state.reportNodeId && (
+          <PauseMenu
+            title={session.title}
+            active={isFocused}
+            restarting={restarting}
+            onResume={resume}
+            onStartOver={startOver}
+            onExit={exitHome}
+            onReport={canReport ? openReport : undefined}
+          />
+        )}
+
+        {state.menuOpen && state.reportNodeId && (
+          <ReportSheet
+            active={isFocused}
+            sending={report.sending}
+            error={report.error}
+            onPick={sendReport}
+            onCancel={cancelReport}
+          />
+        )}
+      </View>
+    </ToneContext.Provider>
   );
 }
 

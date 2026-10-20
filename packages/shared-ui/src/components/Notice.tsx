@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
-import { colors, radii, screen, space, type } from '../theme';
+import { colors, radii, screen, space, type, useTone } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 
 interface NoticeProps {
@@ -8,11 +8,12 @@ interface NoticeProps {
   text: string;
   onDismiss: (id: number) => void;
   durationMs?: number;
-  // On plain ink screens the scrim would vanish, so the card is raised instead.
+  // On plain night screens the scrim would vanish, so the card is raised instead.
   raised?: boolean;
 }
 
 export const Notice = React.memo(({ id, text, onDismiss, durationMs = 4500, raised }: NoticeProps) => {
+  const tone = useTone();
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -30,7 +31,13 @@ export const Notice = React.memo(({ id, text, onDismiss, durationMs = 4500, rais
     <Animated.View
       pointerEvents="none"
       accessibilityLiveRegion="polite"
-      style={[styles.card, raised && styles.raised, { opacity }]}
+      style={[
+        styles.card,
+        raised
+          ? [styles.raised, { backgroundColor: tone.raised, borderColor: tone.line }]
+          : { backgroundColor: tone.scrim },
+        { opacity },
+      ]}
     >
       <Text style={styles.text}>{text}</Text>
     </Animated.View>
@@ -46,13 +53,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radii.card,
-    backgroundColor: colors.scrim,
     zIndex: 40,
   },
   raised: {
-    backgroundColor: colors.inkRaised,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
   },
   text: {
     ...type.body,

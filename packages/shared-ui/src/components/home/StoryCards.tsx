@@ -1,7 +1,7 @@
 import React, { useCallback, useMemo } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { IdeaView } from '@storyquest/contracts';
-import { colors, radii, space, type } from '../../theme';
+import { colors, radii, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { resolveMediaUrl } from '../../api/media';
 import { audienceFact, formatPlays, moodLabel } from '../../story/format';
@@ -10,7 +10,7 @@ import { Icon } from '../Icons';
 import { Placeholder } from '../Placeholder';
 import { WaitingDots } from '../WaitingDots';
 
-export const CARD_WIDTH = scaledPixels(340);
+export const CARD_WIDTH = scaledPixels(380);
 export const CARD_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
 export const CARD_GAP = scaledPixels(32);
 
@@ -29,6 +29,7 @@ function ideaHint(idea: IdeaView): string {
 }
 
 export const IdeaCard = React.memo(({ idea, index, opening, onFocusIndex, onSelectIdea }: IdeaCardProps) => {
+  const tone = useTone();
   const poster = resolveMediaUrl(idea.posterUrl);
   const source = useMemo(() => (poster ? { uri: poster } : null), [poster]);
   const focus = useCallback(() => onFocusIndex(index), [index, onFocusIndex]);
@@ -55,12 +56,12 @@ export const IdeaCard = React.memo(({ idea, index, opening, onFocusIndex, onSele
                   <Placeholder />
                 )}
                 {!idea.ready && (
-                  <View style={styles.tag}>
+                  <View style={[styles.tag, { backgroundColor: tone.night }]}>
                     <Text style={styles.tagText}>Getting ready</Text>
                   </View>
                 )}
                 {opening && (
-                  <View style={styles.opening}>
+                  <View style={[styles.opening, { backgroundColor: tone.scrim }]}>
                     <WaitingDots />
                   </View>
                 )}
@@ -83,6 +84,7 @@ interface MakeYourOwnCardProps {
 }
 
 export const MakeYourOwnCard = React.memo(({ paused, onFocusIndex, onSelect }: MakeYourOwnCardProps) => {
+  const tone = useTone();
   const focus = useCallback(() => onFocusIndex(0), [onFocusIndex]);
   return (
     <Focusable
@@ -97,11 +99,11 @@ export const MakeYourOwnCard = React.memo(({ paused, onFocusIndex, onSelect }: M
       {(focused) => (
         <View style={styles.column}>
           <FocusScale focused={focused}>
-            <View style={[styles.card, styles.makeCard]}>
+            <View style={[styles.card, styles.makeCard, focused && styles.cardFocused]}>
               {focused && <FocusFrame radius={radii.card} />}
               <Icon name="pen" size={48} color={paused ? colors.paperDim : colors.paper} />
               {paused && (
-                <View style={styles.tag}>
+                <View style={[styles.tag, { backgroundColor: tone.night }]}>
                   <Text style={styles.tagText}>Paused</Text>
                 </View>
               )}
@@ -130,8 +132,8 @@ const styles = StyleSheet.create({
     height: CARD_HEIGHT,
     borderRadius: radii.card,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
-    backgroundColor: colors.inkRaised,
+    borderColor: colors.surfaceLine,
+    backgroundColor: colors.surface,
   },
   clip: {
     flex: 1,
@@ -149,7 +151,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
     paddingVertical: scaledPixels(4),
     borderRadius: radii.image,
-    backgroundColor: colors.ink,
   },
   tagText: {
     ...type.small,
@@ -157,7 +158,6 @@ const styles = StyleSheet.create({
   },
   opening: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -171,7 +171,7 @@ const styles = StyleSheet.create({
     color: colors.paper,
   },
   cardFocused: {
-    borderColor: colors.ink,
+    borderColor: 'transparent',
   },
   makeCard: {
     alignItems: 'center',

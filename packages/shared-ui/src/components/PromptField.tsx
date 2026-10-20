@@ -107,9 +107,9 @@ const styles = StyleSheet.create({
   field: {
     minHeight: scaledPixels(112),
     borderRadius: radii.card,
-    backgroundColor: colors.inkRaised,
+    backgroundColor: colors.surface,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
+    borderColor: colors.surfaceLine,
     paddingHorizontal: space.lg,
     paddingTop: space.md,
     paddingBottom: space.sm,

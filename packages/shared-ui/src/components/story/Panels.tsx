@@ -4,7 +4,7 @@ import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'reac
 import type { ReportReason } from '@storyquest/contracts';
 import { CUSTOM_CHOICE_LIMITS } from '../../story/format';
 import { REPORT_REASONS } from '../../story/reports';
-import { colors, radii, screen, space, type } from '../../theme';
+import { colors, radii, screen, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { Button } from '../Button';
 import { Icon, IconName } from '../Icons';
@@ -35,10 +35,11 @@ interface PauseMenuProps {
 
 export function PauseMenu({ title, active, restarting, onResume, onStartOver, onExit, onReport }: PauseMenuProps) {
   const opacity = useFadeIn();
+  const tone = useTone();
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.small}>Paused</Text>
           <Text style={styles.sheetTitle} numberOfLines={2}>
             {title}
@@ -85,9 +86,10 @@ export function CustomChoiceSheet({
   onCancel,
 }: CustomChoiceSheetProps) {
   const opacity = useFadeIn();
+  const tone = useTone();
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.panel, { opacity }]}>
+      <Animated.View style={[styles.panel, { backgroundColor: tone.scrim, opacity }]}>
         <View style={styles.panelTop}>
           <Text style={styles.panelTitle}>What should happen next?</Text>
           <WalletText />
@@ -132,10 +134,11 @@ interface ReportSheetProps {
 
 export function ReportSheet({ active, sending, error, onPick, onCancel }: ReportSheetProps) {
   const opacity = useFadeIn();
+  const tone = useTone();
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.sheetTitle}>Report this scene</Text>
           <SpatialNavigationView direction="vertical" style={styles.buttons}>
             {REPORT_REASONS.map(({ reason, label }, i) => (
@@ -169,10 +172,11 @@ interface PathEndPanelProps {
 // While filming is paused, a family can reach a scene where no choice has been filmed.
 export function PathEndPanel({ active, restarting, onStartOver, onExit }: PathEndPanelProps) {
   const opacity = useFadeIn();
+  const tone = useTone();
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.sheetTitle}>The filmed path ends here</Text>
           <Text style={styles.body}>What happens next has not been filmed yet. Start over to try another path.</Text>
           <SpatialNavigationView direction="vertical" style={styles.buttons}>
@@ -210,10 +214,11 @@ export function StoryErrorPanel({
   actionIcon = 'restart',
 }: StoryErrorPanelProps) {
   const opacity = useFadeIn();
+  const tone = useTone();
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.sheetTitle}>The story stopped</Text>
           <Text style={styles.body}>{message}</Text>
           <View style={styles.buttons}>
@@ -227,19 +232,21 @@ export function StoryErrorPanel({
   );
 }
 
-export const PausedBadge = React.memo(() => (
-  <View pointerEvents="none" style={styles.pausedWrap}>
-    <View style={styles.paused}>
-      <Icon name="pause" size={32} />
-      <Text style={styles.pausedText}>Paused</Text>
+export const PausedBadge = React.memo(() => {
+  const tone = useTone();
+  return (
+    <View pointerEvents="none" style={styles.pausedWrap}>
+      <View style={[styles.paused, { backgroundColor: tone.scrim }]}>
+        <Icon name="pause" size={32} />
+        <Text style={styles.pausedText}>Paused</Text>
+      </View>
     </View>
-  </View>
-));
+  );
+});
 
 const styles = StyleSheet.create({
   cover: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -248,7 +255,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xl,
     paddingVertical: space.xl,
     borderRadius: radii.card,
-    backgroundColor: colors.inkRaised,
   },
   small: {
     ...type.label,
@@ -298,7 +304,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: scaledPixels(256),
     paddingTop: space.xl,
     paddingBottom: screen.top,
-    backgroundColor: colors.scrim,
   },
   panelTop: {
     flexDirection: 'row',
@@ -333,7 +338,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radii.card,
-    backgroundColor: colors.scrim,
   },
   pausedText: {
     ...type.bodyStrong,

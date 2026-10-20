@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { SparkProduct } from '@storyquest/contracts';
-import { colors, radii, space, type } from '../../theme';
+import { colors, radii, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { SPARKS_EXPLAINER, bestValueSku, formatSparks, packPrice, packTitle, sparks, useSparks } from '../../purchases';
 import { messages } from '../../story/messages';
@@ -26,6 +26,7 @@ interface PackCardProps {
 }
 
 const PackCard = React.memo(({ product, price, best, busy, position, onBuy }: PackCardProps) => {
+  const tone = useTone();
   const buy = useCallback(() => {
     if (!busy) onBuy(product.sku);
   }, [busy, onBuy, product.sku]);
@@ -40,7 +41,7 @@ const PackCard = React.memo(({ product, price, best, busy, position, onBuy }: Pa
     >
       {(focused) => (
         <FocusScale focused={focused}>
-          <View style={[styles.pack, busy && styles.packBusy]}>
+          <View style={[styles.pack, { backgroundColor: tone.night, borderColor: tone.line }, busy && styles.packBusy]}>
             {focused && <FocusFrame radius={radii.card} />}
             <View style={styles.amountRow}>
               <SparkCoin size={30} />
@@ -65,6 +66,7 @@ interface SparksSheetProps {
 // to the screen so the original action can carry on.
 export function SparksSheet({ active, onDone, onClose }: SparksSheetProps) {
   const { wallet, prices, canBuy } = useSparks();
+  const tone = useTone();
   const [status, setStatus] = useState<SheetStatus>({ kind: 'idle', message: null });
   const mounted = useRef(true);
   const opacity = useRef(new Animated.Value(0)).current;
@@ -101,8 +103,8 @@ export function SparksSheet({ active, onDone, onClose }: SparksSheetProps) {
 
   return (
     <SpatialNavigationRoot isActive={active}>
-      <Animated.View style={[styles.cover, { opacity }]}>
-        <View style={styles.sheet}>
+      <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
+        <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           {status.kind === 'done' ? (
             <>
               <View style={styles.amountRow}>
@@ -158,7 +160,6 @@ export function SparksSheet({ active, onDone, onClose }: SparksSheetProps) {
 const styles = StyleSheet.create({
   cover: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.scrim,
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 50,
@@ -168,7 +169,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.xxl,
     paddingVertical: space.xl,
     borderRadius: radii.card,
-    backgroundColor: colors.inkRaised,
   },
   title: {
     ...type.title,
@@ -194,8 +194,6 @@ const styles = StyleSheet.create({
     paddingVertical: space.lg,
     borderRadius: radii.card,
     borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
-    backgroundColor: colors.ink,
   },
   packBusy: {
     opacity: 0.6,

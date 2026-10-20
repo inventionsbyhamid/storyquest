@@ -1,10 +1,11 @@
 import React, { useEffect, useMemo, useRef } from 'react';
 import { Animated, StyleSheet } from 'react-native';
-import { colors } from '../../theme';
+import { useTone } from '../../theme';
 
 // Covers the video surface with the exact frame the next clip starts on, so cuts never flash black.
-// Without a frame yet it is plain ink.
+// Without a frame yet it is the story's night.
 export const StillFrame = React.memo(({ uri, visible }: { uri: string | null; visible: boolean }) => {
+  const tone = useTone();
   const opacity = useRef(new Animated.Value(visible ? 1 : 0)).current;
   const source = useMemo(() => (uri ? { uri } : null), [uri]);
 
@@ -19,7 +20,8 @@ export const StillFrame = React.memo(({ uri, visible }: { uri: string | null; vi
     return () => animation.stop();
   }, [visible, opacity]);
 
-  if (!source) return <Animated.View pointerEvents="none" style={[styles.plain, { opacity }]} />;
+  if (!source)
+    return <Animated.View pointerEvents="none" style={[styles.plain, { backgroundColor: tone.night, opacity }]} />;
   return (
     <Animated.Image
       source={source}
@@ -33,6 +35,5 @@ export const StillFrame = React.memo(({ uri, visible }: { uri: string | null; vi
 const styles = StyleSheet.create({
   plain: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: colors.ink,
   },
 });

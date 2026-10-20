@@ -1,6 +1,6 @@
 import React from 'react';
 import { StyleSheet, Text, View, ViewStyle } from 'react-native';
-import { colors, radii, space, type } from '../../theme';
+import { colors, radii, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { formatSparks, useSparks, walletLabel } from '../../purchases';
 import { SparkCoin } from '../Icons';
@@ -18,13 +18,16 @@ export const WalletText = React.memo(({ style }: { style?: ViewStyle }) => {
   );
 });
 
-// What a card costs, on a small solid ink tag. Only shown when it costs something.
-export const CostTag = React.memo(({ sparks }: { sparks: number }) => (
-  <View style={styles.tag}>
-    <SparkCoin size={18} />
-    <Text style={styles.tagText}>{formatSparks(sparks)}</Text>
-  </View>
-));
+// What a card costs, on a small solid night tag. Only shown when it costs something.
+export const CostTag = React.memo(({ sparks }: { sparks: number }) => {
+  const tone = useTone();
+  return (
+    <View style={[styles.tag, { backgroundColor: tone.night }]}>
+      <SparkCoin size={18} />
+      <Text style={styles.tagText}>{formatSparks(sparks)}</Text>
+    </View>
+  );
+});
 
 const styles = StyleSheet.create({
   row: {
@@ -42,7 +45,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.sm,
     paddingVertical: scaledPixels(6),
     borderRadius: radii.image,
-    backgroundColor: colors.ink,
   },
   tagText: {
     ...type.small,

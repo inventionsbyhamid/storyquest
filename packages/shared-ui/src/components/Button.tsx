@@ -18,7 +18,7 @@ interface ButtonProps {
   style?: ViewStyle;
 }
 
-// Primary: marigold with ink text, one per screen. Others sit on raised ink.
+// Primary: marigold with ink text, one per screen. Others are a thin layer of paper over the night.
 export const Button = React.memo(
   ({ label, onSelect, onFocus, hint, icon, primary, plain, block, style }: ButtonProps) => (
     <Focusable label={label} hint={hint} onSelect={onSelect} onFocus={onFocus} style={style}>
@@ -65,8 +65,8 @@ const styles = StyleSheet.create({
     borderColor: colors.marigold,
   },
   quiet: {
-    backgroundColor: colors.inkRaised,
-    borderColor: colors.inkLine,
+    backgroundColor: colors.surface,
+    borderColor: colors.surfaceLine,
   },
   plain: {
     backgroundColor: 'transparent',

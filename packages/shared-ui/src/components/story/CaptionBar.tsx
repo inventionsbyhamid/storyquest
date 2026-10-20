@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
-import { colors, radii, space, type } from '../../theme';
+import { colors, radii, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 
 interface CaptionBarProps {
@@ -15,6 +15,7 @@ const VISIBLE_MS = 4000;
 
 // The caption plate: a solid panel at the bottom with the line of the scene and a folio.
 export const CaptionBar = React.memo(({ caption, folio, madeIn, showToken }: CaptionBarProps) => {
+  const tone = useTone();
   const opacity = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -34,7 +35,7 @@ export const CaptionBar = React.memo(({ caption, folio, madeIn, showToken }: Cap
 
   return (
     <Animated.View pointerEvents="none" style={[styles.wrap, { opacity }]}>
-      <View style={styles.plate}>
+      <View style={[styles.plate, { backgroundColor: tone.scrim }]}>
         <Text style={styles.caption} numberOfLines={2}>
           {caption ?? ''}
         </Text>
@@ -62,7 +63,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     borderRadius: radii.card,
-    backgroundColor: colors.scrim,
   },
   caption: {
     ...type.body,

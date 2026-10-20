@@ -1,22 +1,24 @@
-import React, { useCallback, useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { ChoiceView, SceneView } from '@storyquest/contracts';
 import { resolveMediaUrl } from '../../api/media';
 import { formatSceneProgress } from '../../story/format';
 import { formatSparks } from '../../purchases/format';
-import { colors, radii, space, type } from '../../theme';
+import { colors, radii, space, toneFor, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
+import { Backdrop } from '../Backdrop';
 import { Focusable, FocusFrame, FocusScale } from '../Focusable';
 import { Icon } from '../Icons';
 import { Placeholder } from '../Placeholder';
 import { CostTag } from '../sparks/WalletText';
 
-const CARD_WIDTH = scaledPixels(380);
-const CARD_PADDING = scaledPixels(16);
-const THUMB_WIDTH = CARD_WIDTH - CARD_PADDING * 2 - scaledPixels(4);
-const THUMB_HEIGHT = Math.round((THUMB_WIDTH * 9) / 16);
+const CARD_WIDTH = scaledPixels(440);
+const THUMB_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
 const RISE = scaledPixels(24);
+const DOCK_HEIGHT = scaledPixels(497);
+// The last frame melts into the dock over this height instead of meeting a hard line.
+const DOCK_FADE = scaledPixels(200);
 
 interface ChoiceCardProps {
   choice: ChoiceView;
@@ -37,6 +39,7 @@ function choiceHint(choice: ChoiceView, closed: boolean, notFilmed: boolean): st
 }
 
 const ChoiceCard = React.memo(({ choice, closed, notFilmed, freeSparks, onChoose, onFocusChoice }: ChoiceCardProps) => {
+  const tone = useTone();
   const unavailable = closed || notFilmed;
   const costs = !unavailable && choice.sparks > freeSparks;
   const poster = unavailable ? null : resolveMediaUrl(choice.posterUrl);
@@ -56,22 +59,22 @@ const ChoiceCard = React.memo(({ choice, closed, notFilmed, freeSparks, onChoose
     >
       {(focused) => (
         <FocusScale focused={focused}>
-          <View style={[styles.card, focused && styles.cardFocused]}>
+          <View style={[styles.thumb, focused && styles.thumbFocused]}>
             {focused && <FocusFrame radius={radii.card} />}
-            <View style={styles.thumb}>
+            <View style={styles.clip}>
               <View style={[styles.fill, unavailable && styles.closed]}>
                 {source ? (
                   <Image source={source} style={styles.image} resizeMode="cover" fadeDuration={0} />
                 ) : (
-                  <Placeholder style={styles.placeholder} />
+                  <Placeholder />
                 )}
               </View>
               {unavailable ? (
-                <View style={[styles.status, styles.topRight]}>
+                <View style={[styles.status, styles.topRight, { backgroundColor: tone.night }]}>
                   <Text style={styles.statusText}>{closed ? 'Path closed' : 'Not filmed yet'}</Text>
                 </View>
               ) : !choice.ready && choice.nodeId ? (
-                <View style={[styles.status, styles.bottomLeft]}>
+                <View style={[styles.status, styles.bottomLeft, { backgroundColor: tone.night }]}>
                   <Text style={styles.statusText}>Drawing</Text>
                 </View>
               ) : null}
@@ -81,11 +84,11 @@ const ChoiceCard = React.memo(({ choice, closed, notFilmed, freeSparks, onChoose
                 </View>
               )}
             </View>
-            <View style={[styles.text, unavailable && styles.closed]}>
-              <Text style={styles.label} numberOfLines={2}>
-                {choice.label}
-              </Text>
-            </View>
+          </View>
+          <View style={[styles.text, unavailable && styles.closed]}>
+            <Text style={styles.label} numberOfLines={2}>
+              {choice.label}
+            </Text>
           </View>
         </FocusScale>
       )}
@@ -108,25 +111,26 @@ function somethingElseHint(cost: number, paused: boolean): string {
   return cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it';
 }
 
-const SomethingElseCard = React.memo(({ position, cost, paused, onSelect, onFocusChoice }: SomethingElseProps) => (
-  <Focusable
-    label="Something else"
-    hint={somethingElseHint(cost, paused)}
-    position={position}
-    altLabels={ELSE_ALT_LABELS}
-    onSelect={onSelect}
-    onFocus={() => onFocusChoice(null)}
-  >
-    {(focused) => (
-      <FocusScale focused={focused}>
-        <View style={[styles.card, focused && styles.cardFocused]}>
-          {focused && <FocusFrame radius={radii.card} />}
-          <View style={[styles.thumb, styles.elseThumb]}>
+const SomethingElseCard = React.memo(({ position, cost, paused, onSelect, onFocusChoice }: SomethingElseProps) => {
+  const tone = useTone();
+  return (
+    <Focusable
+      label="Something else"
+      hint={somethingElseHint(cost, paused)}
+      position={position}
+      altLabels={ELSE_ALT_LABELS}
+      onSelect={onSelect}
+      onFocus={() => onFocusChoice(null)}
+    >
+      {(focused) => (
+        <FocusScale focused={focused}>
+          <View style={[styles.thumb, styles.elseThumb, focused && styles.thumbFocused]}>
+            {focused && <FocusFrame radius={radii.card} />}
             <View style={paused && styles.closed}>
-              <Icon name="pen" size={56} />
+              <Icon name="pen" size={64} />
             </View>
             {paused ? (
-              <View style={[styles.status, styles.topRight]}>
+              <View style={[styles.status, styles.topRight, { backgroundColor: tone.night }]}>
                 <Text style={styles.statusText}>Paused</Text>
               </View>
             ) : cost > 0 ? (
@@ -143,11 +147,11 @@ const SomethingElseCard = React.memo(({ position, cost, paused, onSelect, onFocu
               Say it or type it
             </Text>
           </View>
-        </View>
-      </FocusScale>
-    )}
-  </Focusable>
-));
+        </FocusScale>
+      )}
+    </Focusable>
+  );
+});
 
 interface ChoiceOverlayProps {
   scene: SceneView;
@@ -163,7 +167,8 @@ interface ChoiceOverlayProps {
 }
 
 // The choice dock: the last frame stays above, a solid panel fills the bottom, and the cards
-// rise in one after another. This is the only orchestrated motion in the app.
+// rise in one after another. This is the only orchestrated motion in the app. The panel takes
+// the night of the focused choice's first picture, so moving between paths hints at their mood.
 export function ChoiceOverlay({
   scene,
   closedChoices,
@@ -176,6 +181,21 @@ export function ChoiceOverlay({
   onSomethingElse,
   onFocusChoice,
 }: ChoiceOverlayProps) {
+  const tone = useTone();
+  const [focusedIndex, setFocusedIndex] = useState<number | null>(null);
+  const focusChoice = useCallback(
+    (index: number | null) => {
+      setFocusedIndex(index);
+      onFocusChoice(index);
+    },
+    [onFocusChoice],
+  );
+  const focused = scene.choices.find((choice) => choice.index === focusedIndex);
+  const pathTone =
+    focused && !closedChoices.includes(focused.index) && !notFilmedChoices.includes(focused.index)
+      ? (focused.tone ?? null)
+      : null;
+  const dockNight = pathTone ? toneFor(pathTone).night : tone.night;
   const panel = useRef(new Animated.Value(0)).current;
   const cards = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
 
@@ -213,6 +233,7 @@ export function ChoiceOverlay({
         style={[styles.dock, { opacity: panel }]}
         accessibilityLabel={`What happens next? ${formatSceneProgress(scene.sceneNumber, scene.totalScenes)}`}
       >
+        <Backdrop color={dockNight} alpha={0.92} fadeTop={DOCK_FADE} />
         <Text style={styles.heading}>What happens next?</Text>
         <SpatialNavigationView direction="horizontal" style={styles.row}>
           {scene.choices.map((choice, i) => (
@@ -224,7 +245,7 @@ export function ChoiceOverlay({
                   notFilmed={notFilmedChoices.includes(choice.index)}
                   freeSparks={freeSparks}
                   onChoose={onChoose}
-                  onFocusChoice={onFocusChoice}
+                  onFocusChoice={focusChoice}
                 />
               </DefaultFocus>
             </Animated.View>
@@ -236,7 +257,7 @@ export function ChoiceOverlay({
                 cost={customCost > freeSparks ? customCost : 0}
                 paused={customPaused}
                 onSelect={onSomethingElse}
-                onFocusChoice={onFocusChoice}
+                onFocusChoice={focusChoice}
               />
             </DefaultFocus>
           </Animated.View>
@@ -252,32 +273,21 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: '46%',
-    backgroundColor: colors.scrim,
+    height: DOCK_HEIGHT + DOCK_FADE,
     alignItems: 'center',
-    paddingTop: space.md,
+    paddingTop: DOCK_FADE + space.sm,
   },
   heading: {
     ...type.title,
     color: colors.paper,
-    marginBottom: space.sm,
+    marginBottom: space.md,
   },
   row: {
     justifyContent: 'center',
   },
   slot: {
     marginHorizontal: space.sm,
-  },
-  card: {
     width: CARD_WIDTH,
-    padding: CARD_PADDING,
-    borderRadius: radii.card,
-    borderWidth: scaledPixels(2),
-    borderColor: colors.inkLine,
-    backgroundColor: colors.inkRaised,
-  },
-  cardFocused: {
-    borderColor: colors.ink,
   },
   closed: {
     opacity: 0.5,
@@ -286,11 +296,20 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
   },
   thumb: {
-    width: THUMB_WIDTH,
+    width: CARD_WIDTH,
     height: THUMB_HEIGHT,
-    borderRadius: radii.image,
+    borderRadius: radii.card,
+    borderWidth: scaledPixels(2),
+    borderColor: colors.surfaceLine,
+    backgroundColor: colors.surface,
+  },
+  thumbFocused: {
+    borderColor: 'transparent',
+  },
+  clip: {
+    flex: 1,
+    borderRadius: radii.card - scaledPixels(2),
     overflow: 'hidden',
-    backgroundColor: colors.ink,
   },
   elseThumb: {
     alignItems: 'center',
@@ -298,21 +317,17 @@ const styles = StyleSheet.create({
   },
   text: {
     height: scaledPixels(80),
-    marginTop: space.xs,
+    marginTop: space.sm,
   },
   image: {
     width: '100%',
     height: '100%',
-  },
-  placeholder: {
-    backgroundColor: colors.ink,
   },
   status: {
     position: 'absolute',
     paddingHorizontal: space.sm,
     paddingVertical: scaledPixels(4),
     borderRadius: radii.image,
-    backgroundColor: colors.ink,
   },
   statusText: {
     ...type.small,

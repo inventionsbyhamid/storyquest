@@ -18,5 +18,5 @@ export function usePulse(min = 0.6, max = 1, duration = 800): Animated.Value {
 }
 
 export function SkeletonBlock({ pulse, style }: { pulse: Animated.Value; style: StyleProp<ViewStyle> }) {
-  return <Animated.View style={[{ backgroundColor: colors.inkRaised, opacity: pulse }, style]} />;
+  return <Animated.View style={[{ backgroundColor: colors.surface, opacity: pulse }, style]} />;
 }

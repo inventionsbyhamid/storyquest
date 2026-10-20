@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
@@ -14,9 +14,10 @@ import {
   moodLabel,
 } from '../story/format';
 import { messageForError } from '../story/messages';
-import { DISPLAY_FONT, colors, radii, screen, space, type } from '../theme';
+import { DISPLAY_FONT, ToneContext, colors, radii, screen, space, toneFor, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { useBackHandler } from '../hooks/useBackHandler';
+import { Backdrop } from '../components/Backdrop';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
 import { Chip } from '../components/Chip';
@@ -29,6 +30,15 @@ import { canAfford, costLabel, useSparks } from '../purchases';
 import type { ScreenNavigation } from '../navigation/types';
 
 const MAX_MOODS = 3;
+
+// Each mood has its own night, worked out like a picture's, so the screen leans into the last mood picked.
+const MOOD_NIGHTS: Record<Mood, string> = {
+  funny: '#341F02',
+  adventure: '#092C13',
+  cozy: '#3C1715',
+  mystery: '#032931',
+  spooky: '#2B1C3B',
+};
 
 export default function CreateScreen() {
   const navigation = useNavigation<ScreenNavigation<'Create'>>();
@@ -111,11 +121,14 @@ export default function CreateScreen() {
   }, [start]);
 
   const cost = costLabel(wallet, storyCost);
+  const lastMood = moods[moods.length - 1];
+  const tone = useMemo(() => toneFor(lastMood ? MOOD_NIGHTS[lastMood] : null), [lastMood]);
 
   return (
-    <>
+    <ToneContext.Provider value={tone}>
       <SpatialNavigationRoot isActive={isFocused && !needsSparks && !gateOpen}>
         <View style={styles.screen}>
+          <Backdrop color={tone.night} />
           <View style={styles.header}>
             <Brand />
             <WalletText />
@@ -193,7 +206,7 @@ export default function CreateScreen() {
       </SpatialNavigationRoot>
       {needsSparks && <SparksSheet active={isFocused} onDone={sparksDone} onClose={closeSparks} />}
       {gateOpen && <GrownUpsGate active={isFocused} onPass={passGate} onCancel={leave} />}
-    </>
+    </ToneContext.Provider>
   );
 }
 
