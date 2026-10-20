@@ -59,7 +59,7 @@ More detail in [docs/design.md](docs/design.md).
 
 ### Design
 
-The look is "picture book at night": flat inks, warm paper type, story titles in Fraunces, and AI scenes framed like illustrations. No gradients, no glows. The full system is in [docs/ui.md](docs/ui.md) and the logo, a Q whose tail forks into two paths, is in [assets/brand](assets/brand).
+The look is "picture book at night": warm paper type, story titles in Fraunces, and the AI scenes as the illustrations. Every scene brings its own night: the server picks a deep color from each poster and last frame, and the screens around it take that color, like a streaming app's hero. Pictures melt into their night at the edges; nothing else uses gradients or glows. The full system is in [docs/ui.md](docs/ui.md) and the logo, a Q whose tail forks into two paths, is in [assets/brand](assets/brand).
 
 ### AWS services used
 
