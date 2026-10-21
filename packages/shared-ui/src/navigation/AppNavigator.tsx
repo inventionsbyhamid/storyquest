@@ -5,6 +5,7 @@ import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { colors } from '../theme';
 import { sparks } from '../purchases';
 import { startUiSounds } from '../utils/uiSounds';
+import { loadGrownUps } from '../gate/grownUps';
 import HomeScreen from '../screens/HomeScreen';
 import CreateScreen from '../screens/CreateScreen';
 import StoryScreen from '../screens/StoryScreen';
@@ -36,6 +37,7 @@ export default function AppNavigator() {
   useEffect(() => {
     sparks.start();
     startUiSounds();
+    void loadGrownUps();
     // Amazon asks apps to look for unfinished purchases whenever they come back to the foreground.
     const subscription = AppState.addEventListener('change', (next) => {
       if (next === 'active') sparks.resume();

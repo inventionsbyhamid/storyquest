@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'storyquest.deviceId';
 
-interface KeyValueStore {
+export interface KeyValueStore {
   getItem(key: string): Promise<string | null>;
   setItem(key: string, value: string): Promise<void>;
 }
@@ -11,7 +11,7 @@ export function generateDeviceId(random: () => number = Math.random): string {
   return `tv_${hex}`;
 }
 
-function loadStore(): KeyValueStore | null {
+export function loadStore(): KeyValueStore | null {
   try {
     // Loaded lazily: the storage module throws at import time when its native side is missing.
     // eslint-disable-next-line @typescript-eslint/no-var-requires

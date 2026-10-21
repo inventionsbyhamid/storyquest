@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { confirmGrownUps, needsGrownUpsGate, resetGrownUpsGate } from './grownUps';
+import { confirmGrownUps, loadGrownUps, needsGrownUpsGate, resetGrownUpsGate } from './grownUps';
 import { createGateState, gateReducer, makeQuestion, questionText } from './question';
 import type { GateAction, GateQuestion, GateState } from './question';
 
@@ -59,7 +59,23 @@ describe('grown ups question', () => {
 describe('when to ask', () => {
   afterEach(resetGrownUpsGate);
 
-  it('asks once per session and never for grown up stories', () => {
+  it('remembers the answer on this TV', async () => {
+    const saved = new Map<string, string>();
+    const store = {
+      getItem: async (key: string) => saved.get(key) ?? null,
+      setItem: async (key: string, value: string) => void saved.set(key, value),
+    };
+    await loadGrownUps(store);
+    expect(needsGrownUpsGate('kids')).toBe(true);
+    confirmGrownUps();
+    await Promise.resolve();
+    resetGrownUpsGate();
+    expect(needsGrownUpsGate('kids')).toBe(true);
+    await loadGrownUps(store);
+    expect(needsGrownUpsGate('kids')).toBe(false);
+  });
+
+  it('asks once and never for grown up stories', () => {
     expect(needsGrownUpsGate('family')).toBe(true);
     expect(needsGrownUpsGate('kids')).toBe(true);
     expect(needsGrownUpsGate(undefined)).toBe(true);

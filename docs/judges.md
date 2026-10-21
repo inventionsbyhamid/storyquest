@@ -41,4 +41,4 @@ Every new scene is filmed by AI video and costs us money, so the hosted server h
 * Choices that were never filmed say "Not filmed yet". If none can play, the app offers Start over or Home.
 * Something else and Make your own say "Paused".
 
-The demo video shows live filming, including a custom idea. To try it yourself with no keys, run the server locally with its built in stand in story writer and clips (see "Run it yourself" in the README), point `apps/vega/src/config.ts` at it and build the app. Something else and Make your own then work end to end, after a short grown ups question.
+The demo video shows live filming, including a custom idea. To try it yourself with no keys, run the server locally with its built in stand in story writer and clips (see "Run it yourself" in the README), point `apps/vega/src/config.ts` at it and build the app. Something else and Make your own then work end to end, after a short grown ups question that each TV answers only once.
