@@ -403,7 +403,8 @@ describe('filming a scene again', () => {
     expect(after.clipPath).not.toBe(before.clipPath);
     expect(after.lastFramePath).not.toBe(before.lastFramePath);
     expect(after.videoPrompt).toBe(before.videoPrompt);
-    expect(existsSync(oldClip)).toBe(false);
+    // Every paid take is kept.
+    expect(existsSync(oldClip)).toBe(true);
     expect(existsSync(services.store.absolute(after.clipPath!))).toBe(true);
     expect(services.repo.getTotal('video_seconds')).toBe(2);
 

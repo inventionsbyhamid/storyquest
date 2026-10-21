@@ -154,7 +154,8 @@ export class SceneGenerator {
       log.info({ nodeId, treeId: node.treeId, depth: node.depth, timings }, 'scene ready');
       return 'ready';
     } catch (err) {
-      await Promise.all(partialFiles.map((file) => rm(file, { force: true })));
+      // A clip that was paid for stays on disk even when a later step fails.
+      if (!videoMade) await Promise.all(partialFiles.map((file) => rm(file, { force: true })));
       const outcome = this.handleFailure(nodeId, err);
       // A family should not pay for a scene that never got as far as video.
       if (outcome === 'failed' && !videoMade) {
@@ -169,8 +170,9 @@ export class SceneGenerator {
 
   /**
    * Films a ready scene again from the same prompt and swaps in the new clip,
-   * poster and last frame. Refused once a later scene was filmed from its
-   * last frame, because that scene would no longer join up.
+   * poster and last frame. The earlier take stays on disk, since every paid
+   * clip is kept. Refused once a later scene was filmed from its last frame,
+   * because that scene would no longer join up.
    */
   async redo(nodeId: string): Promise<{ node: NodeRecord; billedSeconds: number }> {
     const { repo, store, log } = this.deps;
@@ -183,14 +185,15 @@ export class SceneGenerator {
     const parent = node.parentId ? repo.getNode(node.parentId) : null;
 
     const files = await this.newFiles(node.id);
+    let filmed = false;
     try {
       const rendered = await this.renderPaid(
         { prompt: node.videoPrompt, caption: node.caption ?? '', startFramePath: this.startFrame(parent), outPath: files.raw },
         { task: 'redo', nodeId: node.id, treeId: node.treeId, forced: false },
       );
+      filmed = true;
       const { durationMs, tone, endTone } = await this.finishMedia(files);
       if (repo.countFilmedChildren(node.id) > 0) throw new RedoRefused('has_children', 'a later scene was filmed from it meanwhile');
-      const old = [node.clipPath, node.posterPath, node.lastFramePath].filter((file): file is string => Boolean(file));
       repo.replaceNodeMedia(node.id, {
         clipPath: store.relative(files.clip),
         posterPath: store.relative(files.poster),
@@ -200,11 +203,10 @@ export class SceneGenerator {
         endTone,
         extraCostSeconds: rendered.billedSeconds,
       });
-      await Promise.all(old.map((file) => rm(store.absolute(file), { force: true })));
       log.info({ nodeId, billedSeconds: rendered.billedSeconds }, 'scene filmed again');
       return { node: repo.getNode(node.id)!, billedSeconds: rendered.billedSeconds };
     } catch (err) {
-      await Promise.all(Object.values(files).map((file) => rm(file, { force: true })));
+      if (!filmed) await Promise.all(Object.values(files).map((file) => rm(file, { force: true })));
       throw err;
     }
   }
