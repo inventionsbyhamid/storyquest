@@ -26,6 +26,8 @@ interface FalVideoOutput {
 const RENDER_TIMEOUT_MS = 90_000;
 const DOWNLOAD_TIMEOUT_MS = 60_000;
 const ATTEMPTS = 2;
+// The model has no negative prompt and sometimes burns the spoken line in as a subtitle; the app shows its own captions.
+const NO_TEXT = ' No subtitles, captions or written words anywhere on screen.';
 
 function isRetryable(err: unknown): boolean {
   if (err instanceof ApiError) return err.status === 429 || err.status >= 500;
@@ -47,7 +49,7 @@ export class FalVideo implements VideoProvider {
   async render(request: RenderRequest): Promise<RenderResult> {
     const endpoint = request.startFramePath ? this.options.imageToVideoModel : this.options.textToVideoModel;
     const input: Record<string, unknown> = {
-      prompt: request.prompt,
+      prompt: request.prompt + NO_TEXT,
       duration: request.seconds,
       resolution: this.options.resolution,
       prompt_expansion_mode: this.options.promptExpansion,

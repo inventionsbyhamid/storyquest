@@ -348,6 +348,16 @@ describe('video safety rejections', () => {
     await expect(flaky.render(request)).rejects.toBeInstanceOf(VideoNotBilled);
     expect(calls).toBe(2);
 
+    let sentPrompt = '';
+    const recording = new FalVideo(options, silentLogger, {
+      subscribe: (async (_endpoint: string, opts: { input: { prompt: string } }) => {
+        sentPrompt = opts.input.prompt;
+        throw new ApiError({ message: 'Unprocessable Entity', status: 422, body: {} });
+      }) as never,
+    });
+    await expect(recording.render(request)).rejects.toBeInstanceOf(VideoRejected);
+    expect(sentPrompt).toMatch(/^p No subtitles/);
+
     // Once fal has queued the job it may bill, so the error is passed on as billed and not retried.
     calls = 0;
     const queued = new FalVideo(options, silentLogger, {
