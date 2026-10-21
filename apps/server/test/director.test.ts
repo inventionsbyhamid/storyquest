@@ -348,8 +348,9 @@ describe('LlmDirector with an OpenAI compatible model', () => {
 });
 
 describe('prompts', () => {
-  it('gives longer clips room for two beats', () => {
-    expect(sceneSystemPrompt(12)).toContain('12 seconds is room for one moment in two beats');
+  it('gives longer clips room for an action and what it leads to', () => {
+    expect(sceneSystemPrompt(12)).toContain('12 seconds is room for one moment that unfolds');
+    expect(sceneSystemPrompt(12)).not.toContain('beats');
     expect(sceneSystemPrompt(12)).toContain('80 to 140 words');
     expect(sceneSystemPrompt(8)).toContain('8 seconds is short');
   });
