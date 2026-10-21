@@ -8,6 +8,9 @@ import { logTiming } from '../../utils/timing';
 import type { ClipPlayerProps } from './types';
 
 const DEINIT_TIMEOUT_MS = 1500;
+// A clip that should be playing but has not moved for this long is treated as failed,
+// so a stalled stream ends in the normal retry and never leaves a family on a frozen frame.
+const STALL_MS = 10_000;
 
 type Handlers = Record<string, () => void>;
 
@@ -28,6 +31,9 @@ class ClipController {
   private hasLoadedBefore = false;
   private componentInstance: IComponentInstance | undefined;
   private readonly handlers: Handlers;
+  private lastTime = -1;
+  private lastProgressAt = Date.now();
+  private readonly watchdog = setInterval(() => this.checkStall(), 1000);
 
   constructor(
     private readonly props: () => ClipPlayerProps,
@@ -121,6 +127,7 @@ class ClipController {
 
   destroy() {
     this.destroyed = true;
+    clearInterval(this.watchdog);
     const player = this.player;
     this.player = null;
     this.ready = false;
@@ -175,22 +182,38 @@ class ClipController {
     this.applyPaused();
   };
 
+  private checkStall() {
+    const player = this.player;
+    const waiting = !!this.source && !this.paused && !this.ended && !!this.surface && !this.destroyed;
+    const time = player && this.ready ? player.currentTime || 0 : -1;
+    if (!waiting || time !== this.lastTime) {
+      this.lastTime = time;
+      this.lastProgressAt = Date.now();
+      return;
+    }
+    if (Date.now() - this.lastProgressAt < STALL_MS) return;
+    this.lastProgressAt = Date.now();
+    console.warn('[ClipPlayer] playback stalled', this.source);
+    this.onError();
+  }
+
+  // Events that arrive before the new clip's metadata belong to the clip before it.
   private onPlaying = () => {
-    if (!this.source || this.started) return;
+    if (!this.source || this.started || !this.metadataLoaded) return;
     this.started = true;
     this.props().onPlaying?.(this.source);
   };
 
   private onTimeUpdate = () => {
     const player = this.player;
-    if (!player || !this.source) return;
+    if (!player || !this.source || !this.metadataLoaded) return;
     const time = player.currentTime || 0;
     if (!this.started && time > 0) this.onPlaying();
     this.props().onProgress?.(time, player.duration || 0);
   };
 
   private onEnded = () => {
-    if (!this.source || this.ended) return;
+    if (!this.source || this.ended || !this.metadataLoaded) return;
     this.ended = true;
     this.props().onEnded?.(this.source);
   };
@@ -244,13 +267,14 @@ function ClipPlayer(props: ClipPlayerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    controllerRef.current!.setPaused(props.paused);
-  }, [props.paused]);
-
+  // The source switches before the paused state applies, so the old clip never resumes for a moment.
   useEffect(() => {
     if (props.source) controllerRef.current!.load(props.source);
   }, [props.source]);
+
+  useEffect(() => {
+    controllerRef.current!.setPaused(props.paused);
+  }, [props.paused]);
 
   const onSurfaceViewCreated = useCallback((handle: string) => controllerRef.current?.setSurface(handle), []);
   const onSurfaceViewDestroyed = useCallback((handle: string) => controllerRef.current?.clearSurface(handle), []);
