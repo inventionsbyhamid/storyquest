@@ -8,13 +8,20 @@ export const CharacterSchema = z.object({
   description: z.string().trim().min(10).max(400),
 });
 
+// Some models write a character as "Name: description" instead of an object.
+const LooseCharacterSchema = z.preprocess((value) => {
+  if (typeof value !== 'string') return value;
+  const colon = value.indexOf(':');
+  return colon > 0 ? { name: value.slice(0, colon).trim(), description: value.slice(colon + 1).trim() } : value;
+}, CharacterSchema);
+
 export const BibleDraftSchema = z.object({
   title: z.string().trim().min(2).max(60),
   logline: z.string().trim().min(10).max(220),
   artStyle: z.string().trim().min(10).max(300),
   setting: z.string().trim().min(10).max(400),
   tone: z.string().trim().min(2).max(120),
-  characters: z.array(CharacterSchema).min(1).max(5),
+  characters: z.array(LooseCharacterSchema).min(1).max(5),
 });
 export type BibleDraft = z.output<typeof BibleDraftSchema>;
 
@@ -45,7 +52,7 @@ export function sceneSchema(sceneNumber: number, totalScenes: number) {
         )
         .max(2),
       isEnding: z.boolean(),
-      newCharacters: z.array(CharacterSchema).max(3).optional().default([]),
+      newCharacters: z.array(LooseCharacterSchema).max(3).optional().default([]),
     })
     .superRefine((scene, ctx) => {
       // The final scene is forced to be an ending later, so only the middle scenes are strict.

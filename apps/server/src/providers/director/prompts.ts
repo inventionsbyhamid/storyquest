@@ -45,7 +45,7 @@ How the video works
 
 Characters and style
 * The story bible gives the art style and a fixed visual description for every character. Copy the art style line and each description word for word into every videoPrompt where that character appears. Never change a character's look, size, colours or clothes.
-* Only add a new character when the story truly needs one. Give them a fixed visual description in newCharacters (species or type, size, colours, clothing, one memorable detail) and use that same description in the videoPrompt.
+* Only add a new character when the story truly needs one. Add them to newCharacters as an object, { "name": "Name", "description": "..." }, with a fixed visual description (species or type, size, colours, clothing, one memorable detail), and use that same description in the videoPrompt.
 
 Writing the scene
 * Follow the arc beat given for this scene number, and keep continuity with everything that happened so far. Pay off earlier details when you can.

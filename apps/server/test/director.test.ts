@@ -64,6 +64,20 @@ describe('scene validation', () => {
     }
   });
 
+  it('accepts a new character written as "Name: description"', () => {
+    const parsed = parseModelJson(
+      sceneSchema(2, 6),
+      JSON.stringify({ ...goodScene, newCharacters: ['Pip: a small lantern bird folded from russet leaves with a glowing eye'] }),
+    );
+    expect(parsed.ok).toBe(true);
+    if (parsed.ok) {
+      expect(parsed.value.newCharacters).toEqual([
+        { name: 'Pip', description: 'a small lantern bird folded from russet leaves with a glowing eye' },
+      ]);
+    }
+    expect(parseModelJson(sceneSchema(2, 6), JSON.stringify({ ...goodScene, newCharacters: ['no colon here'] })).ok).toBe(false);
+  });
+
   it('rejects choices that are too long', () => {
     const parsed = parseModelJson(
       sceneSchema(2, 6),
