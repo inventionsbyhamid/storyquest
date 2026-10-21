@@ -228,4 +228,15 @@ describe('chapters', () => {
     expect(share.scenes[1]!.choiceTaken).toBeNull();
     expect(share.stats.choices).toHaveLength(1);
   });
+
+  it('keeps only the latest story of each idea in Continue watching', async () => {
+    const { app, services } = await boot();
+    const first = await start(app);
+    await services.engine.idle();
+    const second = await start(app);
+    await services.engine.idle();
+    const list = StoryListResponse.parse((await app.inject({ method: 'GET', url: '/v1/stories', headers })).json());
+    expect(list.stories.map((story) => story.id)).toEqual([second.id]);
+    expect(first.id).not.toBe(second.id);
+  });
 });

@@ -323,7 +323,8 @@ export default function HomeScreen() {
   const tone = useMemo(() => toneFor(focusedTone), [focusedTone]);
 
   return (
-    <SpatialNavigationRoot isActive={isFocused} key={load.status}>
+    // A newly started story moves to the front of Continue watching, so focus starts there again.
+    <SpatialNavigationRoot isActive={isFocused} key={`${load.status}:${stories[0]?.id ?? ''}`}>
       <MotionContext.Provider value={isFocused}>
         <ToneContext.Provider value={tone}>
           <View style={styles.screen}>

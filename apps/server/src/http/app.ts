@@ -197,10 +197,19 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   // This TV's stories, newest first, for Continue watching. Stories with nothing filmed yet are left out.
   app.get('/v1/stories', async (request) => {
     const device = requireDevice(request);
+    // Only the latest story of each daily idea; playing an idea again starts a new one.
+    const seen = new Set<string>();
     const stories = repo
-      .listStoriesForDevice(device, 12)
+      .listStoriesForDevice(device, 24)
+      .filter((story) => {
+        const key = story.ideaId ?? story.treeId;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      })
       .map((story) => views.storySummary(story))
-      .filter((summary) => summary.posterUrl !== null);
+      .filter((summary) => summary.posterUrl !== null)
+      .slice(0, 12);
     return parse(StoryListResponse, { stories });
   });
 
