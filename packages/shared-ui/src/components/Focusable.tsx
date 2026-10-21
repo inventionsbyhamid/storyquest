@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, StyleProp, StyleSheet, View, ViewStyle } from 'react-native';
 import { SpatialNavigationFocusableView } from 'react-tv-space-navigation';
+import { playFocusSound, playUiSound } from '../utils/uiSounds';
 import { colors } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { voiceProps } from './voiceProps';
@@ -31,6 +32,15 @@ export function Focusable({
   children,
 }: FocusableProps) {
   const altKey = altLabels?.join('|');
+  const focus = useCallback(() => {
+    playFocusSound();
+    onFocus?.();
+  }, [onFocus]);
+  const select = useCallback(() => {
+    if (!onSelect) return;
+    playUiSound('select');
+    onSelect();
+  }, [onSelect]);
   const viewProps = useMemo(
     () => ({
       accessibilityLabel: label,
@@ -43,8 +53,8 @@ export function Focusable({
   );
   return (
     <SpatialNavigationFocusableView
-      onSelect={onSelect}
-      onFocus={onFocus}
+      onSelect={select}
+      onFocus={focus}
       onBlur={onBlur}
       style={style}
       viewProps={viewProps}

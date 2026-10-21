@@ -101,4 +101,6 @@ On the final frame's night. Left: "The end" in Fraunces display, the story title
 Skeletons are surface blocks whose opacity pulses between 0.6 and 1. Errors and empty states: one Fraunces line, one sans sentence that says what to do, one button.
 
 ## Motion
+Sound: four quiet marimba like tones, played on Fire TV only through small sonification audio players that never take media control focus: a soft tick when an arrow press moves focus (not when a screen sets its first focus), a two note pop on Select, a three note rise when the choice dock appears, and a faint tick in the last three seconds of the countdown. Files live in apps/server/site/static/sounds.
+
 Focus scale and frame 150 ms. Overlays fade 200 ms. A change of night 450 ms, the Home billboard 350 ms. One orchestrated moment: when the choice dock appears, the three cards rise 24px and fade in with 60 ms stagger. Nothing else animates on its own.

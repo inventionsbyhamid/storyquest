@@ -4,6 +4,7 @@ import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'reac
 import type { ChoiceView, SceneView } from '@storyquest/contracts';
 import { resolveMediaUrl } from '../../api/media';
 import { formatAutoPick } from '../../story/autoPick';
+import { playUiSound } from '../../utils/uiSounds';
 import { formatSceneProgress } from '../../story/format';
 import { formatSparks } from '../../purchases/format';
 import { colors, radii, space, toneFor, type, useTone } from '../../theme';
@@ -204,6 +205,7 @@ export function ChoiceOverlay({
   const cards = useRef(Array.from({ length: 4 }, () => new Animated.Value(0))).current;
 
   useEffect(() => {
+    playUiSound('choices');
     const animation = Animated.parallel([
       Animated.timing(panel, { toValue: 1, duration: 200, useNativeDriver: true }),
       Animated.stagger(

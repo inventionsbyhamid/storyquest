@@ -51,6 +51,7 @@ import { ToneContext, colors, toneFor } from '../theme';
 import { createClipCache } from '../utils/clipCache';
 import { prefetchImage } from '../utils/prefetch';
 import { endChoiceTiming, logTiming, markChoice } from '../utils/timing';
+import { playUiSound } from '../utils/uiSounds';
 import type { ScreenNavigation, ScreenRoute } from '../navigation/types';
 
 const TOGGLE_DEBOUNCE_MS = 600;
@@ -495,6 +496,7 @@ export default function StoryScreen() {
       left -= 1;
       if (left > 0) {
         setAutoPickLeft(left);
+        if (left <= 3) playUiSound('tick');
         return;
       }
       clearInterval(timer);
