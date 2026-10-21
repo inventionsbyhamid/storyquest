@@ -10,7 +10,7 @@ export const AUTO_PICK_SECONDS = 10;
  */
 export function autoPickCandidates(state: StoryState): number[] {
   const scene = state.scene;
-  if (state.phase !== 'choosing' || !scene || scene.isEnding) return [];
+  if (state.phase !== 'choosing' || !scene || scene.isEnding || scene.continues) return [];
   const unavailable = [...closedChoices(state), ...notFilmedChoices(state)];
   return scene.choices
     .filter((choice) => choice.ready && choice.sparks === 0 && !unavailable.includes(choice.index))

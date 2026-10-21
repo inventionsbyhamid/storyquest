@@ -80,9 +80,11 @@ export function renderSharePage(view: ShareView, shareUrl: string, contact = '',
     ? `A family chose their own path through ${view.title}. ${choicePhrase(rare)}: ${rare.label}.`
     : `A family chose their own path through ${view.title}.`;
 
+  // Only the first clip of each chapter follows a choice, so stats are matched in order of choices.
+  let choiceIndex = 0;
   const steps = view.scenes
     .map((scene, i) => {
-      const stat = view.stats.choices[i - 1];
+      const stat = i > 0 && scene.choiceTaken ? view.stats.choices[choiceIndex++] : undefined;
       const choice =
         i > 0 && scene.choiceTaken
           ? `<li class="choice">They chose <strong>${escapeHtml(scene.choiceTaken)}</strong>${stat ? `<span>${escapeHtml(choicePhrase(stat))}</span>` : ''}</li>`

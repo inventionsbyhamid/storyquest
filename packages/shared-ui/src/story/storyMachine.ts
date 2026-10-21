@@ -244,7 +244,9 @@ function onClipFinished(state: StoryState, clipUrl: string, failed: boolean): St
     return { ...base, phase: 'finished', menuOpen: false };
   }
   const next: StoryState = { ...base, phase: 'choosing' };
-  return failed ? withNotice(next, messages.sceneWouldNotPlay) : next;
+  const shown = failed ? withNotice(next, messages.sceneWouldNotPlay) : next;
+  // In the middle of a chapter the next clip follows on its own; there is nothing to choose.
+  return scene.continues ? onChoose(shown, 0) : shown;
 }
 
 // Private paths are filmed only for this family, so the server prepares just the choice they focus on.
@@ -586,5 +588,6 @@ export function shouldWatchChoices(state: StoryState): boolean {
 export function waitingLabel(state: StoryState): string | null {
   if (state.phase === 'loadingScene') return 'Starting the story';
   if (state.phase !== 'waitingNext') return null;
-  return state.waitKind === 'custom' ? 'Filming your idea' : 'Drawing the next scene';
+  if (state.waitKind === 'custom') return 'Filming your idea';
+  return state.scene?.continues ? 'Filming the next part' : 'Drawing the next scene';
 }

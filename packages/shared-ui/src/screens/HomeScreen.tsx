@@ -7,7 +7,7 @@ import {
   SpatialNavigationScrollView,
   SpatialNavigationView,
 } from 'react-tv-space-navigation';
-import type { IdeaView, TodayResponse } from '@storyquest/contracts';
+import type { IdeaView, StorySummary, TodayResponse } from '@storyquest/contracts';
 import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
 import { audienceFact, formatPlays, moodLabel } from '../story/format';
 import { messageForError } from '../story/messages';
@@ -19,12 +19,22 @@ import { useFilmingPaused } from '../budget/useFilmingPaused';
 import { Brand } from '../components/Brand';
 import { Button } from '../components/Button';
 import { Billboard } from '../components/home/Billboard';
-import { CARD_GAP, CARD_HEIGHT, CARD_WIDTH, IdeaCard, MakeYourOwnCard } from '../components/home/StoryCards';
+import {
+  CARD_GAP,
+  CARD_HEIGHT,
+  CARD_WIDTH,
+  ContinueCard,
+  IdeaCard,
+  MakeYourOwnCard,
+  storyProgress,
+} from '../components/home/StoryCards';
 import { MotionContext } from '../components/Motion';
 import { Notice } from '../components/Notice';
 import { SkeletonBlock, usePulse } from '../components/Skeleton';
 import { WalletText } from '../components/sparks/WalletText';
 import type { ScreenNavigation } from '../navigation/types';
+
+const MAX_CONTINUE = 4;
 
 type LoadState =
   | { status: 'loading' }
@@ -44,11 +54,30 @@ const FadeIn = ({ children }: { children: React.ReactNode }) => {
 
 interface StoryTextProps {
   idea: IdeaView | null;
+  story: StorySummary | null;
   empty: boolean;
   paused: boolean;
 }
 
-const StoryText = React.memo(({ idea, empty, paused }: StoryTextProps) => {
+const StoryText = React.memo(({ idea, story, empty, paused }: StoryTextProps) => {
+  if (story) {
+    return (
+      <View>
+        <Text style={styles.title} numberOfLines={2}>
+          {story.title}
+        </Text>
+        <Text style={styles.logline} numberOfLines={2}>
+          {story.status === 'finished'
+            ? 'Your family finished this story. Watch it again as one movie, or share it.'
+            : 'Pick up your story where you left it.'}
+        </Text>
+        <View style={styles.facts}>
+          <Text style={styles.fact}>Continue watching</Text>
+          <Text style={styles.fact}>{storyProgress(story)}</Text>
+        </View>
+      </View>
+    );
+  }
   if (!idea && paused) {
     return (
       <View>
@@ -122,15 +151,19 @@ const HomeSkeleton = () => {
 
 interface StoryRowProps {
   ideas: IdeaView[];
+  stories: StorySummary[];
   openingId: string | null;
   onFocusIndex: (index: number) => void;
   onSelectIdea: (idea: IdeaView) => void;
+  onSelectStory: (story: StorySummary) => void;
   onMakeYourOwn: () => void;
   paused: boolean;
 }
 
+// The family's own stories come first, then Make your own, then tonight's stories.
+// Focus indexes: stories are negative (-1 is the first), 0 is Make your own, ideas start at 1.
 const StoryRow = React.memo(
-  ({ ideas, openingId, onFocusIndex, onSelectIdea, onMakeYourOwn, paused }: StoryRowProps) => (
+  ({ ideas, stories, openingId, onFocusIndex, onSelectIdea, onSelectStory, onMakeYourOwn, paused }: StoryRowProps) => (
     <View style={styles.rowArea}>
       <View style={styles.rowHeader}>
         <Text style={styles.rowTitle}>Tonight's stories</Text>
@@ -142,14 +175,31 @@ const StoryRow = React.memo(
         style={styles.scroll}
       >
         <SpatialNavigationView direction="horizontal" style={styles.rowContent}>
-          <DefaultFocus enable={ideas.length === 0}>
-            <MakeYourOwnCard paused={paused} onFocusIndex={onFocusIndex} onSelect={onMakeYourOwn} />
+          {stories.map((story, i) => (
+            <DefaultFocus key={story.id} enable={i === 0}>
+              <ContinueCard
+                story={story}
+                index={-(i + 1)}
+                position={i + 1}
+                onFocusIndex={onFocusIndex}
+                onSelectStory={onSelectStory}
+              />
+            </DefaultFocus>
+          ))}
+          <DefaultFocus enable={ideas.length === 0 && stories.length === 0}>
+            <MakeYourOwnCard
+              paused={paused}
+              position={stories.length + 1}
+              onFocusIndex={onFocusIndex}
+              onSelect={onMakeYourOwn}
+            />
           </DefaultFocus>
           {ideas.map((idea, i) => (
-            <DefaultFocus key={idea.id} enable={i === 0}>
+            <DefaultFocus key={idea.id} enable={i === 0 && stories.length === 0}>
               <IdeaCard
                 idea={idea}
                 index={i + 1}
+                position={stories.length + i + 2}
                 opening={openingId === idea.id}
                 onFocusIndex={onFocusIndex}
                 onSelectIdea={onSelectIdea}
@@ -170,6 +220,7 @@ export default function HomeScreen() {
   const [focusedIndex, setFocusedIndex] = useState(1);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
+  const [stories, setStories] = useState<StorySummary[]>([]);
   const opening = useRef(false);
   const hasIdeas = load.status === 'ready';
 
@@ -179,11 +230,17 @@ export default function HomeScreen() {
     const controller = new AbortController();
     const quiet = hasIdeas;
     if (!quiet) setLoad({ status: 'loading' });
-    api
-      .getToday({ signal: controller.signal })
-      .then((today) => {
+    // Both lists arrive together so the first focus lands on the family's latest story.
+    // Unfinished stories come first, then recently finished ones; Home works without them.
+    const ownStories = api
+      .listStories({ signal: controller.signal, retries: 0 })
+      .then((list) => [...list.filter((s) => s.status === 'active'), ...list.filter((s) => s.status === 'finished')])
+      .catch(() => null);
+    Promise.all([api.getToday({ signal: controller.signal }), ownStories])
+      .then(([today, own]) => {
         reportFilmingPaused(today.filmingPaused);
         today.ideas.forEach((idea) => prefetchImage(resolveMediaUrl(idea.posterUrl)));
+        if (own) setStories(own.slice(0, MAX_CONTINUE));
         setLoad({ status: 'ready', today });
       })
       .catch((error) => {
@@ -228,17 +285,51 @@ export default function HomeScreen() {
     [navigation],
   );
 
+  const openStory = useCallback(
+    (story: StorySummary) => {
+      const origin = { ideaId: story.ideaId };
+      if (story.status === 'finished') {
+        navigation.navigate('End', {
+          storyId: story.id,
+          title: story.title,
+          stillUrl: story.posterUrl,
+          tone: story.tone ?? null,
+          origin,
+        });
+        return;
+      }
+      navigation.navigate('Story', {
+        storyId: story.id,
+        title: story.title,
+        nodeId: story.currentNodeId,
+        posterUrl: story.posterUrl,
+        tone: story.tone ?? null,
+        origin,
+        audience: story.audience,
+      });
+    },
+    [navigation],
+  );
+
   const ideas = load.status === 'ready' ? load.today.ideas : [];
   const focusedIdea = focusedIndex > 0 ? (ideas[focusedIndex - 1] ?? null) : null;
-  const billboardUri = focusedIdea ? resolveMediaUrl(focusedIdea.posterUrl) : null;
-  const tone = useMemo(() => toneFor(focusedIdea?.tone), [focusedIdea?.tone]);
+  const focusedStory = focusedIndex < 0 ? (stories[-focusedIndex - 1] ?? null) : null;
+  const billboardUri = focusedStory
+    ? focusedStory.posterUrl
+    : focusedIdea
+      ? resolveMediaUrl(focusedIdea.posterUrl)
+      : null;
+  const focusedTone = focusedStory ? focusedStory.tone : focusedIdea?.tone;
+  const tone = useMemo(() => toneFor(focusedTone), [focusedTone]);
 
   return (
     <SpatialNavigationRoot isActive={isFocused} key={load.status}>
       <MotionContext.Provider value={isFocused}>
         <ToneContext.Provider value={tone}>
           <View style={styles.screen}>
-            {load.status === 'ready' && <Billboard uri={billboardUri} page={!focusedIdea} night={tone.night} />}
+            {load.status === 'ready' && (
+              <Billboard uri={billboardUri} page={!focusedIdea && !focusedStory} night={tone.night} />
+            )}
             <View style={styles.header}>
               <Brand />
               {load.status !== 'ready' && <WalletText />}
@@ -261,15 +352,22 @@ export default function HomeScreen() {
             {load.status === 'ready' && (
               <>
                 <View style={styles.hero}>
-                  <FadeIn key={focusedIdea?.id ?? 'make'}>
-                    <StoryText idea={focusedIdea} empty={ideas.length === 0} paused={filmingPaused} />
+                  <FadeIn key={focusedStory?.id ?? focusedIdea?.id ?? 'make'}>
+                    <StoryText
+                      idea={focusedIdea}
+                      story={focusedStory}
+                      empty={ideas.length === 0}
+                      paused={filmingPaused}
+                    />
                   </FadeIn>
                 </View>
                 <StoryRow
                   ideas={ideas}
+                  stories={stories}
                   openingId={openingId}
                   onFocusIndex={setFocusedIndex}
                   onSelectIdea={openIdea}
+                  onSelectStory={openStory}
                   onMakeYourOwn={makeYourOwn}
                   paused={filmingPaused}
                 />

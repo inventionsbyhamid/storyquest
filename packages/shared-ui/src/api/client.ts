@@ -8,6 +8,7 @@ import {
   ReportResponse,
   SceneView,
   ShareView,
+  StoryListResponse,
   StoryView,
   TodayResponse,
   VerifyPurchaseResponse,
@@ -189,6 +190,11 @@ export function createApiClient(options: ApiClientOptions) {
 
     startStory: (input: StartStoryRequest, opts?: RequestOptions) =>
       request('POST', '/stories', StoryView, input, opts),
+
+    listStories: (opts?: RequestOptions) =>
+      request('GET', '/stories', StoryListResponse, undefined, opts).then((list) =>
+        list.stories.map((story) => ({ ...story, posterUrl: media(story.posterUrl) })),
+      ),
 
     getStory: (storyId: string, opts?: RequestOptions) =>
       request('GET', `/stories/${id(storyId)}`, StoryView, undefined, opts),

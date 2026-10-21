@@ -811,3 +811,40 @@ describe('filming paused', () => {
     expect(notFilmedChoices(closed)).toEqual([]);
   });
 });
+
+describe('chapters', () => {
+  const part1 = makeScene({
+    id: 'part-1',
+    continues: true,
+    choices: [makeChoice(0, { label: 'Continue', nodeId: 'part-2', ready: false, posterUrl: null })],
+  });
+  const part2 = makeScene({ id: 'part-2', sceneNumber: 1, depth: 1 });
+
+  function playingPart1(): StoryState {
+    return run(
+      createStoryState({ nodeId: 'part-1', posterUrl: '/idea.jpg' }),
+      { type: 'NODE_UPDATE', scene: part1 },
+      { type: 'CLIP_PLAYING', clipUrl: part1.clipUrl! },
+    );
+  }
+
+  it('moves to the next part on its own when it is not filmed yet', () => {
+    const state = run(playingPart1(), { type: 'CLIP_ENDED', clipUrl: part1.clipUrl! });
+    expect(state.phase).toBe('waitingNext');
+    expect(state.pendingChoice).toBe(0);
+    expect(waitingLabel(state)).toBe('Filming the next part');
+  });
+
+  it('plays the next part at once when it is already on the device', () => {
+    const ready = { ...part1, choices: [makeChoice(0, { label: 'Continue', nodeId: 'part-2', ready: true })] };
+    const state = run(
+      playingPart1(),
+      { type: 'NODE_UPDATE', scene: ready },
+      { type: 'CHILD_SCENE', scene: part2 },
+      { type: 'CLIP_ENDED', clipUrl: part1.clipUrl! },
+    );
+    expect(state.phase).toBe('playing');
+    expect(state.scene?.id).toBe('part-2');
+    expect(state.syncs).toHaveLength(1);
+  });
+});

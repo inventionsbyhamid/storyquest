@@ -571,7 +571,7 @@ export default function StoryScreen() {
           <PathEndPanel active={isFocused} restarting={restarting} onStartOver={startOver} onExit={exitHome} />
         )}
 
-        {scene && phase === 'choosing' && !pathEnded && (
+        {scene && phase === 'choosing' && !pathEnded && !scene.continues && (
           <ChoiceOverlay
             scene={scene}
             closedChoices={closedChoices(state)}

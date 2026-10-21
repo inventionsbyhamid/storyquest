@@ -88,7 +88,7 @@ export default function EndScreen() {
         // The strip is a nice extra, so a failure here stays quiet.
         api
           .getShare(result.shareSlug, { signal: controller.signal, retries: 1 })
-          .then((share) => setScenes(share.scenes))
+          .then((share) => setScenes(share.scenes.filter((scene) => scene.chapterStart !== false)))
           .catch(() => undefined);
       })
       .catch((error) => {
