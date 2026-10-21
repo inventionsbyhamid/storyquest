@@ -45,6 +45,40 @@ export class Media {
     await this.ffmpeg(['-i', input, '-map', '0', '-c', 'copy', '-movflags', '+faststart', output]);
   }
 
+  /**
+   * The playback copy of a scene: H.264 High at about 5 Mbps instead of the
+   * provider's 11 Mbps Baseline, a third of the size for the same picture, so
+   * TVs download the next scenes sooner. The sound is copied as it is.
+   */
+  async encodeClip(input: string, output: string): Promise<void> {
+    await this.ffmpeg(
+      [
+        '-i', input,
+        '-map', '0:v:0', '-map', '0:a?',
+        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'medium', '-crf', '20',
+        '-maxrate', '6M', '-bufsize', '12M', '-g', '48', '-pix_fmt', 'yuv420p',
+        '-c:a', 'copy',
+        '-movflags', '+faststart',
+        output,
+      ],
+      5 * 60_000,
+    );
+  }
+
+  /** What has to match for clips to be joined without re-encoding. */
+  async streamSignature(file: string): Promise<string> {
+    return runCommand(
+      'ffprobe',
+      [
+        '-v', 'error',
+        '-show_entries', 'stream=codec_name,profile,width,height,pix_fmt,sample_rate,channels',
+        '-of', 'csv=p=0',
+        file,
+      ],
+      15_000,
+    );
+  }
+
   async probeDurationMs(file: string): Promise<number> {
     const out = await runCommand(
       'ffprobe',
@@ -94,10 +128,13 @@ export class Media {
     const list = inputs.map((file) => `file '${file.replace(/'/g, "'\\''")}'`).join('\n');
     await writeFile(listFile, `${list}\n`);
     try {
+      // A copy join only works when every clip has the same stream parameters; it can
+      // succeed on mixed clips and still make a broken file, so check first.
+      const signatures = await Promise.all(inputs.map((file) => this.streamSignature(file).catch(() => file)));
       try {
+        if (new Set(signatures).size > 1) throw new MediaCommandError('clips differ');
         await this.ffmpeg(['-f', 'concat', '-safe', '0', '-i', listFile, '-c', 'copy', '-movflags', '+faststart', output]);
       } catch {
-        // Clips from different encoders can disagree on stream parameters; re-encode then.
         await this.ffmpeg(
           [
             '-f', 'concat', '-safe', '0', '-i', listFile,
