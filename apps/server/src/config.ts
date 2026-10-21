@@ -9,6 +9,15 @@ const flag = (fallback: boolean) =>
     .default(fallback ? 'true' : 'false')
     .transform((value) => value === 'true' || value === '1');
 
+// Claude Opus 5.5 under each provider's own name for it.
+const DEFAULT_MODELS = {
+  fake: 'fake',
+  bedrock: 'anthropic.claude-opus-5-5',
+  anthropic: 'claude-opus-5-5',
+  openrouter: 'anthropic/claude-opus-5.5',
+  openai: '',
+} as const;
+
 const ConfigSchema = z
   .object({
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
@@ -22,12 +31,21 @@ const ConfigSchema = z
     TRUST_PROXY: flag(false),
     DATA_DIR: z.string().min(1).default('./data'),
 
-    DIRECTOR: z.enum(['fake', 'bedrock']).default('fake'),
-    BEDROCK_MODEL: z.string().min(1).default('anthropic.claude-opus-5-5'),
-    BEDROCK_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).default('low'),
+    DIRECTOR: z.enum(['fake', 'bedrock', 'anthropic', 'openrouter', 'openai']).default('fake'),
+    // Each provider has its own default model, so switching only needs DIRECTOR.
+    DIRECTOR_MODEL: z.string().min(1).optional(),
+    DIRECTOR_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
     AWS_REGION: z.string().min(1).default('us-east-1'),
     BEDROCK_API_KEY: z.string().optional(),
     AWS_BEARER_TOKEN_BEDROCK: z.string().optional(),
+    ANTHROPIC_API_KEY: z.string().optional(),
+    OPENROUTER_API_KEY: z.string().optional(),
+    OPENROUTER_PROVIDERS: z
+      .string()
+      .regex(/^[a-z0-9./-]+(,[a-z0-9./-]+)*$/, 'must look like amazon-bedrock,anthropic')
+      .optional(),
+    OPENAI_API_KEY: z.string().optional(),
+    OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
     VIDEO: z.enum(['fake', 'fal']).default('fake'),
     FAL_KEY: z.string().optional(),
@@ -37,8 +55,8 @@ const ConfigSchema = z
     SCENE_SECONDS: int(8, 1, 30),
     PROMPT_EXPANSION: z.enum(['disabled', 'balanced', 'quality']).default('disabled'),
     VIDEO_PRICE_PER_SECOND: z.coerce.number().nonnegative().default(0.04),
-    BEDROCK_INPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(4.4),
-    BEDROCK_OUTPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(22),
+    DIRECTOR_INPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(4.4),
+    DIRECTOR_OUTPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(22),
     FAKE_VIDEO_DELAY_MS: int(2500, 0, 120_000),
     FAKE_VIDEO_SIZE: z
       .string()
@@ -83,6 +101,13 @@ const ConfigSchema = z
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   })
   .superRefine((env, ctx) => {
+    const needs = { anthropic: 'ANTHROPIC_API_KEY', openrouter: 'OPENROUTER_API_KEY' } as const;
+    if ((env.DIRECTOR === 'anthropic' || env.DIRECTOR === 'openrouter') && !env[needs[env.DIRECTOR]]) {
+      ctx.addIssue({ code: 'custom', path: [needs[env.DIRECTOR]], message: `is required when DIRECTOR=${env.DIRECTOR}` });
+    }
+    if (env.DIRECTOR === 'openai' && !env.DIRECTOR_MODEL) {
+      ctx.addIssue({ code: 'custom', path: ['DIRECTOR_MODEL'], message: 'is required when DIRECTOR=openai' });
+    }
     if (env.VIDEO === 'fal' && !env.FAL_KEY) {
       ctx.addIssue({ code: 'custom', path: ['FAL_KEY'], message: 'is required when VIDEO=fal' });
     }
@@ -103,6 +128,8 @@ const ConfigSchema = z
       }),
       purchasesEnabled: env.IAP_MODE === 'fake' || Boolean(env.AMAZON_IAP_SHARED_SECRET),
       bedrockToken: env.BEDROCK_API_KEY ?? env.AWS_BEARER_TOKEN_BEDROCK,
+      directorModel: env.DIRECTOR_MODEL ?? DEFAULT_MODELS[env.DIRECTOR],
+      openRouterProviders: env.OPENROUTER_PROVIDERS?.split(',') ?? [],
       fakeVideoWidth: width - (width % 2),
       fakeVideoHeight: height - (height % 2),
     };

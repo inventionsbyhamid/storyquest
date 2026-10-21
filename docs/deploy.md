@@ -10,10 +10,12 @@ Copy `apps/server/.env.example` and fill in:
 | --- | --- |
 | `PUBLIC_BASE_URL` | the public https address, for example `https://storyquest.example.com` |
 | `ADMIN_TOKEN` | a long random string (`openssl rand -hex 24`) |
-| `DIRECTOR` | `bedrock` |
+| `DIRECTOR` | `bedrock`, or `anthropic`, `openrouter` or `openai` |
 | `AWS_REGION` | for example `us-east-1` |
-| `BEDROCK_API_KEY` or AWS credentials | Bedrock access for Claude |
-| `BEDROCK_MODEL` | `anthropic.claude-opus-5-5` (default) |
+| `BEDROCK_API_KEY` or AWS credentials | Bedrock access for Claude (also used by Guardrails) |
+| `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY` or `OPENAI_API_KEY` | the key for the director you picked |
+| `OPENROUTER_PROVIDERS` | `amazon-bedrock` to keep Claude on Bedrock through OpenRouter |
+| `DIRECTOR_MODEL` | empty for Claude Opus 5.5, or any model the provider offers |
 | `VIDEO` | `fal` |
 | `FAL_KEY` | your fal key |
 | `SAFETY` | `guardrails` (with `GUARDRAIL_ID`) or `wordlist` |

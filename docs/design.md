@@ -97,7 +97,7 @@ Fire TV app (Vega, React Native)
         │  HTTPS JSON + MP4
         ▼
 StoryQuest server (Node 22, Fastify)
-  ├─ director: Amazon Bedrock (Claude) or a local fake
+  ├─ director: Claude on Amazon Bedrock, Anthropic, OpenRouter, any OpenAI compatible API, or a local fake
   ├─ safety: Bedrock Guardrails or a local word list
   ├─ video: fal MiniMax H3 Max Turbo or a local ffmpeg fake
   ├─ media: ffmpeg (poster, last frame, movie stitching)

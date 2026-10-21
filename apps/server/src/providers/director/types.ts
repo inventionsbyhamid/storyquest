@@ -51,6 +51,36 @@ export interface Director {
   planIdeas(date: string, count: number, avoidTitles?: string[]): Promise<Bible[]>;
 }
 
+export interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+export interface ChatRequest {
+  system: string;
+  messages: ChatMessage[];
+  maxTokens: number;
+}
+
+export interface ChatReply {
+  text: string;
+  stop: 'end' | 'max_tokens' | 'refusal';
+  inputTokens: number;
+  outputTokens: number;
+}
+
+/** One chat model behind any provider. The director only ever needs plain text back. */
+export interface ChatModel {
+  readonly provider: string;
+  readonly model: string;
+  complete(request: ChatRequest): Promise<ChatReply>;
+}
+
+/** Long replies take longer, so the plan of six stories gets more time than one scene. */
+export function requestTimeoutMs(maxTokens: number): number {
+  return Math.max(30_000, maxTokens * 18);
+}
+
 export interface DirectorCallContext {
   task: 'scene' | 'bible' | 'plan';
   nodeId?: string | null;
@@ -74,6 +104,22 @@ export const unmetered: DirectorMeter = {
 /** The model declined to write this. Treated like an unsafe draft. */
 export class DirectorRefusal extends Error {
   override name = 'DirectorRefusal';
+}
+
+/** A dropped connection or timeout, worth one more try. */
+export class ModelConnectionError extends Error {
+  override name = 'ModelConnectionError';
+}
+
+/** The provider answered with an error status. 429 and 5xx are worth one more try. */
+export class ModelHttpError extends Error {
+  override name = 'ModelHttpError';
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+  }
 }
 
 /** The model answered twice without producing valid JSON. */

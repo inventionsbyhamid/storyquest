@@ -35,7 +35,7 @@ Fire TV app (Vega OS, React Native)
         │  HTTPS JSON and MP4
         ▼
 StoryQuest server (Node 22, Fastify, SQLite)
-  ├─ story director   Claude on Amazon Bedrock
+  ├─ story director   Claude on Amazon Bedrock (or any model, see below)
   ├─ safety           Amazon Bedrock Guardrails
   ├─ video            fal, MiniMax H3 Max Turbo (image to video)
   └─ media            ffmpeg: posters, last frames, the shared movie
@@ -84,7 +84,7 @@ docs/                 design, UI system, economics, friction log, product feedba
 * Node 22 and Yarn 4 (`corepack enable`)
 * ffmpeg (for the server)
 * Vega SDK 0.24 for the Fire TV app ([install guide](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html))
-* Optional for real AI: an AWS account with Claude enabled in Amazon Bedrock, and a fal API key
+* Optional for real AI: a fal API key, and for the story director either an AWS account with Claude enabled in Amazon Bedrock or an Anthropic, OpenRouter or OpenAI compatible key
 
 ### Server
 
@@ -95,6 +95,17 @@ yarn dev:server                                # http://localhost:8080
 ```
 
 Without keys the server uses built in fakes: a scripted story writer and ffmpeg generated placeholder clips, so the whole app works offline. Set `DIRECTOR=bedrock`, `VIDEO=fal` and `SAFETY=guardrails` with the matching keys to use the real services. Every variable is described in [apps/server/.env.example](apps/server/.env.example).
+
+The story director is not tied to one model. Prompts, JSON validation, retries and spend tracking live in one place (`apps/server/src/providers/director/llm.ts`), and each provider is a small adapter that sends text and returns text. Pick one with `DIRECTOR`:
+
+| `DIRECTOR` | Key | Default model |
+| --- | --- | --- |
+| `bedrock` | `BEDROCK_API_KEY` or AWS credentials | `anthropic.claude-opus-5-5` |
+| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
+| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-opus-5.5` |
+| `openai` | `OPENAI_API_KEY` and `OPENAI_BASE_URL` | set `DIRECTOR_MODEL` |
+
+`DIRECTOR_MODEL` swaps the model on any of them. `openai` covers every service that speaks the OpenAI chat API, including Groq, Together, DeepSeek, Gemini and a local Ollama. On OpenRouter, `OPENROUTER_PROVIDERS=amazon-bedrock` keeps Claude running on Amazon Bedrock with one OpenRouter key, and hosts that keep or train on prompts are always skipped. The privacy page names whichever services are configured.
 
 With Docker:
 

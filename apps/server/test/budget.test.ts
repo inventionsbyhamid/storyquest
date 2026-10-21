@@ -14,8 +14,9 @@ import { StoryEngine } from '../src/engine/engine';
 import { createServer } from '../src/http/app';
 import { silentLogger } from '../src/log';
 import { Media } from '../src/media';
-import { BedrockDirector, type MessagesClient } from '../src/providers/director/bedrock';
+import { AnthropicChat, type MessagesClient } from '../src/providers/director/anthropic';
 import { FakeDirector } from '../src/providers/director/fake';
+import { LlmDirector } from '../src/providers/director/llm';
 import { FakeVideo } from '../src/providers/video/fake';
 import { VideoNotBilled, VideoRejected } from '../src/providers/video/types';
 import { createServices, type Services } from '../src/services';
@@ -162,7 +163,7 @@ describe('director call cap', () => {
     ).rejects.toMatchObject({ code: 'budget_exhausted', status: 429 });
   });
 
-  it('counts every Bedrock request, retries and validation turns included, with their tokens', async () => {
+  it('counts every director request, retries and validation turns included, with their tokens', async () => {
     const repo = new Repository(openDatabase(':memory:'));
     const config = loadConfig({ DIRECTOR_CALL_CAP: '3' });
     const budget = new Budget({ config, repo, log: silentLogger, now: () => new Date() });
@@ -195,9 +196,9 @@ describe('director call cap', () => {
         },
       },
     };
-    const director = new BedrockDirector(
-      client,
-      { model: 'anthropic.claude-opus-5-5', effort: 'low', sceneSeconds: 8, retryDelayMs: 0 },
+    const director = new LlmDirector(
+      new AnthropicChat(client, 'bedrock', 'anthropic.claude-opus-5-5', 'low'),
+      { sceneSeconds: 8, retryDelayMs: 0 },
       silentLogger,
       budget,
     );

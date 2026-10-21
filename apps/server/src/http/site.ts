@@ -14,6 +14,53 @@ const PAGES = {
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
+const AWS = 'Amazon Web Services';
+// OpenRouter host slugs, region suffix removed, with the company that runs them.
+const HOSTS: Record<string, [company: string, writer: string]> = {
+  'amazon-bedrock': [AWS, 'Amazon Bedrock writes the scene'],
+  anthropic: ['Anthropic', 'writes the scene'],
+  'google-vertex': ['Google Cloud', 'Vertex AI writes the scene'],
+  azure: ['Microsoft Azure', 'writes the scene'],
+  openai: ['OpenAI', 'writes the scene'],
+};
+
+/** Names every outside service that sees a family's story, from what this server is set up to use. */
+export function providersSentence(config: Config): string {
+  const roles = new Map<string, string[]>();
+  const add = (company: string, role: string) => roles.set(company, [...(roles.get(company) ?? []), role]);
+
+  switch (config.DIRECTOR) {
+    case 'bedrock':
+      add(AWS, 'Amazon Bedrock writes the scene');
+      break;
+    case 'anthropic':
+      add('Anthropic', 'writes the scene');
+      break;
+    case 'openrouter': {
+      const hosts = config.openRouterProviders.map((slug) => HOSTS[slug.split('/')[0]!]);
+      if (hosts.length && hosts.every(Boolean)) {
+        add('OpenRouter', 'passes it on');
+        for (const [company, role] of hosts as Array<[string, string]>) add(company, role);
+      } else {
+        add('OpenRouter', 'passes it to the AI model that writes the scene');
+      }
+      break;
+    }
+    case 'openai': {
+      const host = new URL(config.OPENAI_BASE_URL).hostname;
+      add(host === 'api.openai.com' ? 'OpenAI' : host, 'writes the scene');
+      break;
+    }
+  }
+  if (config.SAFETY === 'guardrails') add(AWS, 'Amazon Bedrock Guardrails checks it for safety');
+  if (config.VIDEO === 'fal') add('fal', 'films the video');
+
+  if (roles.size === 0) return 'Scenes are written and filmed on our own server.';
+  const list = [...roles].map(([company, parts]) => `${company} (${[...new Set(parts)].join(' and ')})`);
+  const joined = list.length > 1 ? `${list.slice(0, -1).join(', ')} and ${list.at(-1)}` : list[0];
+  return `To write and film a scene we send the story so far and your idea to our service providers: ${escapeHtml(joined!)}. They process this text and images only to make your scene.`;
+}
+
 export async function registerSite(app: FastifyInstance, config: Config): Promise<void> {
   const dir = path.resolve(config.SITE_DIR);
   const layout = readFileSync(path.join(dir, 'layout.html'), 'utf8');
@@ -22,6 +69,7 @@ export async function registerSite(app: FastifyInstance, config: Config): Promis
     company: escapeHtml(config.COMPANY_NAME),
     contact: email ? `<a href="mailto:${email}">${email}</a>` : 'us through the StoryQuest page on the Amazon Appstore',
     updated: escapeHtml(config.POLICY_UPDATED),
+    providers: providersSentence(config),
     year: String(new Date().getUTCFullYear()),
   };
   const fill = (template: string, extra: Record<string, string>) =>

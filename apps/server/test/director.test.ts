@@ -2,12 +2,19 @@ import type Anthropic from '@anthropic-ai/sdk';
 import { describe, expect, it } from 'vitest';
 import type { Bible } from '../src/domain';
 import { silentLogger } from '../src/log';
-import { BedrockDirector, type MessagesClient } from '../src/providers/director/bedrock';
+import { AnthropicChat, type MessagesClient } from '../src/providers/director/anthropic';
 import { FakeDirector } from '../src/providers/director/fake';
 import { extractJsonObject, parseModelJson } from '../src/providers/director/json';
+import { LlmDirector } from '../src/providers/director/llm';
+import { OpenAiChat } from '../src/providers/director/openai';
 import { arcBeat, sceneUserPrompt, seasonNote } from '../src/providers/director/prompts';
 import { sceneSchema } from '../src/providers/director/schemas';
-import { DirectorFormatError, DirectorRefusal, type SceneRequest } from '../src/providers/director/types';
+import {
+  DirectorFormatError,
+  DirectorRefusal,
+  ModelHttpError,
+  type SceneRequest,
+} from '../src/providers/director/types';
 import { hasDash } from '../src/text';
 
 const goodScene = {
@@ -118,25 +125,34 @@ function reply(text: string, stopReason: Anthropic.Message['stop_reason'] = 'end
 
 function stubClient(replies: Anthropic.Message[]) {
   const requests: Anthropic.MessageCreateParamsNonStreaming[] = [];
+  const timeouts: Array<number | undefined> = [];
   const client: MessagesClient = {
     messages: {
-      async create(body) {
+      async create(body, options) {
         requests.push(structuredClone(body));
+        timeouts.push(options?.timeout);
         const next = replies.shift();
         if (!next) throw new Error('no more stubbed replies');
         return next;
       },
     },
   };
-  return { client, requests };
+  return { client, requests, timeouts };
 }
 
-describe('BedrockDirector', () => {
-  const options = { model: 'anthropic.claude-opus-5-5', effort: 'low' as const, sceneSeconds: 8 };
+function claude(client: MessagesClient) {
+  return new LlmDirector(
+    new AnthropicChat(client, 'bedrock', 'anthropic.claude-opus-5-5', 'low'),
+    { sceneSeconds: 8 },
+    silentLogger,
+  );
+}
 
+describe('LlmDirector with Claude', () => {
   it('sends a cached system prompt, the effort and no thinking parameter', async () => {
-    const { client, requests } = stubClient([reply(JSON.stringify(goodScene))]);
-    const director = new BedrockDirector(client, options, silentLogger);
+    const { client, requests, timeouts } = stubClient([reply(JSON.stringify(goodScene))]);
+    const director = claude(client);
+    expect(director.name).toBe('bedrock');
     const scene = await director.writeScene(sceneRequest());
     expect(scene.caption).toBe(goodScene.caption);
     const body = requests[0]!;
@@ -147,11 +163,18 @@ describe('BedrockDirector', () => {
     const system = body.system as Anthropic.TextBlockParam[];
     expect(system[0]!.cache_control).toEqual({ type: 'ephemeral' });
     expect(system[0]!.text).toContain('8 seconds');
+    expect(timeouts[0]).toBeGreaterThanOrEqual(60_000);
+  });
+
+  it('gives the daily plan more time than a scene', async () => {
+    const { client, timeouts } = stubClient([reply('{"ideas": []}'), reply('{"ideas": []}')]);
+    await expect(claude(client).planIdeas('2026-10-21', 3)).rejects.toBeInstanceOf(DirectorFormatError);
+    expect(timeouts[0]).toBeGreaterThanOrEqual(120_000);
   });
 
   it('reads fenced JSON from the text blocks only', async () => {
     const { client } = stubClient([reply(`\`\`\`json\n${JSON.stringify(goodScene)}\n\`\`\``)]);
-    const scene = await new BedrockDirector(client, options, silentLogger).writeScene(sceneRequest());
+    const scene = await claude(client).writeScene(sceneRequest());
     expect(scene.choices).toEqual(goodScene.choices);
   });
 
@@ -160,29 +183,25 @@ describe('BedrockDirector', () => {
       reply('{"summary": "too short"}'),
       reply(JSON.stringify(goodScene)),
     ]);
-    const scene = await new BedrockDirector(client, options, silentLogger).writeScene(sceneRequest());
+    const scene = await claude(client).writeScene(sceneRequest());
     expect(scene.summary).toBe(goodScene.summary);
     expect(requests).toHaveLength(2);
+    expect(requests[0]!.messages).toHaveLength(1);
     const second = requests[1]!.messages;
     expect(second).toHaveLength(3);
-    expect(second[1]!.role).toBe('assistant');
-    expect(Array.isArray(second[1]!.content)).toBe(true);
+    expect(second[1]).toEqual({ role: 'assistant', content: '{"summary": "too short"}' });
     expect(String(second[2]!.content)).toContain('could not be used');
     expect(String(second[2]!.content)).toContain('caption');
   });
 
   it('gives up after two broken replies', async () => {
     const { client } = stubClient([reply('nope'), reply('{"still": "broken"')]);
-    await expect(new BedrockDirector(client, options, silentLogger).writeScene(sceneRequest())).rejects.toBeInstanceOf(
-      DirectorFormatError,
-    );
+    await expect(claude(client).writeScene(sceneRequest())).rejects.toBeInstanceOf(DirectorFormatError);
   });
 
   it('treats a refusal as unsafe', async () => {
     const { client } = stubClient([reply('', 'refusal')]);
-    await expect(new BedrockDirector(client, options, silentLogger).writeScene(sceneRequest())).rejects.toBeInstanceOf(
-      DirectorRefusal,
-    );
+    await expect(claude(client).writeScene(sceneRequest())).rejects.toBeInstanceOf(DirectorRefusal);
   });
 
   it('keeps the requested audience and moods on a custom bible', async () => {
@@ -195,13 +214,122 @@ describe('BedrockDirector', () => {
       characters: [{ name: 'Puff', description: 'a small green dragon with a flour dusted apron' }],
     };
     const { client } = stubClient([reply(JSON.stringify(draft))]);
-    const result = await new BedrockDirector(client, options, silentLogger).createBible({
+    const result = await claude(client).createBible({
       prompt: 'a shy dragon who bakes',
       moods: ['cozy'],
       audience: 'kids',
       totalScenes: 6,
     });
     expect(result).toMatchObject({ title: 'The Shy Dragon', audience: 'kids', moods: ['cozy'] });
+  });
+});
+
+type Sent = { url: string; headers: Record<string, string>; body: Record<string, unknown> };
+
+function stubFetch(responses: Array<{ status?: number; body: unknown } | Error>) {
+  const sent: Sent[] = [];
+  const fetch = (async (url: string, init: RequestInit) => {
+    sent.push({ url, headers: init.headers as Record<string, string>, body: JSON.parse(String(init.body)) });
+    const next = responses.shift();
+    if (!next) throw new Error('no more stubbed responses');
+    if (next instanceof Error) throw next;
+    const text = typeof next.body === 'string' ? next.body : JSON.stringify(next.body);
+    return new Response(text, { status: next.status ?? 200 });
+  }) as unknown as typeof globalThis.fetch;
+  return { fetch, sent };
+}
+
+function completion(content: string | null, finish = 'stop', extra: Record<string, unknown> = {}) {
+  return {
+    choices: [{ finish_reason: finish, message: { role: 'assistant', content }, ...extra }],
+    usage: { prompt_tokens: 120, completion_tokens: 80 },
+  };
+}
+
+function openRouter(fetch: typeof globalThis.fetch, baseUrl = 'https://openrouter.ai/api/v1/') {
+  return new OpenAiChat({
+    provider: 'openrouter',
+    model: 'anthropic/claude-opus-5.5',
+    baseUrl,
+    apiKey: 'sk-test',
+    headers: { 'X-Title': 'StoryQuest' },
+    extraBody: { verbosity: 'low', provider: { order: ['amazon-bedrock'], allow_fallbacks: false } },
+    fetch,
+  });
+}
+
+describe('LlmDirector with an OpenAI compatible model', () => {
+  it('sends the system prompt as the first message with routing and the key', async () => {
+    const { fetch, sent } = stubFetch([{ body: completion(JSON.stringify(goodScene)) }]);
+    const director = new LlmDirector(openRouter(fetch), { sceneSeconds: 8 }, silentLogger);
+    expect(director.name).toBe('openrouter');
+    const scene = await director.writeScene(sceneRequest());
+    expect(scene.caption).toBe(goodScene.caption);
+
+    const { url, headers, body } = sent[0]!;
+    expect(url).toBe('https://openrouter.ai/api/v1/chat/completions');
+    expect(headers.authorization).toBe('Bearer sk-test');
+    expect(headers['X-Title']).toBe('StoryQuest');
+    expect(body.model).toBe('anthropic/claude-opus-5.5');
+    expect(body.max_tokens).toBe(4000);
+    expect(body.verbosity).toBe('low');
+    expect(body.provider).toEqual({ order: ['amazon-bedrock'], allow_fallbacks: false });
+    const messages = body.messages as Array<{ role: string; content: string }>;
+    expect(messages.map((message) => message.role)).toEqual(['system', 'user']);
+    expect(messages[0]!.content).toContain('8 seconds');
+  });
+
+  it('uses max_completion_tokens on OpenAI itself and no key header without a key', async () => {
+    const { fetch, sent } = stubFetch([{ body: completion(JSON.stringify(goodScene)) }]);
+    const model = new OpenAiChat({ provider: 'openai', model: 'gpt-test', baseUrl: 'https://api.openai.com/v1', fetch });
+    await new LlmDirector(model, { sceneSeconds: 8 }, silentLogger).writeScene(sceneRequest());
+    expect(sent[0]!.body.max_completion_tokens).toBe(4000);
+    expect('max_tokens' in sent[0]!.body).toBe(false);
+    expect('authorization' in sent[0]!.headers).toBe(false);
+  });
+
+  it('reads text parts, cut off replies and token counts', async () => {
+    const { fetch } = stubFetch([
+      { body: completion(null, 'length', { message: { content: [{ type: 'text', text: '{"summary": "half' }] } }) },
+    ]);
+    const reply = await openRouter(fetch).complete({ system: 's', messages: [{ role: 'user', content: 'u' }], maxTokens: 10 });
+    expect(reply).toEqual({ text: '{"summary": "half', stop: 'max_tokens', inputTokens: 120, outputTokens: 80 });
+  });
+
+  it('treats a content filter or a refusal as unsafe', async () => {
+    for (const body of [completion('', 'content_filter'), completion('', 'stop', { native_finish_reason: 'refusal' })]) {
+      const { fetch } = stubFetch([{ body }]);
+      await expect(
+        new LlmDirector(openRouter(fetch), { sceneSeconds: 8 }, silentLogger).writeScene(sceneRequest()),
+      ).rejects.toBeInstanceOf(DirectorRefusal);
+    }
+  });
+
+  it('retries once on throttling and dropped connections, not on a bad key', async () => {
+    const throttled = stubFetch([{ status: 429, body: { error: { message: 'slow down', code: 429 } } }, new TypeError('fetch failed')]);
+    await expect(
+      new LlmDirector(openRouter(throttled.fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger).writeScene(sceneRequest()),
+    ).rejects.toThrow(/fetch failed/);
+    expect(throttled.sent).toHaveLength(2);
+
+    const badKey = stubFetch([{ status: 401, body: { error: { message: 'No auth credentials found', code: 401 } } }]);
+    const error = await new LlmDirector(openRouter(badKey.fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger)
+      .writeScene(sceneRequest())
+      .catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(ModelHttpError);
+    expect((error as ModelHttpError).status).toBe(401);
+    expect(badKey.sent).toHaveLength(1);
+  });
+
+  it('turns an error inside a 200 reply or a non JSON page into a retryable error', async () => {
+    const { fetch, sent } = stubFetch([
+      { body: { error: { message: 'upstream overloaded', code: 502 } } },
+      { status: 502, body: '<html>Bad gateway</html>' },
+    ]);
+    await expect(
+      new LlmDirector(openRouter(fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger).writeScene(sceneRequest()),
+    ).rejects.toMatchObject({ status: 502 });
+    expect(sent).toHaveLength(2);
   });
 });
 

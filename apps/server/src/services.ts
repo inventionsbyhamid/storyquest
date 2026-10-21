@@ -10,9 +10,11 @@ import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
 import { Media } from './media';
-import { BedrockDirector, createBedrockClient } from './providers/director/bedrock';
+import { AnthropicChat, createAnthropicClient, createBedrockClient } from './providers/director/anthropic';
 import { FakeDirector } from './providers/director/fake';
-import type { Director, DirectorMeter } from './providers/director/types';
+import { LlmDirector } from './providers/director/llm';
+import { OpenAiChat } from './providers/director/openai';
+import type { ChatModel, Director, DirectorMeter } from './providers/director/types';
 import { GuardrailsSafety } from './providers/safety/guardrails';
 import type { SafetyChecker } from './providers/safety/types';
 import { WordlistSafety } from './providers/safety/wordlist';
@@ -50,16 +52,53 @@ export interface ServiceOverrides {
   databaseFile?: string;
 }
 
-function createDirector(config: Config, log: Logger, meter: DirectorMeter): Director {
-  if (config.DIRECTOR === 'bedrock') {
-    return new BedrockDirector(
-      createBedrockClient(config),
-      { model: config.BEDROCK_MODEL, effort: config.BEDROCK_EFFORT, sceneSeconds: config.SCENE_SECONDS },
-      log.child({ module: 'director' }),
-      meter,
-    );
+export function createChatModel(config: Config): ChatModel | null {
+  const model = config.directorModel;
+  // Low effort keeps Claude quick and cheap; the scenes are short.
+  const effort = config.DIRECTOR_EFFORT ?? 'low';
+  switch (config.DIRECTOR) {
+    case 'bedrock':
+      return new AnthropicChat(createBedrockClient(config), 'bedrock', model, effort);
+    case 'anthropic':
+      return new AnthropicChat(createAnthropicClient(config), 'anthropic', model, effort);
+    case 'openrouter': {
+      const providers = config.openRouterProviders;
+      return new OpenAiChat({
+        provider: 'openrouter',
+        model,
+        baseUrl: 'https://openrouter.ai/api/v1',
+        apiKey: config.OPENROUTER_API_KEY,
+        headers: { 'HTTP-Referer': config.PUBLIC_BASE_URL, 'X-Title': 'StoryQuest' },
+        extraBody: {
+          // OpenRouter passes verbosity to Claude as its effort setting.
+          verbosity: effort,
+          // Family stories only go to hosts that do not keep or train on them.
+          provider: {
+            data_collection: 'deny',
+            ...(providers.length ? { order: providers, allow_fallbacks: false } : {}),
+          },
+        },
+      });
+    }
+    case 'openai':
+      return new OpenAiChat({
+        provider: 'openai',
+        model,
+        baseUrl: config.OPENAI_BASE_URL,
+        apiKey: config.OPENAI_API_KEY,
+        // Only reasoning models know this setting, so it is sent only when asked for.
+        extraBody: config.DIRECTOR_EFFORT ? { reasoning_effort: config.DIRECTOR_EFFORT } : {},
+      });
+    default:
+      return null;
   }
-  return new FakeDirector(meter);
+}
+
+function createDirector(config: Config, log: Logger, meter: DirectorMeter): Director {
+  const model = createChatModel(config);
+  if (!model) return new FakeDirector(meter);
+  log.info({ provider: model.provider, model: model.model }, 'story director');
+  return new LlmDirector(model, { sceneSeconds: config.SCENE_SECONDS }, log.child({ module: 'director' }), meter);
 }
 
 function createVideo(config: Config, media: Media, log: Logger): VideoProvider {

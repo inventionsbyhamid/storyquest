@@ -148,8 +148,8 @@ export class Budget implements DirectorMeter {
     const { config } = this.deps;
     const video = sums.videoSeconds * config.VIDEO_PRICE_PER_SECOND;
     const director =
-      (sums.inputTokens / 1_000_000) * config.BEDROCK_INPUT_PRICE_PER_MTOK +
-      (sums.outputTokens / 1_000_000) * config.BEDROCK_OUTPUT_PRICE_PER_MTOK;
+      (sums.inputTokens / 1_000_000) * config.DIRECTOR_INPUT_PRICE_PER_MTOK +
+      (sums.outputTokens / 1_000_000) * config.DIRECTOR_OUTPUT_PRICE_PER_MTOK;
     return { videoUsd: round(video), directorUsd: round(director), totalUsd: round(video + director) };
   }
 
@@ -179,8 +179,8 @@ export class Budget implements DirectorMeter {
       },
       prices: {
         videoPerSecond: config.VIDEO_PRICE_PER_SECOND,
-        inputPerMillionTokens: config.BEDROCK_INPUT_PRICE_PER_MTOK,
-        outputPerMillionTokens: config.BEDROCK_OUTPUT_PRICE_PER_MTOK,
+        inputPerMillionTokens: config.DIRECTOR_INPUT_PRICE_PER_MTOK,
+        outputPerMillionTokens: config.DIRECTOR_OUTPUT_PRICE_PER_MTOK,
       },
       recent: repo.listSpend(recent),
     };
