@@ -10,7 +10,7 @@ import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
 import { Media } from './media';
-import { AnthropicChat, createAnthropicClient, createBedrockClient } from './providers/director/anthropic';
+import { AnthropicChat, createAnthropicClient, createBedrockClient, type Effort } from './providers/director/anthropic';
 import { FakeDirector } from './providers/director/fake';
 import { LlmDirector } from './providers/director/llm';
 import { OpenAiChat } from './providers/director/openai';
@@ -54,8 +54,8 @@ export interface ServiceOverrides {
 
 export function createChatModel(config: Config): ChatModel | null {
   const model = config.directorModel;
-  // Low effort keeps Claude quick and cheap; the scenes are short.
-  const effort = config.DIRECTOR_EFFORT ?? 'low';
+  // Low effort keeps Claude quick and cheap; the scenes are short. Config rejects none and minimal for Claude.
+  const effort = (config.DIRECTOR_EFFORT ?? 'low') as Effort;
   switch (config.DIRECTOR) {
     case 'bedrock':
       return new AnthropicChat(createBedrockClient(config), 'bedrock', model, effort);
@@ -63,6 +63,12 @@ export function createChatModel(config: Config): ChatModel | null {
       return new AnthropicChat(createAnthropicClient(config), 'anthropic', model, effort);
     case 'openrouter': {
       const providers = config.openRouterProviders;
+      // OpenRouter passes verbosity to Claude as its effort setting; other models take a reasoning effort.
+      const effortField = model.startsWith('anthropic/')
+        ? { verbosity: effort }
+        : config.DIRECTOR_EFFORT
+          ? { reasoning: { effort: config.DIRECTOR_EFFORT } }
+          : {};
       return new OpenAiChat({
         provider: 'openrouter',
         model,
@@ -70,11 +76,11 @@ export function createChatModel(config: Config): ChatModel | null {
         apiKey: config.OPENROUTER_API_KEY,
         headers: { 'HTTP-Referer': config.PUBLIC_BASE_URL, 'X-Title': 'StoryQuest' },
         extraBody: {
-          // OpenRouter passes verbosity to Claude as its effort setting.
-          verbosity: effort,
+          ...effortField,
           // Family stories only go to hosts that do not keep or train on them.
           provider: {
             data_collection: 'deny',
+            ...(config.OPENROUTER_SORT ? { sort: config.OPENROUTER_SORT } : {}),
             ...(providers.length ? { order: providers, allow_fallbacks: false } : {}),
           },
         },

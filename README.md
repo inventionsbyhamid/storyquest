@@ -105,7 +105,7 @@ The story director is not tied to one model. Prompts, JSON validation, retries a
 | `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-opus-5.5` |
 | `openai` | `OPENAI_API_KEY` and `OPENAI_BASE_URL` | set `DIRECTOR_MODEL` |
 
-`DIRECTOR_MODEL` swaps the model on any of them. `openai` covers every service that speaks the OpenAI chat API, including Groq, Together, DeepSeek, Gemini and a local Ollama. On OpenRouter, `OPENROUTER_PROVIDERS=amazon-bedrock` keeps Claude running on Amazon Bedrock with one OpenRouter key, and hosts that keep or train on prompts are always skipped. The privacy page names whichever services are configured.
+`DIRECTOR_MODEL` swaps the model on any of them. `openai` covers every service that speaks the OpenAI chat API, including Groq, Together, DeepSeek, Gemini and a local Ollama. On OpenRouter, `OPENROUTER_PROVIDERS=amazon-bedrock` keeps Claude running on Amazon Bedrock with one OpenRouter key, `OPENROUTER_SORT=throughput` picks the fastest host, and hosts that keep or train on prompts are always skipped. For example, DeepSeek V4.1 Flash (`DIRECTOR_MODEL=deepseek/deepseek-v4.1-flash`, `DIRECTOR_EFFORT=low`, `OPENROUTER_SORT=throughput`) writes a scene in about 2.5 seconds for about $0.001. The privacy page names whichever services are configured.
 
 With Docker:
 

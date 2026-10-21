@@ -34,7 +34,7 @@ const ConfigSchema = z
     DIRECTOR: z.enum(['fake', 'bedrock', 'anthropic', 'openrouter', 'openai']).default('fake'),
     // Each provider has its own default model, so switching only needs DIRECTOR.
     DIRECTOR_MODEL: z.string().min(1).optional(),
-    DIRECTOR_EFFORT: z.enum(['low', 'medium', 'high', 'xhigh', 'max']).optional(),
+    DIRECTOR_EFFORT: z.enum(['none', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max']).optional(),
     AWS_REGION: z.string().min(1).default('us-east-1'),
     BEDROCK_API_KEY: z.string().optional(),
     AWS_BEARER_TOKEN_BEDROCK: z.string().optional(),
@@ -44,6 +44,8 @@ const ConfigSchema = z
       .string()
       .regex(/^[a-z0-9./-]+(,[a-z0-9./-]+)*$/, 'must look like amazon-bedrock,anthropic')
       .optional(),
+    // Lets OpenRouter pick the fastest host instead of the cheapest.
+    OPENROUTER_SORT: z.enum(['price', 'throughput', 'latency']).optional(),
     OPENAI_API_KEY: z.string().optional(),
     OPENAI_BASE_URL: z.string().url().default('https://api.openai.com/v1'),
 
@@ -107,6 +109,11 @@ const ConfigSchema = z
     }
     if (env.DIRECTOR === 'openai' && !env.DIRECTOR_MODEL) {
       ctx.addIssue({ code: 'custom', path: ['DIRECTOR_MODEL'], message: 'is required when DIRECTOR=openai' });
+    }
+    const model = env.DIRECTOR_MODEL ?? DEFAULT_MODELS[env.DIRECTOR];
+    const claude = env.DIRECTOR === 'bedrock' || env.DIRECTOR === 'anthropic' || model.startsWith('anthropic/');
+    if (claude && (env.DIRECTOR_EFFORT === 'none' || env.DIRECTOR_EFFORT === 'minimal')) {
+      ctx.addIssue({ code: 'custom', path: ['DIRECTOR_EFFORT'], message: 'must be low or more for Claude' });
     }
     if (env.VIDEO === 'fal' && !env.FAL_KEY) {
       ctx.addIssue({ code: 'custom', path: ['FAL_KEY'], message: 'is required when VIDEO=fal' });

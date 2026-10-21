@@ -10,7 +10,7 @@ export interface MessagesClient {
   };
 }
 
-export type Effort = NonNullable<Config['DIRECTOR_EFFORT']>;
+export type Effort = Exclude<NonNullable<Config['DIRECTOR_EFFORT']>, 'none' | 'minimal'>;
 
 // Retries happen in the director so each one is counted.
 export function createBedrockClient(config: Config): MessagesClient {

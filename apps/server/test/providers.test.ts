@@ -25,6 +25,10 @@ describe('choosing the story director', () => {
     expect(() => loadConfig({ DIRECTOR: 'openrouter', OPENROUTER_API_KEY: 'k', OPENROUTER_PROVIDERS: 'amazon bedrock' })).toThrow(
       /OPENROUTER_PROVIDERS/,
     );
+    expect(() => loadConfig({ DIRECTOR: 'bedrock', DIRECTOR_EFFORT: 'none' })).toThrow(/low or more for Claude/);
+    expect(() => loadConfig({ DIRECTOR: 'openrouter', OPENROUTER_API_KEY: 'k', DIRECTOR_EFFORT: 'minimal' })).toThrow(
+      /low or more for Claude/,
+    );
     // A local model server needs no key.
     expect(loadConfig({ DIRECTOR: 'openai', DIRECTOR_MODEL: 'llama3.3', OPENAI_BASE_URL: 'http://localhost:11434/v1' }).DIRECTOR).toBe(
       'openai',
@@ -63,6 +67,23 @@ describe('choosing the story director', () => {
       verbosity: 'low',
       provider: { data_collection: 'deny', order: ['amazon-bedrock'], allow_fallbacks: false },
     });
+  });
+
+  it('gives other OpenRouter models a reasoning effort and can ask for the fastest host', async () => {
+    const fetch = vi.fn(
+      async () =>
+        new Response(JSON.stringify({ choices: [{ finish_reason: 'stop', message: { content: '{}' } }], usage: {} })),
+    );
+    vi.stubGlobal('fetch', fetch);
+    const request = { system: 's', messages: [{ role: 'user' as const, content: 'u' }], maxTokens: 100 };
+    const env = { DIRECTOR: 'openrouter', OPENROUTER_API_KEY: 'k', DIRECTOR_MODEL: 'deepseek/deepseek-v4.1-flash' };
+    await createChatModel(loadConfig({ ...env, DIRECTOR_EFFORT: 'none', OPENROUTER_SORT: 'throughput' }))!.complete(request);
+    await createChatModel(loadConfig(env))!.complete(request);
+    const [tuned, plain] = fetch.mock.calls.map((call) => JSON.parse(String((call as unknown as [string, RequestInit])[1].body)));
+    expect(tuned.reasoning).toEqual({ effort: 'none' });
+    expect(tuned.provider).toEqual({ data_collection: 'deny', sort: 'throughput' });
+    expect('verbosity' in tuned).toBe(false);
+    expect('reasoning' in plain || 'verbosity' in plain).toBe(false);
   });
 
   it('sends reasoning effort to OpenAI compatible services only when asked', async () => {
