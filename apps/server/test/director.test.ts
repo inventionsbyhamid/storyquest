@@ -7,7 +7,7 @@ import { FakeDirector } from '../src/providers/director/fake';
 import { extractJsonObject, parseModelJson } from '../src/providers/director/json';
 import { LlmDirector } from '../src/providers/director/llm';
 import { OpenAiChat } from '../src/providers/director/openai';
-import { arcBeat, sceneUserPrompt, seasonNote } from '../src/providers/director/prompts';
+import { arcBeat, sceneSystemPrompt, sceneUserPrompt, seasonNote } from '../src/providers/director/prompts';
 import { sceneSchema } from '../src/providers/director/schemas';
 import {
   DirectorFormatError,
@@ -348,6 +348,12 @@ describe('LlmDirector with an OpenAI compatible model', () => {
 });
 
 describe('prompts', () => {
+  it('gives longer clips room for two beats', () => {
+    expect(sceneSystemPrompt(12)).toContain('12 seconds is room for one moment in two beats');
+    expect(sceneSystemPrompt(12)).toContain('80 to 140 words');
+    expect(sceneSystemPrompt(8)).toContain('8 seconds is short');
+  });
+
   it('marks the custom idea as data and tells the director where it is in the arc', () => {
     const prompt = sceneUserPrompt(
       sceneRequest({ sceneNumber: 4, choice: { kind: 'custom', text: 'the puppy learns to fly' } }),
