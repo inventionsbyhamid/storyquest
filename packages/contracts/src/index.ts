@@ -40,6 +40,8 @@ export const SceneView = z.object({
   endTone: Tone.nullable().optional(),
   durationMs: z.number().nullable(),
   isEnding: z.boolean(),
+  /** True for a clip in the middle of a chapter: the next clip follows on its own, with no choice. */
+  continues: z.boolean().optional(),
   choices: z.array(ChoiceView),
   generationMs: z.number().nullable(),
   error: z.string().nullable(),
@@ -97,6 +99,23 @@ export const StoryView = z.object({
 });
 export type StoryView = z.infer<typeof StoryView>;
 
+/** One of this TV's stories, for Continue watching on Home. */
+export const StorySummary = z.object({
+  id: z.string(),
+  title: z.string(),
+  status: StoryStatus,
+  ideaId: z.string().nullable(),
+  chapter: z.number().int(),
+  totalChapters: z.number().int(),
+  posterUrl: z.string().nullable(),
+  tone: Tone.nullable().optional(),
+  updatedAt: z.string(),
+});
+export type StorySummary = z.infer<typeof StorySummary>;
+
+export const StoryListResponse = z.object({ stories: z.array(StorySummary) });
+export type StoryListResponse = z.infer<typeof StoryListResponse>;
+
 export const ChooseRequest = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('preset'),
@@ -152,6 +171,8 @@ export const ShareScene = z.object({
   posterUrl: z.string().nullable(),
   tone: Tone.nullable().optional(),
   choiceTaken: z.string().nullable(),
+  /** False for the later clips of a chapter, which follow the first one without a choice. */
+  chapterStart: z.boolean().optional(),
   /** True when the scene was reported and taken down; clipUrl is then empty. */
   removed: z.boolean().optional(),
 });

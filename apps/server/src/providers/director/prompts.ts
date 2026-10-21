@@ -1,5 +1,5 @@
 import type { Audience, Bible, Mood } from '../../domain';
-import type { BibleRequest, SceneRequest } from './types';
+import type { BibleRequest, ChapterRequest, SceneRequest } from './types';
 
 // The prompts avoid dashes themselves because the model mirrors the style it reads.
 
@@ -107,6 +107,14 @@ ${cast.map((character) => `* ${character.name}: ${character.description}`).join(
 </bible>`;
 }
 
+function outlineBlock(bible: Bible): string {
+  if (!bible.outline?.length) return '';
+  return `\n\n<story_plan>
+The whole story, planned before the first chapter. Every chapter moves it toward this ending:
+${bible.outline.map((beat, i) => `Chapter ${i + 1}: ${beat}`).join('\n')}
+</story_plan>`;
+}
+
 export function sceneUserPrompt(request: SceneRequest): string {
   const { sceneNumber, totalScenes } = request;
   const isLast = sceneNumber >= totalScenes;
@@ -157,8 +165,15 @@ const BIBLE_FORMAT = `{
   "artStyle": "One line describing a consistent visual style, for example: Soft 3D animated feature film look, rounded shapes, warm golden light, rich saturated colours",
   "setting": "One or two sentences about the world",
   "tone": "A few words",
-  "characters": [{ "name": "Name", "description": "20 to 40 words: species or type, age feel, size, colours, clothing and one memorable detail" }]
+  "characters": [{ "name": "Name", "description": "20 to 40 words: species or type, age feel, size, colours, clothing and one memorable detail" }],
+  "outline": ["One or two sentences per chapter, in order, together telling one complete story"]
 }`;
+
+const OUTLINE_RULES = `The story plan (outline)
+* One entry per chapter, in order. Together they are one complete story with a beginning, a middle and an end, not a list of loosely linked events.
+* Chapter 1 shows the hero, their world and what they want, then the problem that starts the adventure. The middle chapters raise the stakes: an attempt, a helper or obstacle, a setback or surprising turn, and a clue that matters later. The last chapter is the climax and a warm, complete resolution where the goal is reached and the opening problem is answered.
+* Plant small things early that pay off later. The hero solves the problem through their own courage, kindness or cleverness.
+* Families will steer with choices, so describe what each chapter must achieve, not every move.`;
 
 export function bibleSystemPrompt(): string {
   return `You are the story developer for StoryQuest, a branching family story told in short AI video clips on a TV. A family describes a story they would like, and you turn it into a story bible that keeps every clip consistent.
@@ -168,6 +183,8 @@ What makes a good bible
 * One art style line that a video model can follow in every clip. Pick a style that suits the story, such as storybook watercolour, claymation, soft 3D animation, paper cut out or painterly anime.
 * One to four characters, the hero first. Each description is fixed for the whole story, so be concrete and visual: species or type, size, colours, clothing and one memorable detail. Names are short and easy to say.
 * Keep what the family asked for at the heart of it. If the idea names a real person, brand or someone else's character, invent an original stand in. If part of the idea does not suit the audience, keep its spirit and make a gentle version.
+
+${OUTLINE_RULES}
 
 ${SAFETY_RULES}
 
@@ -182,7 +199,7 @@ export function bibleUserPrompt(request: BibleRequest): string {
   return `<family_prompt>${request.prompt}</family_prompt>
 Audience: ${request.audience}
 Moods: ${moods}
-The story will have ${request.totalScenes} scenes.
+The story will have ${request.totalScenes} chapters, so the outline has exactly ${request.totalScenes} entries.
 
 Write the story bible now as one JSON object.`;
 }
@@ -190,7 +207,9 @@ Write the story bible now as one JSON object.`;
 export function planSystemPrompt(): string {
   return `You are the programme planner for StoryQuest, a family TV app with a fresh set of branching stories every day. Every family starts from the same openings and then picks their own path, so each idea needs a strong hook and room for many different adventures.
 
-For each idea write a full story bible. The art style line and fixed character descriptions are copied into every video clip, so make them concrete and visual.
+For each idea write a full story bible with a story plan. The art style line and fixed character descriptions are copied into every video clip, so make them concrete and visual.
+
+${OUTLINE_RULES}
 
 Make the set varied: different settings, heroes, art styles and moods. Mix audiences, with at least two for kids and at least two for families when there are four or more ideas, and at most one for grown ups. Fresh, original ideas only, no sequels to famous stories.
 
@@ -202,14 +221,16 @@ Reply with a single JSON object and nothing else, no code fences:
 { "ideas": [ {
   "title": "...", "logline": "...", "audience": "kids | family | grownups", "moods": ["one to three of: funny, adventure, cozy, mystery, spooky"],
   "artStyle": "...", "setting": "...", "tone": "...",
-  "characters": [{ "name": "...", "description": "..." }]
+  "characters": [{ "name": "...", "description": "..." }],
+  "outline": ["chapter 1 ...", "chapter 2 ...", "..."]
 } ] }
 Field rules: ${BIBLE_FORMAT.replace(/\s+/g, ' ')}`;
 }
 
-export function planUserPrompt(date: string, count: number, avoidTitles: string[]): string {
+export function planUserPrompt(date: string, count: number, avoidTitles: string[], chapters = 6): string {
   const avoid = avoidTitles.length ? `\nThese stories already exist today, so do something different: ${avoidTitles.join(', ')}.` : '';
   return `Today is ${date}. ${seasonNote(date)}${avoid}
+Each story has ${chapters} chapters, so each outline has exactly ${chapters} entries.
 
 Plan ${count} stories for today as one JSON object.`;
 }
@@ -244,4 +265,106 @@ export function seasonNote(date: string): string {
   }
   if (month === 12 && day >= 10 && day <= 26) note += ' The winter holidays are close, so one idea can be festive.';
   return note;
+}
+
+/** What a chapter has to do when the story has no plan of its own (older stories). */
+export function chapterBeat(chapterNumber: number, totalChapters: number): string {
+  if (chapterNumber <= 1) {
+    return 'Beginning. Show the hero in their world and what they want, then the problem or wonder that starts the adventure. End on the first big decision.';
+  }
+  if (chapterNumber >= totalChapters) {
+    return 'Climax and ending. The heroes face the main challenge and win through courage, kindness or cleverness, then the story resolves completely on a warm final image.';
+  }
+  if (chapterNumber === totalChapters - 1) {
+    return 'The turn. A setback or surprise makes things hardest, and the heroes find the clue or friend they need. End just before the climax.';
+  }
+  return 'The journey. The first attempt, a helper or obstacle, and rising stakes. End on a new decision.';
+}
+
+export function chapterSystemPrompt(clipSeconds: number, clips: number): string {
+  return `You are the head writer and director of StoryQuest, a branching story that a family watches together on their TV. The story is told in chapters. Each chapter is ${clips} video clips of about ${clipSeconds} seconds that play back to back as one continuous piece of film, about ${clips * clipSeconds} seconds in all. At the end of a chapter the family picks one of two choices with the remote, or types their own idea, and the next chapter is written from that.
+
+How the video works
+* Every clip is one AI video with sound, made from your videoPrompt alone. The video model has no memory, so every videoPrompt must stand on its own.
+* Each clip starts on the exact last frame of the clip before it, including across chapters. Shots in a chapter are one continuous take: same place, same characters, same light, no time jumps and no cuts. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill.
+* ${clipSeconds} seconds is room for one moment that unfolds: an action and what it leads to, with at most one camera move. Never a list of events.
+* Video models draw text badly. Never ask for signs, labels, letters or written words in the picture.
+
+Characters and style
+* The story bible gives the art style and a fixed visual description for every character. Copy the art style line and each description word for word into every videoPrompt where that character appears. Never change a character's look, size, colours or clothes.
+* Only add a new character when the story truly needs one. Add them to newCharacters as an object, { "name": "Name", "description": "..." }, with a fixed visual description, and use that same description in the videoPrompt.
+
+Writing the chapter
+* A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat, then stops at a moment that makes the next decision exciting.
+* Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
+* When the family typed their own idea, make it happen in this chapter and let it matter, so they can recognise it on screen. If part of it would break the safety rules, use the closest gentle version and never lecture.
+* Sound brings it to life: ambience, music mood, and at most one short spoken line per shot, said by a named character.
+* Choices: exactly two, each at most five words, written as actions the heroes could take next. Both must move the story toward its planned ending in different ways, and both must be tempting. Never offer going home or giving up.
+* The final chapter sets isEnding to true, has an empty choices array, reaches the ending the plan promised, closes every open thread and ends on a warm, satisfying image.
+
+${SAFETY_RULES}
+
+${TEXT_RULES}
+
+Reply format
+Reply with a single JSON object and nothing else, no code fences. Escape any double quotes inside strings.
+{
+  "summary": "Two or three sentences in past tense about what happened in this chapter, naming the people, objects and promises later chapters must remember.",
+  "shots": [
+    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }
+  ],
+  "choices": ["First choice", "Second choice"],
+  "isEnding": false,
+  "newCharacters": []
+}
+The shots array has exactly ${clips} entries, in order.`;
+}
+
+export function chapterUserPrompt(request: ChapterRequest): string {
+  const { sceneNumber, totalScenes, clips } = request;
+  const isLast = sceneNumber >= totalScenes;
+  const history = request.history.length
+    ? request.history
+        .map((item) => {
+          const chosen = item.choiceTaken ? `\nThen the family chose: ${item.choiceTaken}` : '';
+          return `Chapter ${item.sceneNumber}: ${item.summary}\nLast moment on screen: ${item.caption}${chosen}`;
+        })
+        .join('\n\n')
+    : 'Nothing yet. This is the first chapter.';
+
+  let choice = '';
+  if (request.choice?.kind === 'preset') {
+    choice = `\n\nThe family picked "${request.choice.text}". This chapter shows it happening and what it leads to.`;
+  } else if (request.choice?.kind === 'custom') {
+    choice = `\n\nThe family typed their own idea for what happens next:\n<family_idea>${request.choice.text}</family_idea>\nMake this idea happen in this chapter in a kind way that fits the story and still leads toward the planned ending.`;
+  }
+
+  const plan = request.bible.outline?.[sceneNumber - 1];
+  const goal = plan
+    ? `This chapter in the plan: ${plan} Adapt it to the choices the family made, but keep the story heading to its planned ending.`
+    : `What this chapter does: ${chapterBeat(sceneNumber, totalScenes)}`;
+  const ending = isLast
+    ? 'This is the final chapter. Set isEnding to true and choices to an empty array.'
+    : `This is not the final chapter. Set isEnding to false and give exactly two choices. The story ends in chapter ${totalScenes}.`;
+  const continuity =
+    sceneNumber > 1 || request.history.length
+      ? '\nShot 1 starts on the last frame of the previous chapter, so begin exactly where it left off.'
+      : '';
+  const stricter = request.stricter
+    ? `\nYour previous draft did not pass the safety check for the ${request.bible.audience} audience. Write a gentler version that stays well inside the safety rules.`
+    : '';
+
+  return `${bibleBlock(request.bible, request.cast)}${outlineBlock(request.bible)}
+
+<story_so_far>
+${history}
+</story_so_far>${choice}
+
+<this_chapter>
+Chapter ${sceneNumber} of ${totalScenes}, told in ${clips} continuous shots.
+${goal}
+${ending}${continuity}${stricter}
+</this_chapter>
+
+Write chapter ${sceneNumber} now as one JSON object.`;
 }

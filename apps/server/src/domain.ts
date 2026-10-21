@@ -16,6 +16,22 @@ export interface Bible {
   setting: string;
   tone: string;
   characters: Character[];
+  /** What each chapter has to achieve, written before the first scene so the story arrives somewhere. */
+  outline?: string[];
+}
+
+/** One clip of a chapter, written ahead with the rest of the chapter. */
+export interface Shot {
+  caption: string;
+  videoPrompt: string;
+}
+
+/** The rest of a chapter after the clip that carries it. */
+export interface ChapterScript {
+  shots: Shot[];
+  summary: string;
+  choices: string[];
+  isEnding: boolean;
 }
 
 export interface TreeRecord {
@@ -27,7 +43,10 @@ export interface TreeRecord {
   moods: Mood[];
   bible: Bible | null;
   prompt: string | null;
+  /** Chapters in the story. Old stories have one clip per chapter, so this is also their scene count. */
   totalScenes: number;
+  /** Continuous clips that make up one chapter before the next choice. */
+  clipsPerChapter: number;
   isPrivate: boolean;
   /** Scenes deep that an admin asked to pre generate, and whether that may exceed the daily cap. */
   warmDepth: number;
@@ -98,7 +117,12 @@ export interface NodeRecord {
   choiceIndex: number | null;
   customText: string | null;
   ownerStoryId: string | null;
+  /** Clips from the opening; chapter and shot say where the clip sits in the story. */
   depth: number;
+  chapter: number;
+  shot: number;
+  /** The clips still to come in this chapter, so they are filmed without asking the director again. */
+  script: ChapterScript | null;
   status: NodeStatus;
   summary: string | null;
   caption: string | null;
@@ -141,7 +165,13 @@ export interface StoryRecord {
   moviePath: string | null;
   movieStatus: MovieStatus | null;
   createdAt: string;
+  updatedAt: string;
   finishedAt: string | null;
+}
+
+/** True when this clip is followed by another clip of the same chapter instead of a choice. */
+export function continuesChapter(node: NodeRecord): boolean {
+  return node.script !== null && node.script.shots.length > 0;
 }
 
 export function isPaid(node: NodeRecord): boolean {

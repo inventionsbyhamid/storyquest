@@ -181,6 +181,15 @@ const MIGRATIONS: string[] = [
   ALTER TABLE nodes ADD COLUMN tone TEXT;
   ALTER TABLE nodes ADD COLUMN end_tone TEXT;
   `,
+  `
+  ALTER TABLE trees ADD COLUMN clips_per_chapter INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE nodes ADD COLUMN chapter INTEGER;
+  ALTER TABLE nodes ADD COLUMN shot INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE nodes ADD COLUMN script TEXT;
+  ALTER TABLE stories ADD COLUMN updated_at TEXT;
+  UPDATE stories SET updated_at = COALESCE(finished_at, created_at);
+  CREATE INDEX stories_device_recent ON stories(device_id, updated_at);
+  `,
 ];
 
 export function openDatabase(file: string): Db {

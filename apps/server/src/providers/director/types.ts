@@ -1,4 +1,4 @@
-import type { Audience, Bible, Character, Mood } from '../../domain';
+import type { Audience, Bible, Character, Mood, Shot } from '../../domain';
 
 export interface SceneHistoryItem {
   sceneNumber: number;
@@ -35,6 +35,20 @@ export interface Scene {
   newCharacters: Character[];
 }
 
+/** A chapter: several continuous clips, written in one go, ending at a choice. */
+export interface Chapter {
+  summary: string;
+  shots: Shot[];
+  choices: string[];
+  isEnding: boolean;
+  newCharacters: Character[];
+}
+
+export interface ChapterRequest extends SceneRequest {
+  /** Clips in the chapter. sceneNumber and totalScenes count chapters. */
+  clips: number;
+}
+
 export interface BibleRequest {
   treeId?: string;
   nodeId?: string;
@@ -47,8 +61,9 @@ export interface BibleRequest {
 export interface Director {
   readonly name: string;
   writeScene(request: SceneRequest): Promise<Scene>;
+  writeChapter(request: ChapterRequest): Promise<Chapter>;
   createBible(request: BibleRequest): Promise<Bible>;
-  planIdeas(date: string, count: number, avoidTitles?: string[]): Promise<Bible[]>;
+  planIdeas(date: string, count: number, avoidTitles?: string[], chapters?: number): Promise<Bible[]>;
 }
 
 export interface ChatMessage {

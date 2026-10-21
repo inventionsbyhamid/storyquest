@@ -6,9 +6,10 @@ import type {
   SceneView,
   ShareScene,
   ShareView,
+  StorySummary,
   StoryView,
 } from '@storyquest/contracts';
-import { isPaid, type IdeaRecord, type NodeRecord, type StoryRecord } from '../domain';
+import { continuesChapter, isPaid, type IdeaRecord, type NodeRecord, type StoryRecord } from '../domain';
 import { MESSAGES } from '../engine/errors';
 import { choiceLabel } from '../engine/scenes';
 import type { Services } from '../services';
@@ -39,6 +40,17 @@ export class Views {
     };
   }
 
+  /** True when every clip of the chapter that starts at this node is filmed and up. */
+  private chapterFilmed(start: NodeRecord): boolean {
+    const { repo } = this.services;
+    let node: NodeRecord | undefined = start;
+    while (node && node.status === 'ready' && !node.hiddenAt) {
+      if (!continuesChapter(node)) return true;
+      node = repo.getPresetChildren(node.id).find((child) => child.choiceIndex === 0);
+    }
+    return false;
+  }
+
   scene(node: NodeRecord): SceneView {
     const { repo } = this.services;
     const tree = repo.getTree(node.treeId)!;
@@ -48,7 +60,7 @@ export class Views {
         id: node.id,
         treeId: node.treeId,
         depth: node.depth,
-        sceneNumber: node.depth + 1,
+        sceneNumber: node.chapter + 1,
         totalScenes: tree.totalScenes,
         status: 'failed',
         caption: null,
@@ -63,12 +75,16 @@ export class Views {
       };
     }
     const ready = node.status === 'ready';
+    const continues = ready && continuesChapter(node);
+    // While filming is paused, a chapter that is only partly filmed could leave a family stuck half way.
+    const paused = this.services.budget.exhausted() !== null;
     let choices: ChoiceView[] = [];
     if (ready && !node.isEnding) {
       const children = repo.getPresetChildren(node.id);
       choices = node.choices.map((label, index) => {
-        const child = children.find((candidate) => candidate.choiceIndex === index) ?? null;
-        const free = node.ownerStoryId === null || (child !== null && isPaid(child));
+        const found = children.find((candidate) => candidate.choiceIndex === index) ?? null;
+        const child = found && paused && !continues && !this.chapterFilmed(found) ? null : found;
+        const free = continues || node.ownerStoryId === null || (child !== null && isPaid(child));
         const playable = child?.status === 'ready' && !child.hiddenAt;
         return {
           index,
@@ -85,7 +101,7 @@ export class Views {
       id: node.id,
       treeId: node.treeId,
       depth: node.depth,
-      sceneNumber: node.depth + 1,
+      sceneNumber: node.chapter + 1,
       totalScenes: tree.totalScenes,
       status: node.status,
       caption: ready ? node.caption : null,
@@ -96,6 +112,7 @@ export class Views {
       endTone: ready ? (node.endTone ?? node.tone) : null,
       durationMs: ready ? node.durationMs : null,
       isEnding: ready && node.isEnding,
+      continues,
       choices,
       generationMs: node.timings?.totalMs ?? null,
       error: node.status === 'failed' ? node.error : null,
@@ -142,6 +159,26 @@ export class Views {
     }));
   }
 
+  storySummary(story: StoryRecord): StorySummary {
+    const { repo } = this.services;
+    const tree = repo.getTree(story.treeId)!;
+    const nodes = story.path.map((id) => repo.getNode(id));
+    const current = nodes[nodes.length - 1] ?? null;
+    // The picture of the latest clip that can be shown, so a story waiting on its next clip still has one.
+    const shown = [...nodes].reverse().find((node) => node?.status === 'ready' && !node.hiddenAt && node.posterPath) ?? null;
+    return {
+      id: story.id,
+      title: tree.title,
+      status: story.status,
+      ideaId: story.ideaId,
+      chapter: (current?.chapter ?? 0) + 1,
+      totalChapters: tree.totalScenes,
+      posterUrl: shown ? this.url(shown.posterPath) : null,
+      tone: shown?.tone ?? null,
+      updatedAt: story.updatedAt,
+    };
+  }
+
   /** The stitched movie is only offered while every scene in it is still up. */
   private movie(story: StoryRecord): { movieStatus: MovieStatus; movieUrl: string | null } {
     const removed = story.path.some((id) => this.services.repo.getNode(id)?.hiddenAt);
@@ -170,14 +207,18 @@ export class Views {
       .filter((node) => node.hiddenAt || (node.status === 'ready' && node.clipPath))
       .map((node) => {
         const parent = nodes.find((candidate) => candidate.id === node.parentId) ?? null;
-        const choiceTaken = parent ? choiceLabel(parent, node) : null;
-        if (node.hiddenAt) return { caption: node.caption, clipUrl: '', posterUrl: null, choiceTaken, removed: true };
+        const chapterStart = !parent || !continuesChapter(parent);
+        const choiceTaken = parent && chapterStart ? choiceLabel(parent, node) : null;
+        if (node.hiddenAt) {
+          return { caption: node.caption, clipUrl: '', posterUrl: null, choiceTaken, chapterStart, removed: true };
+        }
         return {
           caption: node.caption,
           clipUrl: this.url(node.clipPath)!,
           posterUrl: this.url(node.posterPath),
           tone: node.tone,
           choiceTaken,
+          chapterStart,
         };
       });
     return {

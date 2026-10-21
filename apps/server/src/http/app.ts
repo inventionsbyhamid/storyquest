@@ -15,6 +15,7 @@ import {
   SceneView,
   ShareView,
   StartStoryRequest,
+  StoryListResponse,
   StoryView,
   TodayResponse,
   VerifyPurchaseRequest,
@@ -191,6 +192,16 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     const body = parse(StartStoryRequest, request.body);
     const story = await engine.startStory(device, body, iapUser(request));
     return parse(StoryView, views.story(story));
+  });
+
+  // This TV's stories, newest first, for Continue watching. Stories with nothing filmed yet are left out.
+  app.get('/v1/stories', async (request) => {
+    const device = requireDevice(request);
+    const stories = repo
+      .listStoriesForDevice(device, 12)
+      .map((story) => views.storySummary(story))
+      .filter((summary) => summary.posterUrl !== null);
+    return parse(StoryListResponse, { stories });
   });
 
   app.get<{ Params: { id: string } }>('/v1/stories/:id', async (request) => {

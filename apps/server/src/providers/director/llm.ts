@@ -6,18 +6,22 @@ import { parseModelJson } from './json';
 import {
   bibleSystemPrompt,
   bibleUserPrompt,
+  chapterSystemPrompt,
+  chapterUserPrompt,
   planSystemPrompt,
   planUserPrompt,
   sceneSystemPrompt,
   sceneUserPrompt,
 } from './prompts';
-import { BibleDraftSchema, ideaPlanSchema, sceneSchema } from './schemas';
+import { BibleDraftSchema, chapterSchema, ideaPlanSchema, sceneSchema } from './schemas';
 import {
   DirectorFormatError,
   DirectorRefusal,
   ModelConnectionError,
   unmetered,
   type BibleRequest,
+  type Chapter,
+  type ChapterRequest,
   type ChatMessage,
   type ChatModel,
   type ChatReply,
@@ -62,6 +66,17 @@ export class LlmDirector implements Director {
     return { ...scene, newCharacters: scene.newCharacters ?? [] };
   }
 
+  async writeChapter(request: ChapterRequest): Promise<Chapter> {
+    const chapter = await this.ask(
+      { task: 'scene', nodeId: request.nodeId, treeId: request.treeId },
+      chapterSystemPrompt(request.sceneSeconds, request.clips),
+      chapterUserPrompt(request),
+      chapterSchema(request.sceneNumber, request.totalScenes, request.clips),
+      2500 + 1200 * request.clips,
+    );
+    return { ...chapter, newCharacters: chapter.newCharacters ?? [] };
+  }
+
   async createBible(request: BibleRequest): Promise<Bible> {
     const draft = await this.ask(
       { task: 'bible', nodeId: request.nodeId, treeId: request.treeId },
@@ -73,12 +88,12 @@ export class LlmDirector implements Director {
     return { ...draft, audience: request.audience, moods: request.moods };
   }
 
-  async planIdeas(date: string, count: number, avoidTitles: string[] = []): Promise<Bible[]> {
+  async planIdeas(date: string, count: number, avoidTitles: string[] = [], chapters?: number): Promise<Bible[]> {
     if (count <= 0) return [];
     const plan = await this.ask(
       { task: 'plan' },
       planSystemPrompt(),
-      planUserPrompt(date, count, avoidTitles),
+      planUserPrompt(date, count, avoidTitles, chapters),
       ideaPlanSchema(count),
       8000,
     );

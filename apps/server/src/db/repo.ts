@@ -4,6 +4,7 @@ import { newId } from '../ids';
 import type {
   Audience,
   Bible,
+  ChapterScript,
   Character,
   Charge,
   IdeaRecord,
@@ -29,6 +30,7 @@ interface TreeRow {
   bible: string | null;
   prompt: string | null;
   total_scenes: number;
+  clips_per_chapter: number;
   is_private: number;
   warm_depth: number;
   warm_force: number;
@@ -58,6 +60,9 @@ interface NodeRow {
   custom_text: string | null;
   owner_story_id: string | null;
   depth: number;
+  chapter: number | null;
+  shot: number;
+  script: string | null;
   status: string;
   summary: string | null;
   caption: string | null;
@@ -97,6 +102,7 @@ interface StoryRow {
   movie_path: string | null;
   movie_status: string | null;
   created_at: string;
+  updated_at: string | null;
   finished_at: string | null;
 }
 
@@ -110,6 +116,7 @@ const toTree = (row: TreeRow): TreeRecord => ({
   bible: row.bible ? (JSON.parse(row.bible) as Bible) : null,
   prompt: row.prompt,
   totalScenes: row.total_scenes,
+  clipsPerChapter: row.clips_per_chapter,
   isPrivate: row.is_private === 1,
   warmDepth: row.warm_depth,
   warmForce: row.warm_force === 1,
@@ -139,6 +146,9 @@ const toNode = (row: NodeRow): NodeRecord => ({
   customText: row.custom_text,
   ownerStoryId: row.owner_story_id,
   depth: row.depth,
+  chapter: row.chapter ?? row.depth,
+  shot: row.shot,
+  script: row.script ? (JSON.parse(row.script) as ChapterScript) : null,
   status: row.status as NodeStatus,
   summary: row.summary,
   caption: row.caption,
@@ -178,6 +188,7 @@ const toStory = (row: StoryRow): StoryRecord => ({
   moviePath: row.movie_path,
   movieStatus: row.movie_status as MovieStatus | null,
   createdAt: row.created_at,
+  updatedAt: row.updated_at ?? row.created_at,
   finishedAt: row.finished_at,
 });
 
@@ -230,6 +241,7 @@ export interface NewTree {
   bible: Bible | null;
   prompt: string | null;
   totalScenes: number;
+  clipsPerChapter?: number;
   isPrivate: boolean;
 }
 
@@ -241,6 +253,7 @@ export interface NewNode {
   customText: string | null;
   ownerStoryId: string | null;
   depth: number;
+  chapter?: number;
   warm?: number;
   wantChildren?: boolean;
   charge?: Charge | null;
@@ -269,6 +282,8 @@ export interface ReadyScene {
   endTone: string | null;
   timings: NodeTimings;
   costSeconds: number;
+  /** The clips still to film in this chapter, or null when this clip ends the chapter. */
+  script?: ChapterScript | null;
 }
 
 export class Repository {
@@ -301,8 +316,8 @@ export class Repository {
   insertTree(input: NewTree): TreeRecord {
     const id = input.id ?? newId('tr');
     this.stmt(
-      `INSERT INTO trees (id, idea_id, title, logline, audience, moods, bible, prompt, total_scenes, is_private, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO trees (id, idea_id, title, logline, audience, moods, bible, prompt, total_scenes, clips_per_chapter, is_private, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.ideaId ?? null,
@@ -313,6 +328,7 @@ export class Repository {
       input.bible ? JSON.stringify(input.bible) : null,
       input.prompt,
       input.totalScenes,
+      input.clipsPerChapter ?? 1,
       input.isPrivate ? 1 : 0,
       this.timestamp(),
     );
@@ -335,7 +351,14 @@ export class Repository {
 
   // Ideas
 
-  createDailyIdea(input: { date: string; position: number; bible: Bible; totalScenes: number; warm: number }): IdeaRecord | null {
+  createDailyIdea(input: {
+    date: string;
+    position: number;
+    bible: Bible;
+    totalScenes: number;
+    clipsPerChapter?: number;
+    warm: number;
+  }): IdeaRecord | null {
     return this.transaction(() => {
       const taken = this.stmt('SELECT 1 FROM ideas WHERE date = ? AND position = ?').get(input.date, input.position);
       if (taken) return null;
@@ -349,6 +372,7 @@ export class Repository {
         bible: input.bible,
         prompt: null,
         totalScenes: input.totalScenes,
+        clipsPerChapter: input.clipsPerChapter,
         isPrivate: false,
       });
       const root = this.insertNode({
@@ -436,8 +460,8 @@ export class Repository {
     const id = input.id ?? newId('nd');
     const now = this.timestamp();
     this.stmt(
-      `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, warm, want_children, charge, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, chapter, warm, want_children, charge, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     ).run(
       id,
       input.treeId,
@@ -446,6 +470,7 @@ export class Repository {
       input.customText,
       input.ownerStoryId,
       input.depth,
+      input.chapter ?? input.depth,
       input.warm ?? 0,
       input.wantChildren ? 1 : 0,
       input.charge ? JSON.stringify(input.charge) : null,
@@ -475,14 +500,52 @@ export class Repository {
     return this.transaction(() => {
       const now = this.timestamp();
       const info = this.stmt(
-        `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, warm, created_at, updated_at)
-         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?)
+        `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, chapter, warm, created_at, updated_at)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (parent_id, choice_index) WHERE choice_index IS NOT NULL DO NOTHING`,
-      ).run(newId('nd'), parent.treeId, parent.id, choiceIndex, parent.ownerStoryId, parent.depth + 1, warm, now, now);
+      ).run(newId('nd'), parent.treeId, parent.id, choiceIndex, parent.ownerStoryId, parent.depth + 1, parent.chapter + 1, warm, now, now);
       const row = this.stmt('SELECT * FROM nodes WHERE parent_id = ? AND choice_index = ?').get(
         parent.id,
         choiceIndex,
       ) as NodeRow;
+      return { node: toNode(row), created: info.changes === 1 };
+    });
+  }
+
+  /**
+   * The next clip of a chapter, already written: it carries its caption and
+   * prompt and the rest of the chapter, so filming it needs no director call.
+   */
+  getOrCreateContinuation(parent: NodeRecord): { node: NodeRecord; created: boolean } {
+    const script = parent.script;
+    if (!script || script.shots.length === 0) throw new Error(`node ${parent.id} has no next clip`);
+    const [shot, ...rest] = script.shots as [ChapterScript['shots'][number], ...ChapterScript['shots']];
+    const last = rest.length === 0;
+    return this.transaction(() => {
+      const now = this.timestamp();
+      const info = this.stmt(
+        `INSERT INTO nodes (id, tree_id, parent_id, choice_index, custom_text, owner_story_id, depth, chapter, shot,
+           caption, video_prompt, summary, choices, is_ending, script, want_children, created_at, updated_at)
+         VALUES (?, ?, ?, 0, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+         ON CONFLICT (parent_id, choice_index) WHERE choice_index IS NOT NULL DO NOTHING`,
+      ).run(
+        newId('nd'),
+        parent.treeId,
+        parent.id,
+        parent.ownerStoryId,
+        parent.depth + 1,
+        parent.chapter,
+        parent.shot + 1,
+        shot.caption,
+        shot.videoPrompt,
+        script.summary,
+        JSON.stringify(last ? script.choices : ['Continue']),
+        last && script.isEnding ? 1 : 0,
+        last ? null : JSON.stringify({ ...script, shots: rest }),
+        now,
+        now,
+      );
+      const row = this.stmt('SELECT * FROM nodes WHERE parent_id = ? AND choice_index = 0').get(parent.id) as NodeRow;
       return { node: toNode(row), created: info.changes === 1 };
     });
   }
@@ -495,6 +558,7 @@ export class Repository {
       customText: text,
       ownerStoryId: storyId,
       depth: parent.depth + 1,
+      chapter: parent.chapter + 1,
       wantChildren: true,
       charge,
     });
@@ -512,7 +576,7 @@ export class Repository {
     this.stmt(
       `UPDATE nodes SET status = 'ready', summary = ?, caption = ?, video_prompt = ?, choices = ?, is_ending = ?,
          new_characters = ?, clip_path = ?, poster_path = ?, last_frame_path = ?, duration_ms = ?, tone = ?,
-         end_tone = ?, timings = ?, cost_seconds = ?, error = NULL, error_code = NULL, updated_at = ?
+         end_tone = ?, timings = ?, cost_seconds = ?, script = ?, error = NULL, error_code = NULL, updated_at = ?
        WHERE id = ?`,
     ).run(
       scene.summary,
@@ -529,6 +593,7 @@ export class Repository {
       scene.endTone,
       JSON.stringify(scene.timings),
       scene.costSeconds,
+      scene.script ? JSON.stringify(scene.script) : null,
       this.timestamp(),
       id,
     );
@@ -640,8 +705,8 @@ export class Repository {
   insertStory(input: NewStory): StoryRecord {
     const id = input.id ?? newId('st');
     this.stmt(
-      'INSERT INTO stories (id, device_id, tree_id, idea_id, path, created_at) VALUES (?, ?, ?, ?, ?, ?)',
-    ).run(id, input.deviceId, input.treeId, input.ideaId, JSON.stringify(input.path), this.timestamp());
+      'INSERT INTO stories (id, device_id, tree_id, idea_id, path, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)',
+    ).run(id, input.deviceId, input.treeId, input.ideaId, JSON.stringify(input.path), this.timestamp(), this.timestamp());
     return this.getStory(id)!;
   }
 
@@ -656,13 +721,22 @@ export class Repository {
   }
 
   setStoryPath(id: string, path: string[]): void {
-    this.stmt('UPDATE stories SET path = ? WHERE id = ?').run(JSON.stringify(path), id);
+    this.stmt('UPDATE stories SET path = ?, updated_at = ? WHERE id = ?').run(JSON.stringify(path), this.timestamp(), id);
+  }
+
+  /** A TV's stories, the one touched most recently first. */
+  listStoriesForDevice(deviceId: string, limit: number): StoryRecord[] {
+    const rows = this.stmt('SELECT * FROM stories WHERE device_id = ? ORDER BY updated_at DESC LIMIT ?').all(
+      deviceId,
+      limit,
+    ) as StoryRow[];
+    return rows.map(toStory);
   }
 
   finishStory(id: string, slug: string): boolean {
     const info = this.stmt(
-      "UPDATE stories SET status = 'finished', share_slug = ?, movie_status = 'pending', finished_at = ? WHERE id = ? AND status = 'active'",
-    ).run(slug, this.timestamp(), id);
+      "UPDATE stories SET status = 'finished', share_slug = ?, movie_status = 'pending', finished_at = ?, updated_at = ? WHERE id = ? AND status = 'active'",
+    ).run(slug, this.timestamp(), this.timestamp(), id);
     return info.changes === 1;
   }
 

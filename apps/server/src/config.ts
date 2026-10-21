@@ -55,6 +55,8 @@ const ConfigSchema = z
     FAL_MODEL_I2V: z.string().min(1).default('minimax/h3-max-turbo/image-to-video'),
     VIDEO_RESOLUTION: z.enum(['480P', '768P', '1080P']).default('768P'),
     SCENE_SECONDS: int(8, 1, 30),
+    // Continuous clips in a chapter before the family chooses. 1 gives a choice after every clip.
+    CLIPS_PER_CHAPTER: int(1, 1, 6),
     PROMPT_EXPANSION: z.enum(['disabled', 'balanced', 'quality']).default('disabled'),
     VIDEO_PRICE_PER_SECOND: z.coerce.number().nonnegative().default(0.04),
     DIRECTOR_INPUT_PRICE_PER_MTOK: z.coerce.number().nonnegative().default(4.4),

@@ -3,11 +3,20 @@ import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 import type { Config } from '../config';
 import type { Repository } from '../db/repo';
-import { type Audience, type Bible, type Character, type NodeRecord, type NodeTimings, type TreeRecord } from '../domain';
+import {
+  continuesChapter,
+  type Audience,
+  type Bible,
+  type ChapterScript,
+  type Character,
+  type NodeRecord,
+  type NodeTimings,
+  type TreeRecord,
+} from '../domain';
 import { newFileTag } from '../ids';
 import { errorDetails, type Logger } from '../log';
 import type { Media } from '../media';
-import { DirectorRefusal, type Director, type Scene, type SceneRequest } from '../providers/director/types';
+import { DirectorRefusal, type Chapter, type Director, type Scene, type SceneRequest } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
 import { VideoNotBilled, VideoRejected, type RenderResult, type VideoProvider } from '../providers/video/types';
 import type { MediaStore } from '../storage';
@@ -38,6 +47,7 @@ const clean = (text: string) => sanitizeUserText(text);
 export function sanitizeBible(bible: Bible): Bible {
   return {
     ...bible,
+    ...(bible.outline ? { outline: bible.outline.map(clean) } : {}),
     title: clipText(clean(bible.title), 60),
     logline: clipText(clean(bible.logline), 160),
     artStyle: clean(bible.artStyle),
@@ -74,6 +84,47 @@ export function sanitizeScene(scene: Scene, sceneNumber: number, totalScenes: nu
   };
 }
 
+function cleanChoices(choices: string[]): string[] {
+  let cleaned = choices.map((label) => clipText(clean(label), 48)).filter(Boolean);
+  for (const fallback of FALLBACK_CHOICES) {
+    if (cleaned.length >= 2) break;
+    if (!cleaned.some((label) => label.toLowerCase() === fallback.toLowerCase())) cleaned.push(fallback);
+  }
+  cleaned = cleaned.slice(0, 2);
+  return cleaned;
+}
+
+export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalChapters: number): Chapter {
+  const isEnding = chapterNumber >= totalChapters;
+  return {
+    summary: clean(chapter.summary),
+    shots: chapter.shots.map((shot) => ({ caption: clipText(clean(shot.caption), 90), videoPrompt: clean(shot.videoPrompt) })),
+    choices: isEnding ? [] : cleanChoices(chapter.choices),
+    isEnding,
+    newCharacters: chapter.newCharacters.map((character) => ({
+      name: clipText(clean(character.name), 40),
+      description: clean(character.description),
+    })),
+  };
+}
+
+/** The first clip of a chapter as a scene, and the rest of the chapter to film after it. */
+export function splitChapter(chapter: Chapter): { scene: Scene; script: ChapterScript | null } {
+  const [first, ...rest] = chapter.shots;
+  const continues = rest.length > 0;
+  return {
+    scene: {
+      summary: chapter.summary,
+      caption: first!.caption,
+      videoPrompt: first!.videoPrompt,
+      choices: continues ? ['Continue'] : chapter.choices,
+      isEnding: continues ? false : chapter.isEnding,
+      newCharacters: chapter.newCharacters,
+    },
+    script: continues ? { shots: rest, summary: chapter.summary, choices: chapter.choices, isEnding: chapter.isEnding } : null,
+  };
+}
+
 /** Shared nodes inside an admin's forced warm request may go past the daily cap. */
 export function forcedWarm(tree: TreeRecord, depth: number, ownerStoryId: string | null): boolean {
   return tree.warmForce && ownerStoryId === null && depth < tree.warmDepth;
@@ -105,7 +156,7 @@ export class SceneGenerator {
       const forced = forcedWarm(tree, node.depth, node.ownerStoryId);
 
       let directorStarted = performance.now();
-      let draft = await this.writeSafeScene(request, tree.audience, false);
+      let draft = await this.write(node, tree, request, false);
       timings.directorMs = Math.round(performance.now() - directorStarted);
 
       const files = await this.newFiles(node.id);
@@ -125,7 +176,7 @@ export class SceneGenerator {
         if (!(err instanceof VideoRejected) || draft.stricter) throw err;
         log.warn({ nodeId, error: err.message }, 'video provider rejected the scene, asking for a gentler one');
         directorStarted = performance.now();
-        draft = await this.writeSafeScene(request, tree.audience, true);
+        draft = await this.write(node, tree, request, true);
         timings.directorMs += Math.round(performance.now() - directorStarted);
         rendered = await render(draft.scene);
       }
@@ -150,8 +201,9 @@ export class SceneGenerator {
         endTone,
         timings,
         costSeconds: rendered.billedSeconds,
+        script: draft.script,
       });
-      log.info({ nodeId, treeId: node.treeId, depth: node.depth, timings }, 'scene ready');
+      log.info({ nodeId, treeId: node.treeId, depth: node.depth, chapter: node.chapter, shot: node.shot, timings }, 'scene ready');
       return 'ready';
     } catch (err) {
       // A clip that was paid for stays on disk even when a later step fails.
@@ -323,12 +375,16 @@ export class SceneGenerator {
         if (!cast.some((c) => c.name.toLowerCase() === character.name.toLowerCase())) cast.push(character);
       }
     }
-    const history = ancestors.map((ancestor, i) => ({
-      sceneNumber: ancestor.depth + 1,
-      summary: ancestor.summary ?? '',
-      caption: ancestor.caption ?? '',
-      choiceTaken: choiceLabel(ancestor, lineage[i + 1]!),
-    }));
+    // In chapters only the clip that ends a chapter carries its summary and the choice that followed.
+    const history = ancestors
+      .map((ancestor, i) => ({ ancestor, next: lineage[i + 1]! }))
+      .filter(({ ancestor }) => !continuesChapter(ancestor))
+      .map(({ ancestor, next }) => ({
+        sceneNumber: ancestor.chapter + 1,
+        summary: ancestor.summary ?? '',
+        caption: ancestor.caption ?? '',
+        choiceTaken: choiceLabel(ancestor, next),
+      }));
     const parent = ancestors[ancestors.length - 1];
     let choice: SceneRequest['choice'] = null;
     if (node.customText) choice = { kind: 'custom', text: node.customText };
@@ -343,10 +399,73 @@ export class SceneGenerator {
       cast,
       history,
       choice,
-      sceneNumber: node.depth + 1,
+      sceneNumber: node.chapter + 1,
       totalScenes: tree.totalScenes,
       sceneSeconds: this.deps.config.SCENE_SECONDS,
     };
+  }
+
+  /**
+   * The scene to film for a node. A clip already written as part of a chapter is used as it is;
+   * the first clip of a chapter asks the director for the whole chapter; older stories get one scene.
+   */
+  private async write(
+    node: NodeRecord,
+    tree: TreeRecord,
+    request: SceneRequest,
+    stricter: boolean,
+  ): Promise<{ scene: Scene; script: ChapterScript | null; stricter: boolean }> {
+    if (node.videoPrompt !== null && node.choiceIndex !== null && node.shot > 0) {
+      // Already checked for safety with the rest of its chapter, so a rejection is final.
+      return {
+        scene: {
+          summary: node.summary ?? '',
+          caption: node.caption ?? '',
+          videoPrompt: node.videoPrompt,
+          choices: node.choices,
+          isEnding: node.isEnding,
+          newCharacters: [],
+        },
+        script: node.script,
+        stricter: true,
+      };
+    }
+    if (tree.clipsPerChapter > 1) {
+      const written = await this.writeSafeChapter({ ...request, clips: tree.clipsPerChapter }, tree.audience, stricter);
+      return { ...splitChapter(written.chapter), stricter: written.stricter };
+    }
+    const written = await this.writeSafeScene(request, tree.audience, stricter);
+    return { ...written, script: null };
+  }
+
+  private async writeSafeChapter(
+    request: SceneRequest & { clips: number },
+    audience: Audience,
+    startStricter: boolean,
+  ): Promise<{ chapter: Chapter; stricter: boolean }> {
+    const { director, safety, log } = this.deps;
+    for (const stricter of startStricter ? [true] : [false, true]) {
+      let draft: Chapter;
+      try {
+        draft = await director.writeChapter({ ...request, stricter });
+      } catch (err) {
+        if (err instanceof DirectorRefusal) {
+          log.warn({ treeId: request.treeId, chapter: request.sceneNumber, stricter }, 'director refused the chapter');
+          continue;
+        }
+        throw err;
+      }
+      const chapter = sanitizeChapter(draft, request.sceneNumber, request.totalScenes);
+      const text = [
+        chapter.summary,
+        ...chapter.choices,
+        ...chapter.shots.flatMap((shot) => [shot.caption, shot.videoPrompt]),
+      ].join('\n');
+      const verdict = await safety.check(text, { source: 'output', audience });
+      if (verdict.ok) return { chapter, stricter };
+      log.warn({ treeId: request.treeId, chapter: request.sceneNumber, stricter, reason: verdict.reason }, 'chapter failed the safety check');
+    }
+    throw new GenerationError('unsafe_output', MESSAGES.sceneUnsafe);
   }
 
   private async writeSafeScene(

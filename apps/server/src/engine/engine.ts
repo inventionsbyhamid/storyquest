@@ -3,7 +3,7 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import type { ChoiceStat, StoryStats } from '@storyquest/contracts';
-import { isPaid, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
+import { continuesChapter, isPaid, type Audience, type Mood, type NodeRecord, type NodeStatus, type StoryRecord } from '../domain';
 import { newFileTag, newId, newShareSlug } from '../ids';
 import { errorDetails } from '../log';
 import { clipText, provisionalTitle, sanitizeUserText } from '../text';
@@ -140,6 +140,7 @@ export class StoryEngine {
         bible: null,
         prompt,
         totalScenes: config.SCENES_PER_STORY,
+        clipsPerChapter: config.CLIPS_PER_CHAPTER,
         isPrivate: true,
       });
       const storyId = newId('st');
@@ -192,6 +193,8 @@ export class StoryEngine {
     if (from.isEnding) throw conflict(MESSAGES.atEnding);
 
     let customText: string | null = null;
+    const continuing = continuesChapter(from);
+    if (continuing && (request.kind !== 'preset' || request.index !== 0)) throw badRequest(MESSAGES.noSuchChoice);
     if (request.kind === 'preset') {
       if (request.index >= from.choices.length) throw badRequest(MESSAGES.noSuchChoice);
       const existing = repo.getPresetChildren(from.id).find((child) => child.choiceIndex === request.index);
@@ -209,7 +212,10 @@ export class StoryEngine {
     const payer = { deviceId: story.deviceId, userId: iapUserId };
     const next = repo.transaction(() => {
       let node: NodeRecord;
-      if (request.kind === 'preset') {
+      if (continuing) {
+        // The next clip of the chapter the family already chose, paid for when the chapter began.
+        node = repo.getOrCreateContinuation(from).node;
+      } else if (request.kind === 'preset') {
         node = repo.getOrCreatePresetChild(from, request.index, 0).node;
         if (node.ownerStoryId !== null && !isPaid(node)) repo.setNodeCharge(node.id, wallet.charge(payer));
       } else {
@@ -218,7 +224,7 @@ export class StoryEngine {
       repo.setStoryPath(story.id, replaced ? [...story.path.slice(0, -1), node.id] : [...story.path, node.id]);
       repo.addSceneSeen(story.deviceId);
       const repeat = replaced?.id === node.id;
-      if (node.choiceIndex !== null && !repeat) repo.addPicks(node.id, 1);
+      if (node.choiceIndex !== null && !repeat && !continuing) repo.addPicks(node.id, 1);
       if (replaced && replaced.choiceIndex !== null && !repeat) repo.addPicks(replaced.id, -1);
       return node;
     });
@@ -247,15 +253,16 @@ export class StoryEngine {
     for (let i = 1; i < nodes.length; i++) {
       const parent = nodes[i - 1]!;
       const node = nodes[i]!;
+      if (continuesChapter(parent)) continue;
       const label = choiceLabel(parent, node) ?? '';
       // Anything on a private path was seen by this family only, so it has no share of families.
       if (node.customText !== null || node.ownerStoryId !== null) {
-        choices.push({ sceneNumber: parent.depth + 1, label, percent: 0, custom: true });
+        choices.push({ sceneNumber: parent.chapter + 1, label, percent: 0, custom: true });
         continue;
       }
       const total = repo.getPresetChildren(parent.id).reduce((sum, sibling) => sum + sibling.picks, 0);
       const percent = total > 0 ? Math.round((node.picks / total) * 100) : 100;
-      choices.push({ sceneNumber: parent.depth + 1, label, percent: Math.min(100, Math.max(0, percent)), custom: false });
+      choices.push({ sceneNumber: parent.chapter + 1, label, percent: Math.min(100, Math.max(0, percent)), custom: false });
     }
 
     const presets = choices.filter((choice) => !choice.custom);
@@ -385,6 +392,7 @@ export class StoryEngine {
    */
   private prefetch(nodeId: string): void {
     const { repo } = this.deps;
+    if (this.continueChapter(nodeId)) return;
     if (!this.deps.config.AUTO_PREFETCH) return;
     const node = repo.getNode(nodeId);
     if (!node || node.status !== 'ready' || node.isEnding || node.hiddenAt) return;
@@ -400,6 +408,23 @@ export class StoryEngine {
       if (child.status === 'pending') this.enqueue(child.id, 'low');
       else if (child.status === 'ready' && child.warm > 0) this.prefetch(child.id);
     });
+  }
+
+  /**
+   * Films the next clip of a chapter as soon as the clip before it is ready, whatever the
+   * prefetch settings, once a family is on this chapter: it plays as one piece, so its clips are made back to back.
+   * Returns true when the node is part way through a chapter.
+   */
+  private continueChapter(nodeId: string): boolean {
+    const { repo } = this.deps;
+    const node = repo.getNode(nodeId);
+    if (!node || !continuesChapter(node)) return false;
+    // Only once someone is watching this chapter; a choice's preview films just its first clip.
+    if (node.status !== 'ready' || node.hiddenAt || !node.wantChildren) return true;
+    const { node: next } = repo.getOrCreateContinuation(node);
+    if (next.status === 'pending') this.enqueue(next.id, 'high');
+    else if (next.status === 'failed' && !this.budgetExhausted() && repo.resetFailed(next.id)) this.enqueue(next.id, 'high');
+    return true;
   }
 
   private async runJob(nodeId: string): Promise<void> {

@@ -1,5 +1,5 @@
 import type { Repository } from '../db/repo';
-import type { NodeRecord, NodeStatus } from '../domain';
+import { continuesChapter, type NodeRecord, type NodeStatus } from '../domain';
 import { newId } from '../ids';
 import { errorDetails, type Logger } from '../log';
 import type { Budget } from './budget';
@@ -124,10 +124,24 @@ export class AdminJobs {
       });
   }
 
+  /** Films the rest of the chapter that starts at this node, clip after clip. */
+  private async finishChapter(job: Job, start: NodeRecord): Promise<NodeRecord> {
+    let node = start;
+    while (continuesChapter(node)) {
+      node = await this.make(job, this.deps.repo.getOrCreateContinuation(node).node, 0, false);
+    }
+    return node;
+  }
+
+  /**
+   * Films the path: whole chapters along it, and with siblings only the first clip of
+   * each other choice, so its card has a picture. The rest of those chapters is filmed
+   * when a family picks them.
+   */
   private async film(job: Job, root: NodeRecord): Promise<void> {
     const { repo } = this.deps;
     const siblings: Promise<NodeRecord>[] = [];
-    let node = await this.make(job, root, null, false);
+    let node = await this.finishChapter(job, await this.make(job, root, null, false));
     for (const index of job.path) {
       if (node.isEnding) throw new Error('the story ends before this path does');
       if (index >= node.choices.length) throw new Error(`scene ${node.depth + 1} has no choice ${index}`);
@@ -139,7 +153,7 @@ export class AdminJobs {
           siblings.push(sibling);
         }
       }
-      node = await this.make(job, repo.getOrCreatePresetChild(node, index, 0).node, index, false);
+      node = await this.finishChapter(job, await this.make(job, repo.getOrCreatePresetChild(node, index, 0).node, index, false));
     }
     const results = await Promise.allSettled(siblings);
     const failed = results.filter((result) => result.status === 'rejected').length;

@@ -22,6 +22,7 @@ export const BibleDraftSchema = z.object({
   setting: z.string().trim().min(10).max(400),
   tone: z.string().trim().min(2).max(120),
   characters: z.array(LooseCharacterSchema).min(1).max(5),
+  outline: z.array(z.string().trim().min(10).max(400)).min(2).max(8).optional(),
 });
 export type BibleDraft = z.output<typeof BibleDraftSchema>;
 
@@ -67,6 +68,49 @@ export function sceneSchema(sceneNumber: number, totalScenes: number) {
       if (scene.choices.length !== 2) {
         ctx.addIssue({ code: 'custom', path: ['choices'], message: 'must contain exactly 2 choices' });
       } else if (scene.choices[0]!.toLowerCase() === scene.choices[1]!.toLowerCase()) {
+        ctx.addIssue({ code: 'custom', path: ['choices'], message: 'the two choices must be different' });
+      }
+    });
+}
+
+export function chapterSchema(chapterNumber: number, totalChapters: number, clips: number) {
+  const isLast = chapterNumber >= totalChapters;
+  return z
+    .object({
+      summary: z.string().trim().min(10).max(900),
+      shots: z
+        .array(
+          z.object({
+            caption: z.string().trim().min(2).max(140),
+            videoPrompt: z.string().trim().min(80).max(2200),
+          }),
+        )
+        .length(clips, `must contain exactly ${clips} shots`),
+      choices: z
+        .array(
+          z
+            .string()
+            .trim()
+            .min(2)
+            .max(60)
+            .refine((label) => wordCount(label) <= 6, 'each choice must be at most 5 words'),
+        )
+        .max(2),
+      isEnding: z.boolean(),
+      newCharacters: z.array(LooseCharacterSchema).max(3).optional().default([]),
+    })
+    .superRefine((chapter, ctx) => {
+      if (isLast) return;
+      if (chapter.isEnding) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['isEnding'],
+          message: `must be false, this is chapter ${chapterNumber} of ${totalChapters}`,
+        });
+      }
+      if (chapter.choices.length !== 2) {
+        ctx.addIssue({ code: 'custom', path: ['choices'], message: 'must contain exactly 2 choices' });
+      } else if (chapter.choices[0]!.toLowerCase() === chapter.choices[1]!.toLowerCase()) {
         ctx.addIssue({ code: 'custom', path: ['choices'], message: 'the two choices must be different' });
       }
     });

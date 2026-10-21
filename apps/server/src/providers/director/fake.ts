@@ -1,7 +1,17 @@
-import type { Bible, Character } from '../../domain';
+import type { Bible, Character, Shot } from '../../domain';
 import { clipText, lowerFirst, provisionalTitle, sanitizeUserText } from '../../text';
 import { TEMPLATES, type StoryTemplate } from './templates';
-import { unmetered, type BibleRequest, type Director, type DirectorCallContext, type DirectorMeter, type Scene, type SceneRequest } from './types';
+import {
+  unmetered,
+  type BibleRequest,
+  type Chapter,
+  type ChapterRequest,
+  type Director,
+  type DirectorCallContext,
+  type DirectorMeter,
+  type Scene,
+  type SceneRequest,
+} from './types';
 
 const SHOTS = [
   'wide establishing shot, slow push in',
@@ -68,6 +78,10 @@ export class FakeDirector implements Director {
 
   async writeScene(request: SceneRequest): Promise<Scene> {
     this.metered({ task: 'scene', nodeId: request.nodeId, treeId: request.treeId });
+    return this.compose(request);
+  }
+
+  private compose(request: SceneRequest): Scene {
     const template = templateFor(request.bible);
     const random = seededRandom(hashString(`${request.treeId}|${request.pathKey}|${request.stricter ? 1 : 0}`));
     const pick = <T>(items: T[]): T => items[Math.floor(random() * items.length)]!;
@@ -132,6 +146,24 @@ export class FakeDirector implements Director {
     const first = (sceneNumber * 2 + Math.floor(random() * pool.length)) % pool.length;
     const second = (first + 1 + Math.floor(random() * (pool.length - 1))) % pool.length;
     return [pool[first]!, pool[second]!];
+  }
+
+  async writeChapter(request: ChapterRequest): Promise<Chapter> {
+    // One stand in scene per shot, each a step further along the same path, sharing one set of choices.
+    const shots: Shot[] = [];
+    let last: Scene | null = null;
+    this.metered({ task: 'scene', nodeId: request.nodeId, treeId: request.treeId });
+    for (let i = 0; i < request.clips; i++) {
+      last = this.compose({ ...request, pathKey: `${request.pathKey}#${i}` });
+      shots.push({ caption: last.caption, videoPrompt: last.videoPrompt });
+    }
+    return {
+      summary: last!.summary,
+      shots,
+      choices: last!.choices,
+      isEnding: last!.isEnding,
+      newCharacters: [],
+    };
   }
 
   async createBible(request: BibleRequest): Promise<Bible> {

@@ -164,6 +164,7 @@ export class DailyIdeas {
       date,
       missing.length,
       existing.map((idea) => idea.title),
+      config.SCENES_PER_STORY,
     );
 
     let created = 0;
@@ -182,6 +183,7 @@ export class DailyIdeas {
         position: missing[i]!,
         bible,
         totalScenes: config.SCENES_PER_STORY,
+        clipsPerChapter: config.CLIPS_PER_CHAPTER,
         warm: config.WARM_DEPTH,
       });
       if (!idea) continue;
