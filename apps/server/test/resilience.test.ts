@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TodayResponse } from '@storyquest/contracts';
@@ -357,6 +357,19 @@ describe('video safety rejections', () => {
     });
     await expect(recording.render(request)).rejects.toBeInstanceOf(VideoRejected);
     expect(sentPrompt).toMatch(/^p No subtitles/);
+
+    const framePath = join(mkdtempSync(join(tmpdir(), 'storyquest-frame-')), 'last.jpg');
+    writeFileSync(framePath, Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+    let sentImage: unknown = null;
+    const chained = new FalVideo(options, silentLogger, {
+      subscribe: (async (endpoint: string, opts: { input: { image_url: unknown } }) => {
+        expect(endpoint).toBe('i2v');
+        sentImage = opts.input.image_url;
+        throw new ApiError({ message: 'Unprocessable Entity', status: 422, body: {} });
+      }) as never,
+    });
+    await expect(chained.render({ ...request, startFramePath: framePath })).rejects.toBeInstanceOf(VideoRejected);
+    expect(sentImage).toBe('data:image/jpeg;base64,/9j/2Q==');
 
     // Once fal has queued the job it may bill, so the error is passed on as billed and not retried.
     calls = 0;

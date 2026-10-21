@@ -56,9 +56,9 @@ export class FalVideo implements VideoProvider {
       enable_safety_checker: true,
     };
     if (request.startFramePath) {
-      // The client uploads Blob inputs to fal storage and swaps in the URL.
+      // Sent inline: uploading to fal storage first and letting the model fetch it added about 6 seconds.
       const frame = await readFile(request.startFramePath);
-      input.image_url = new Blob([frame], { type: 'image/jpeg' });
+      input.image_url = `data:image/jpeg;base64,${frame.toString('base64')}`;
     } else {
       input.aspect_ratio = '16:9';
     }

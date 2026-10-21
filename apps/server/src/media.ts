@@ -55,7 +55,7 @@ export class Media {
       [
         '-i', input,
         '-map', '0:v:0', '-map', '0:a?',
-        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'medium', '-crf', '20',
+        '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'veryfast', '-crf', '20',
         '-maxrate', '6M', '-bufsize', '12M', '-g', '48', '-pix_fmt', 'yuv420p',
         '-c:a', 'copy',
         '-movflags', '+faststart',

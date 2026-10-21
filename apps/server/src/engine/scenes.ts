@@ -230,16 +230,18 @@ export class SceneGenerator {
   private async finishMedia(files: { raw: string; clip: string; poster: string; lastFrame: string }) {
     const { media, log } = this.deps;
     // Stills come from the provider's file, so the next scene starts from the best picture.
+    // They are made while the playback copy encodes, since a family is waiting on all of it.
     const durationMs = await media.probeDurationMs(files.raw);
-    await media.poster(files.raw, files.poster, (durationMs / 1000) * 0.4);
-    await media.lastFrame(files.raw, files.lastFrame);
-    try {
-      await media.encodeClip(files.raw, files.clip);
-    } catch (err) {
+    const encode = media.encodeClip(files.raw, files.clip).catch(async (err) => {
       log.warn({ error: (err as Error).message }, 'clip encode failed, keeping the original');
       await rm(files.clip, { force: true });
       await media.faststart(files.raw, files.clip);
-    }
+    });
+    await Promise.all([
+      encode,
+      media.poster(files.raw, files.poster, (durationMs / 1000) * 0.4),
+      media.lastFrame(files.raw, files.lastFrame),
+    ]);
     // The provider's original stays next to the playback copy; every paid clip is kept at full quality.
     const [tone, endTone] = await Promise.all([media.tone(files.poster), media.tone(files.lastFrame)]);
     return { durationMs, tone, endTone };
