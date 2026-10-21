@@ -5,14 +5,15 @@
 Six new stories arrive every day. Every family starts from the same openings, every family ends somewhere different, and every ending can be shared with a QR code.
 
 * Demo video: _link coming with the submission_
+* Website and hosted server: [storyquest.dijmo.com](https://storyquest.dijmo.com)
 * Built for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
 * Runs on Fire TV with Vega OS (React Native for Vega), with the same UI on Android TV and the web for development
 
 ## What it does
 
-* **Tonight's Stories.** Six fresh stories each day, planned by Claude on Amazon Bedrock with a seasonal touch.
+* **Tonight's Stories.** Fresh stories planned by the story director with a seasonal touch.
 * **Every scene is video.** Each scene is an 8 second clip with music, sound effects and voices, made by MiniMax H3 Max Turbo.
-* **Choices with the D pad, ideas with your voice.** Two choices after every scene, plus Something else, where the remote microphone dictates any idea into the story.
+* **Choices with the D pad, ideas with your voice.** Two choices after every scene, plus Something else, where the remote microphone dictates any idea into the story. When nobody presses anything, a countdown picks a filmed path, so the story carries on for families who just want to watch.
 * **Seamless cuts.** Each clip starts on the exact last frame of the previous one, so the story flows like one film.
 * **Instant choices.** While a scene plays, both possible next scenes are already being made.
 * **Shared story trees.** Popular paths are made once and then play instantly for every family. Custom ideas grow a private branch.
@@ -35,14 +36,14 @@ Fire TV app (Vega OS, React Native)
         │  HTTPS JSON and MP4
         ▼
 StoryQuest server (Node 22, Fastify, SQLite)
-  ├─ story director   Claude on Amazon Bedrock (or any model, see below)
-  ├─ safety           Amazon Bedrock Guardrails
+  ├─ story director   any LLM: DeepSeek V4.1 Flash on OpenRouter in production, Claude on Amazon Bedrock supported
+  ├─ safety           word list and the video model's checker, Amazon Bedrock Guardrails optional
   ├─ video            fal, MiniMax H3 Max Turbo (image to video)
   └─ media            ffmpeg: posters, last frames, the shared movie
 ```
 
 1. **Story bible.** Each story has a fixed art style and a fixed description for every character. They are copied into every video prompt so characters stay recognisable.
-2. **Director.** For every new scene, Claude gets the bible, the story so far, the choice taken and where the scene sits in a six scene arc, and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
+2. **Director.** For every new scene, the language model gets the bible, the story so far, the choice taken and where the scene sits in a six scene arc, and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
 3. **Video.** The video model renders the scene starting from the last frame of the previous clip.
 4. **Prefetch.** When a family arrives at a scene, both next scenes start generating at once, so a choice usually plays immediately.
 5. **Dedupe.** A unique constraint on (parent, choice) means two families picking the same new path at the same time share one generation.
@@ -61,10 +62,11 @@ More detail in [docs/design.md](docs/design.md).
 
 The look is "picture book at night": warm paper type, story titles in Fraunces, and the AI scenes as the illustrations. Every scene brings its own night: the server picks a deep color from each poster and last frame, and the screens around it take that color, like a streaming app's hero. Pictures melt into their night at the edges; nothing else uses gradients or glows. The full system is in [docs/ui.md](docs/ui.md) and the logo, a Q whose tail forks into two paths, is in [assets/brand](assets/brand).
 
-### AWS services used
+### Models and services
 
-* **Amazon Bedrock (Claude in Amazon Bedrock):** the story director, the bible writer and the daily story planner. See `apps/server/src/providers/director`.
-* **Amazon Bedrock Guardrails:** checks every custom idea and every generated scene. See `apps/server/src/providers/safety/guardrails.ts`.
+* **Story director:** DeepSeek V4.1 Flash through OpenRouter in our hosted server (about 2 seconds and $0.001 a scene). The same prompts run on Claude in Amazon Bedrock, the Anthropic API or any OpenAI compatible model with one setting. See `apps/server/src/providers/director`.
+* **Video:** fal, MiniMax H3 Max Turbo, image to video from the previous scene's last frame. Clips are served as H.264 High profile copies (about 4 MB a scene); the originals are kept.
+* **Safety:** a word list on every idea and scene, the video model's own safety checker, and Amazon Bedrock Guardrails when configured (`apps/server/src/providers/safety`).
 
 ## Repository
 
@@ -137,12 +139,12 @@ yarn workspace @multi-tv/shared-ui test
 ## Safety and privacy
 
 * No sign up and no personal data. Each TV gets a random device id, used for rate limits and to keep a family's private scenes together. Purchases use the anonymous user id that Amazon In App Purchasing provides, never a name or email.
-* Typed ideas and generated scenes pass Amazon Bedrock Guardrails, and the video model's own safety checker is on.
+* Typed ideas and generated scenes pass a safety check (a word list, plus Amazon Bedrock Guardrails when configured), and the video model's own safety checker is on.
 * Family text is treated only as story material, never as instructions to the model.
 
 ## Costs and business model
 
-Every filmed scene costs about $0.36 (8 seconds of video at $0.04 a second plus the story director). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
+Every filmed scene costs about $0.32 (8 seconds of video at $0.04 a second; the story director adds about $0.001). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
 
 ## Website
 
