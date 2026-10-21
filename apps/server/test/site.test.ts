@@ -55,6 +55,31 @@ describe('website', () => {
     expect(visibleText(res.body)).toContain('Amazon Appstore');
   });
 
+  it('shows the filmed stories and one story scene by scene on the home page', async () => {
+    const app = await start({ DAILY_IDEAS: '2', WARM_DEPTH: '1' });
+    let html = '';
+    for (let i = 0; i < 150 && !html.includes('scene by scene'); i++) {
+      // The TV asking for today's stories is what starts them being made.
+      await app.inject({ method: 'GET', url: '/v1/today' });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      html = (await app.inject({ method: 'GET', url: '/' })).body;
+    }
+    const text = visibleText(html);
+    expect(text).toContain("Tonight's stories");
+    expect(text).toContain('One story, scene by scene');
+    expect(text).toContain('They chose');
+    expect(html).toMatch(/<img src="http:\/\/tv\.test\/media\/nodes\/[^"]+\/poster-/);
+    expect(html).toMatch(/style="--tone:#[0-9A-F]{6}"/);
+    expect(hasDash(text)).toBe(false);
+  });
+
+  it('embeds the demo film when a YouTube link is set', async () => {
+    const app = await start({ DEMO_VIDEO_URL: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=3' });
+    const res = await app.inject({ method: 'GET', url: '/' });
+    expect(res.body).toContain('src="https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ"');
+    expect(() => testConfig('/tmp/unused', { DEMO_VIDEO_URL: 'https://vimeo.com/123456' })).toThrow(/YouTube/);
+  });
+
   it('serves the title font and the mark', async () => {
     const app = await start();
     const font = await app.inject({ method: 'GET', url: '/static/fraunces.ttf' });

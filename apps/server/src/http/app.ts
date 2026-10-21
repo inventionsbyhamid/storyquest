@@ -158,7 +158,15 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     immutable: true,
   });
 
-  await registerSite(app, config);
+  await registerSite(app, config, () => {
+    const ideas = daily.listForHome().ideas.map((idea) => ({ record: idea, view: views.idea(idea) }));
+    const playable = ideas.filter(({ view }) => view.ready && view.posterUrl);
+    const featured = playable[0];
+    return {
+      stories: playable.map(({ view }) => ({ title: view.title, logline: view.logline, posterUrl: view.posterUrl!, tone: view.tone ?? null })),
+      featured: featured ? { title: featured.view.title, scenes: views.filmedPath(featured.record) } : null,
+    };
+  });
 
   app.get('/healthz', async () => ({
     ok: true,

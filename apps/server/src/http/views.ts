@@ -120,6 +120,28 @@ export class Views {
     };
   }
 
+  /** The longest filmed shared path from a story's opening, for the website. */
+  filmedPath(idea: IdeaRecord): Array<{ posterUrl: string; caption: string; choiceTaken: string | null }> {
+    const { repo } = this.services;
+    const playable = (node: NodeRecord) => node.status === 'ready' && !node.hiddenAt && Boolean(node.posterPath);
+    const children = (node: NodeRecord) => repo.getPresetChildren(node.id).filter(playable);
+    const reach = (node: NodeRecord): number => 1 + Math.max(0, ...children(node).map(reach));
+
+    const root = repo.getNode(idea.rootNodeId);
+    if (!root || !playable(root)) return [];
+    const path = [root];
+    for (let next = root; ; ) {
+      const options = children(next).sort((a, b) => reach(b) - reach(a) || (a.choiceIndex ?? 0) - (b.choiceIndex ?? 0));
+      if (!options[0]) break;
+      path.push((next = options[0]));
+    }
+    return path.map((node, index) => ({
+      posterUrl: this.url(node.posterPath)!,
+      caption: node.caption ?? '',
+      choiceTaken: index > 0 ? choiceLabel(path[index - 1]!, node) : null,
+    }));
+  }
+
   /** The stitched movie is only offered while every scene in it is still up. */
   private movie(story: StoryRecord): { movieStatus: MovieStatus; movieUrl: string | null } {
     const removed = story.path.some((id) => this.services.repo.getNode(id)?.hiddenAt);

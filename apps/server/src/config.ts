@@ -70,6 +70,11 @@ const ConfigSchema = z
     COMPANY_NAME: z.string().min(1).default('StoryQuest'),
     SUPPORT_EMAIL: z.string().default(''),
     POLICY_UPDATED: z.string().min(1).default('October 18, 2026'),
+    // A YouTube link to the demo film, embedded on the home page when set.
+    DEMO_VIDEO_URL: z
+      .string()
+      .regex(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)[A-Za-z0-9_-]{11}/, 'must be a YouTube video link')
+      .optional(),
 
     SAFETY: z.enum(['wordlist', 'guardrails']).default('wordlist'),
     GUARDRAIL_ID: z.string().optional(),

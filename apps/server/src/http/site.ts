@@ -11,6 +11,11 @@ const PAGES = {
   '/support': { file: 'support.html', title: 'Support | StoryQuest', description: 'Help with StoryQuest.' },
 } as const;
 
+export interface Showcase {
+  stories: Array<{ title: string; logline: string; posterUrl: string; tone: string | null }>;
+  featured: { title: string; scenes: Array<{ posterUrl: string; caption: string; choiceTaken: string | null }> } | null;
+}
+
 const escapeHtml = (text: string) =>
   text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -61,7 +66,53 @@ export function providersSentence(config: Config): string {
   return `To write and film a scene we send the story so far and your idea to our service providers: ${escapeHtml(joined!)}. They process this text and images only to make your scene.`;
 }
 
-export async function registerSite(app: FastifyInstance, config: Config): Promise<void> {
+function youtubeId(url: string | undefined): string | null {
+  return url?.match(/(?:youtu\.be\/|[?&]v=|\/embed\/|\/shorts\/)([A-Za-z0-9_-]{11})/)?.[1] ?? null;
+}
+
+const toneStyle = (tone: string | null) => (tone && /^#[0-9A-Fa-f]{6}$/.test(tone) ? ` style="--tone:${tone}"` : '');
+
+/** The home page parts that come from the filmed stories, rendered on each visit. */
+function renderShowcase(config: Config, showcase: Showcase): Record<string, string> {
+  const video = youtubeId(config.DEMO_VIDEO_URL);
+  const first = showcase.stories[0];
+  const top = video
+    ? `<div class="film"><iframe src="https://www.youtube-nocookie.com/embed/${video}" title="StoryQuest demo film" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen loading="lazy"></iframe></div>`
+    : first
+      ? `<figure class="hero"${toneStyle(first.tone)}><img src="${escapeHtml(first.posterUrl)}" alt="The opening scene of ${escapeHtml(first.title)}"></figure>`
+      : '';
+
+  const stories = showcase.stories.length
+    ? `<h2>Tonight's stories</h2>
+<ul class="stories">${showcase.stories
+        .map(
+          (story) =>
+            `<li${toneStyle(story.tone)}><img src="${escapeHtml(story.posterUrl)}" alt="" loading="lazy"><b>${escapeHtml(story.title)}</b><span>${escapeHtml(story.logline)}</span></li>`,
+        )
+        .join('')}</ul>`
+    : '';
+
+  const featured = showcase.featured;
+  const scenes =
+    featured && featured.scenes.length > 1
+      ? `<h2>One story, scene by scene</h2>
+<p>${escapeHtml(featured.title)}, as one family steered it. Every picture is a frame from a filmed scene.</p>
+<ol class="scenes">${featured.scenes
+          .map(
+            (scene) =>
+              `<li><img src="${escapeHtml(scene.posterUrl)}" alt="" loading="lazy">${scene.choiceTaken ? `<span class="took">They chose ${escapeHtml(scene.choiceTaken)}</span>` : '<span class="took">The opening</span>'}<span>${escapeHtml(scene.caption)}</span></li>`,
+          )
+          .join('')}</ol>`
+      : '';
+
+  return { top, stories, scenes };
+}
+
+export async function registerSite(
+  app: FastifyInstance,
+  config: Config,
+  showcase: () => Showcase = () => ({ stories: [], featured: null }),
+): Promise<void> {
   const dir = path.resolve(config.SITE_DIR);
   const layout = readFileSync(path.join(dir, 'layout.html'), 'utf8');
   const email = escapeHtml(config.SUPPORT_EMAIL);
@@ -76,9 +127,18 @@ export async function registerSite(app: FastifyInstance, config: Config): Promis
     template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => extra[key] ?? values[key] ?? '');
 
   for (const [route, page] of Object.entries(PAGES)) {
-    const content = fill(readFileSync(path.join(dir, page.file), 'utf8'), {});
-    const html = fill(layout, { content, title: escapeHtml(page.title), description: escapeHtml(page.description) });
-    app.get(route, async (_request, reply) => reply.type('text/html; charset=utf-8').header('cache-control', 'public, max-age=300').send(html));
+    const template = readFileSync(path.join(dir, page.file), 'utf8');
+    const render = () => {
+      const content = fill(template, route === '/' ? renderShowcase(config, showcase()) : {});
+      return fill(layout, { content, title: escapeHtml(page.title), description: escapeHtml(page.description) });
+    };
+    const fixed = route === '/' ? null : render();
+    app.get(route, async (_request, reply) =>
+      reply
+        .type('text/html; charset=utf-8')
+        .header('cache-control', `public, max-age=${fixed ? 300 : 60}`)
+        .send(fixed ?? render()),
+    );
   }
 
   await app.register(fastifyStatic, {

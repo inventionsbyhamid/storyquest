@@ -34,6 +34,19 @@
   p, li { color: var(--dim); }
   .lead, .points b, h1, h2, h3 { color: var(--paper); }
   .updated { font-size: 15px; }
+  img { display: block; width: 100%; height: auto; }
+  .hero, .film { margin: 36px 0 8px; border-radius: 14px; overflow: hidden; aspect-ratio: 16 / 9; background: var(--tone, var(--raised)); }
+  .hero img { height: 100%; object-fit: cover; }
+  .film iframe { width: 100%; height: 100%; border: 0; display: block; }
+  .stories { list-style: none; padding: 0; margin: 16px 0 8px; display: grid; gap: 20px; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .stories li { background: var(--tone, var(--raised)); border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; }
+  .stories img { aspect-ratio: 16 / 9; object-fit: cover; }
+  .stories b { font-family: "Fraunces", Georgia, serif; font-weight: normal; font-size: 21px; color: var(--paper); padding: 12px 14px 2px; line-height: 1.25; }
+  .stories span { font-size: 15px; line-height: 1.5; padding: 0 14px 14px; }
+  .scenes { list-style: none; padding: 0; margin: 16px 0 40px; display: grid; gap: 22px 20px; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); counter-reset: scene; }
+  .scenes img { border-radius: 10px; aspect-ratio: 16 / 9; object-fit: cover; margin-bottom: 10px; }
+  .scenes span { display: block; font-size: 15px; line-height: 1.5; }
+  .scenes .took { color: var(--marigold); font-size: 14px; margin-bottom: 2px; }
   footer { border-top: 1px solid var(--line); padding: 28px 0 48px; font-size: 15px; color: var(--dim); }
 </style>
 </head>
