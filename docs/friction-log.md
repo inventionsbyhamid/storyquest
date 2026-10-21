@@ -134,3 +134,30 @@ Severity scale: High blocks progress, Medium costs more than an hour, Low is an 
 * Severity: Medium (we rebuilt the check as a times table question on a number pad).
 * Workaround: logged raw TVEventHandler events with `vega device start-log-stream` to find it, then used only single presses.
 * Suggestion: pass held keys through in the virtual device, and document long press and key repeat behaviour for remotes.
+
+## 15. The virtual device plays video at about half speed
+
+* Task: record a demo of a story on the Vega Virtual Device, headless on a 40 core Linux server with Mesa software OpenGL.
+* Steps: played 8 second H.264 clips (1344x768, 24 fps) with the W3C media player while recording the screen.
+* Expected: real time playback, maybe with dropped frames.
+* Actual: every 8 second clip took 15 to 18 seconds to play, sound included, and showed about 11 new frames per second. Raising the device to 8 cores and 8 GB in config.ini (it started with 6) changed nothing; the time goes into llvmpipe rendering.
+* Severity: Medium (the demo could not show playback as it looks on a Fire TV).
+* Workaround: recorded the interface on the virtual device and showed each scene at real speed from the same file the app plays.
+* Suggestion: document the expected media performance of the virtual device without a GPU, and offer a hardware decode or a lighter render path for video on Linux.
+
+## 16. Screen recording through X stalls; the emulator console records smoothly
+
+* Task: capture the virtual device at 1080p for the demo.
+* Steps: `ffmpeg -f x11grab` on the Xvfb display that hosts the device window.
+* Actual: about 10 frames per second with gaps of 2 to 3 seconds whenever the device was drawing, because the capture and the device share one X server.
+* Severity: Medium.
+* Workaround: the device's own console command, `screenrecord start --time-limit 300 out.webm` on port 5554, records 1080p VP9 at 24 fps with device audio and no gaps.
+* Suggestion: expose screen recording in `vega virtual-device` and the docs, since it is the only smooth way to film an app on Linux.
+
+## 17. After long sessions the virtual device stops reacting to keys
+
+* Task: keep one device session running for several hours of testing.
+* Actual: the app stayed on screen but ignored every key, from xdotool and from the console's `event send` alike. The device log showed `stem-init` crashing with signal 6 about every 0.6 seconds (it does this on a fresh device too). Only a full restart of the device brought input back.
+* Severity: Medium (a recorded take was lost).
+* Workaround: restart the device with a clean instance and reinstall the app before recording.
+* Suggestion: look into the `stem-init` crash loop in the virtual device image and surface a warning when input handling stops.

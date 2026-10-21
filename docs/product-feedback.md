@@ -13,8 +13,8 @@ For each tool we answer: what we used it for, what worked well, what needs work,
 ## Vega Virtual Device
 
 * **Used for:** all on device testing (we had no Fire TV at the start), screenshots and screen recordings for the demo.
-* **Worked well:** with KVM it boots in about 10 seconds. The emulator console (port 5554) gives full resolution screenshots, and remote keys can be scripted, which let us run full story playthroughs automatically.
-* **Needs work:** headless Linux use needs undocumented fixes: IPv6 in containers, software OpenGL instead of `--no-gl-accel` (which renders a black screen), and stale lock cleanup. The boot failure message ("failed to access shell" after 600 seconds) hid the real error. An official container image would remove most of this.
+* **Worked well:** with KVM it boots in about 10 seconds. The emulator console (port 5554) gives full resolution screenshots and smooth 1080p screen recordings (`screenrecord start`), and remote keys can be scripted, which let us run full story playthroughs automatically and record our demo.
+* **Needs work:** headless Linux use needs undocumented fixes: IPv6 in containers, software OpenGL instead of `--no-gl-accel` (which renders a black screen), and stale lock cleanup. The boot failure message ("failed to access shell" after 600 seconds) hid the real error. Without a GPU, video plays at about half speed, so playback cannot be judged there, and after long sessions the device stopped taking key input until it was restarted. An official container image and a documented recording command would remove most of this.
 * **Again?** Yes, and we packaged our setup as an open source image (vega-headless) so others can skip the trial and error.
 
 ## React Native multi TV sample (AmazonAppDev)
@@ -37,25 +37,6 @@ For each tool we answer: what we used it for, what worked well, what needs work,
 * **Worked well:** focusing a TextInput opens the system keyboard with a built in hint to hold the microphone button and dictate, so voice input needed no extra code.
 * **Needs work:** it would help to know from JavaScript whether the text came from dictation, so the app could skip a confirm step for voice input.
 * **Again?** Yes.
-
-## Amazon Bedrock (Claude in Amazon Bedrock)
-
-* **Used for:** the story director. Claude writes every scene as JSON (summary, caption, video prompt and the next two choices), writes story bibles for custom ideas, and plans the six daily stories.
-* **Worked well:** _to be completed after live testing_
-* **Needs work:** structured outputs are not available on the Bedrock Messages endpoint for this model, so we validate JSON ourselves and retry once with the validation error.
-* **Onboarding:** _to be completed_
-* **Again?** _to be completed_
-
-## Amazon Bedrock Guardrails
-
-* **Used for:** checking every custom idea typed or dictated by a family, and every generated scene, before anything reaches the video model.
-* **Worked well:** _to be completed after live testing_
-* **Needs work:** _to be completed_
-
-## AWS services summary (AWS Builder mini challenge)
-
-* **Amazon Bedrock (Claude):** story director, story bible writer and daily planner (`apps/server/src/providers/director/bedrock.ts`).
-* **Amazon Bedrock Guardrails:** input and output safety (`apps/server/src/providers/safety/guardrails.ts`).
 
 ## fal (MiniMax H3 Max Turbo)
 
