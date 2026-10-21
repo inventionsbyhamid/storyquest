@@ -3,6 +3,7 @@ import { Animated, Easing, Image, StyleSheet, Text, View } from 'react-native';
 import { DefaultFocus, SpatialNavigationRoot, SpatialNavigationView } from 'react-tv-space-navigation';
 import type { ChoiceView, SceneView } from '@storyquest/contracts';
 import { resolveMediaUrl } from '../../api/media';
+import { formatAutoPick } from '../../story/autoPick';
 import { formatSceneProgress } from '../../story/format';
 import { formatSparks } from '../../purchases/format';
 import { colors, radii, space, toneFor, type, useTone } from '../../theme';
@@ -161,6 +162,8 @@ interface ChoiceOverlayProps {
   customCost: number;
   freeSparks: number;
   active: boolean;
+  /** Seconds until the app picks a filmed choice by itself, or null when it will not. */
+  autoPickSeconds: number | null;
   onChoose: (index: number) => void;
   onSomethingElse: () => void;
   onFocusChoice: (index: number | null) => void;
@@ -177,6 +180,7 @@ export function ChoiceOverlay({
   customCost,
   freeSparks,
   active,
+  autoPickSeconds,
   onChoose,
   onSomethingElse,
   onFocusChoice,
@@ -235,6 +239,10 @@ export function ChoiceOverlay({
       >
         <Backdrop color={dockNight} alpha={0.92} fadeTop={DOCK_FADE} />
         <Text style={styles.heading}>What happens next?</Text>
+        {/* The line keeps its height when the countdown stops, so the cards never jump. */}
+        <Text style={styles.countdown} accessibilityElementsHidden={autoPickSeconds === null}>
+          {autoPickSeconds !== null ? formatAutoPick(autoPickSeconds) : ' '}
+        </Text>
         <SpatialNavigationView direction="horizontal" style={styles.row}>
           {scene.choices.map((choice, i) => (
             <Animated.View key={choice.index} style={[styles.slot, rise(cards[Math.min(i, 3)])]}>
@@ -280,7 +288,12 @@ const styles = StyleSheet.create({
   heading: {
     ...type.title,
     color: colors.paper,
-    marginBottom: space.md,
+  },
+  countdown: {
+    ...type.small,
+    color: colors.paperDim,
+    marginTop: space.xs,
+    marginBottom: space.sm,
   },
   row: {
     justifyContent: 'center',

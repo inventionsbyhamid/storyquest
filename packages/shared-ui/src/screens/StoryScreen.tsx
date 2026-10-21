@@ -26,6 +26,7 @@ import { useAppActive } from '../hooks/useAppActive';
 import { useBackHandler, useRemoteKey } from '../hooks/useBackHandler';
 import { useLatest } from '../hooks/useLatest';
 import { canAfford, costLabel, sparks, useSparks } from '../purchases';
+import { AUTO_PICK_SECONDS, autoPickCandidates, pickAtRandom } from '../story/autoPick';
 import { createSerialQueue, sendChoice } from '../story/choiceSync';
 import { formatFolio, formatMadeIn } from '../story/format';
 import { isFilmingPaused } from '../budget/filming';
@@ -336,6 +337,8 @@ export default function StoryScreen() {
   }, isFocused);
 
   useRemoteKey((key) => {
+    // Any press while the choices are up means someone is choosing, so the app stops counting down.
+    if (latestState.current.phase === 'choosing') stopAutoPick();
     if (key === SupportedKeys.PlayPause) togglePause();
     else if (key === SupportedKeys.Enter && inPlayback && !state.menuOpen) setCaptionToken(Date.now());
   }, isFocused);
@@ -464,6 +467,45 @@ export default function StoryScreen() {
     },
     [latestState, latestWallet, lifetime],
   );
+  // When nobody presses anything, the story carries on along a filmed, free path.
+  const [autoPickLeft, setAutoPickLeft] = useState<number | null>(null);
+  const [autoPickOffFor, setAutoPickOffFor] = useState<string | null>(null);
+  const stopAutoPick = useCallback(() => {
+    const id = latestState.current.scene?.id;
+    if (id) setAutoPickOffFor(id);
+  }, [latestState]);
+  const canAutoPick =
+    !!scene &&
+    phase === 'choosing' &&
+    !pathEnded &&
+    !state.menuOpen &&
+    !gateOpen &&
+    isFocused &&
+    appActive &&
+    autoPickOffFor !== scene.id &&
+    autoPickCandidates(state).length > 0;
+  useEffect(() => {
+    if (!canAutoPick) {
+      setAutoPickLeft(null);
+      return;
+    }
+    let left = AUTO_PICK_SECONDS;
+    setAutoPickLeft(left);
+    const timer = setInterval(() => {
+      left -= 1;
+      if (left > 0) {
+        setAutoPickLeft(left);
+        return;
+      }
+      clearInterval(timer);
+      setAutoPickLeft(null);
+      stopAutoPick();
+      const index = pickAtRandom(autoPickCandidates(latestState.current));
+      if (index !== null) choose(index);
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [canAutoPick, scene?.id, choose, latestState, stopAutoPick]);
+
   const cancelCustom = useCallback(() => dispatch({ type: 'CANCEL_CUSTOM' }), []);
   const resume = useCallback(() => dispatch({ type: 'CLOSE_MENU' }), []);
 
@@ -536,6 +578,7 @@ export default function StoryScreen() {
             customCost={customCost}
             freeSparks={wallet?.freeSparks ?? 0}
             active={layersActive && phase === 'choosing'}
+            autoPickSeconds={autoPickLeft}
             onChoose={choose}
             onSomethingElse={openCustom}
             onFocusChoice={onFocusChoice}
