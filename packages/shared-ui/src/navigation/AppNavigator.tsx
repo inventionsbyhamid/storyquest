@@ -47,7 +47,8 @@ export default function AppNavigator() {
         <Stack.Screen name="Home" component={HomeScreen} />
         <Stack.Screen name="Create" component={CreateScreen} />
         <Stack.Screen name="Story" component={StoryScreen} />
-        <Stack.Screen name="End" component={EndScreen} />
+        {/* The story is replaced by The end, so a fade would show Home underneath for a moment. */}
+        <Stack.Screen name="End" component={EndScreen} options={{ animation: 'none' }} />
         <Stack.Screen name="Movie" component={MovieScreen} />
       </Stack.Navigator>
     </NavigationContainer>
