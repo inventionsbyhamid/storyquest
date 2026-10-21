@@ -23,7 +23,7 @@ StoryQuest is a Fire TV app where every scene of a branching story is an AI gene
 * Audience: Kids, Family, Grown ups.
 
 ### Story
-* Each scene is one clip of about 8 seconds, full screen, with captions.
+* Each scene is one clip of about 12 seconds (8 in the first stories), full screen, with captions.
 * When a clip ends, its last frame stays on screen and three cards appear: two choices with thumbnails and Something else.
 * Something else opens the text field. The custom scene takes a few seconds and shows a short animation while it is made.
 * Back opens a pause menu. Play and Pause work, and so does Alexa, pause.
@@ -49,7 +49,7 @@ Every story is a tree of scene nodes. A preset choice is an edge to a child node
 Fixed when a story starts: title, art style, setting, tone, audience and a fixed visual description for each character. The descriptions are copied into every video prompt so characters stay recognisable.
 
 ### Director
-One Amazon Bedrock call (Claude) per new scene. Input: bible, summaries of the path so far, the choice taken, position in the arc and audience. Output is strict JSON validated by a schema: summary, caption, videoPrompt, two choices, isEnding and any new characters. The arc is 6 scenes for daily stories. The director is told where it is ("scene 4 of 6, the ending must land by scene 6").
+One language model call per new scene (DeepSeek V4.1 Flash on OpenRouter in production, Claude on Amazon Bedrock supported). Input: bible, summaries of the path so far, the choice taken, position in the arc and audience. Output is strict JSON validated by a schema: summary, caption, videoPrompt, two choices, isEnding and any new characters. The arc length is a setting (4 scenes of 12 seconds in production, 6 of 8 in the first stories). The director is told where it is ("scene 3 of 4, the ending must land by scene 4").
 
 ### Scene pipeline
 1. Director writes the scene.

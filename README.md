@@ -2,7 +2,7 @@
 
 **Tonight's story is yours to choose.** StoryQuest is a Fire TV app where every scene of a family story is an AI generated video clip with sound. When a scene ends, the family picks what happens next with the remote, or presses the microphone button and says their own idea, and the next scene plays.
 
-Six new stories arrive every day. Every family starts from the same openings, every family ends somewhere different, and every ending can be shared with a QR code.
+New stories arrive regularly. Every family starts from the same openings, every family ends somewhere different, and every ending can be shared with a QR code.
 
 * Demo video: _link coming with the submission_
 * Website and hosted server: [storyquest.dijmo.com](https://storyquest.dijmo.com)
@@ -12,7 +12,7 @@ Six new stories arrive every day. Every family starts from the same openings, ev
 ## What it does
 
 * **Tonight's Stories.** Fresh stories planned by the story director with a seasonal touch.
-* **Every scene is video.** Each scene is an 8 second clip with music, sound effects and voices, made by MiniMax H3 Max Turbo.
+* **Every scene is video.** Each scene is a 12 second clip with music, sound effects and voices, made by MiniMax H3 Max Turbo. A story is four scenes, and a new scene from a family's own idea is ready in about 12 seconds.
 * **Choices with the D pad, ideas with your voice.** Two choices after every scene, plus Something else, where the remote microphone dictates any idea into the story. When nobody presses anything, a countdown picks a filmed path, so the story carries on for families who just want to watch.
 * **Seamless cuts.** Each clip starts on the exact last frame of the previous one, so the story flows like one film.
 * **Instant choices.** While a scene plays, both possible next scenes are already being made.
@@ -43,7 +43,7 @@ StoryQuest server (Node 22, Fastify, SQLite)
 ```
 
 1. **Story bible.** Each story has a fixed art style and a fixed description for every character. They are copied into every video prompt so characters stay recognisable.
-2. **Director.** For every new scene, the language model gets the bible, the story so far, the choice taken and where the scene sits in a six scene arc, and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
+2. **Director.** For every new scene, the language model gets the bible, the story so far, the choice taken and where the scene sits in the story's arc (four scenes in production), and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
 3. **Video.** The video model renders the scene starting from the last frame of the previous clip.
 4. **Prefetch.** When a family arrives at a scene, both next scenes start generating at once, so a choice usually plays immediately.
 5. **Dedupe.** A unique constraint on (parent, choice) means two families picking the same new path at the same time share one generation.
@@ -144,7 +144,7 @@ yarn workspace @multi-tv/shared-ui test
 
 ## Costs and business model
 
-Every filmed scene costs about $0.32 (8 seconds of video at $0.04 a second; the story director adds about $0.001). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
+Every filmed scene costs about $0.48 (12 seconds of video at $0.04 a second; the story director adds about $0.001). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
 
 ## Website
 

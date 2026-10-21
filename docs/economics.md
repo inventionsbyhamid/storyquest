@@ -6,9 +6,11 @@ Video generation is the main cost. Everything else (server on our own VPS, bandw
 
 | Item | Cost |
 | --- | --- |
-| MiniMax H3 Max Turbo, 768p, 8 seconds at $0.04 per second | $0.32 |
-| Claude story director on Amazon Bedrock | about $0.04 |
-| **Scene** | **about $0.36** |
+| MiniMax H3 Max Turbo, 768p, at $0.04 per second | $0.48 for 12 seconds ($0.32 for 8) |
+| Story director (DeepSeek V4.1 Flash on OpenRouter) | about $0.001 (Claude on Bedrock: about $0.04) |
+| **Scene** | **about $0.48** |
+
+Stories now use four 12 second scenes, so a whole shared tree is 15 scenes (about $7.20) instead of 63 (about $20 at 8 seconds). A 10 Spark pack at $11.99 is about $0.96 a Spark after Amazon's 20%, against about $0.62 of filming per Spark (1.3 scenes made per scene watched). The simulation below was run with 8 second scenes and Claude, so its costs are on the high side for trees and on the low side for private scenes.
 
 Private scenes are prepared ahead only for the choice a family focuses on, so we budget 1.3 scenes made per scene watched.
 
