@@ -21,6 +21,8 @@ export const ChoiceView = z.object({
   posterUrl: z.string().nullable(),
   tone: Tone.nullable().optional(),
   sparks: z.number().int().min(0),
+  /** True when every clip of the chapter behind this choice is filmed, not just its first. */
+  filmed: z.boolean().optional(),
 });
 export type ChoiceView = z.infer<typeof ChoiceView>;
 

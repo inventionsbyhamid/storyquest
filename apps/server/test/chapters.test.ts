@@ -107,6 +107,7 @@ describe('chapters', () => {
     const third = await scene(app, next.nextNodeId);
     expect(third.continues).toBe(false);
     expect(third.choices).toHaveLength(2);
+    expect(third.choices.every((choice) => !choice.filmed)).toBe(true);
     expect(third.sceneNumber).toBe(1);
 
     // One director call wrote the whole chapter; each clip starts from the one before.
@@ -170,6 +171,9 @@ describe('chapters', () => {
     const sibling = services.repo.getPresetChildren(current.id).find((child) => child.choiceIndex === 1)!;
     expect(sibling.status).toBe('ready');
     expect(services.repo.getPresetChildren(sibling.id)).toHaveLength(0);
+    const offered = await scene(app, current.id);
+    expect(offered.choices[1]).toMatchObject({ ready: true, filmed: false });
+    expect(offered.choices[0]!.filmed).toBe(true);
 
     // With filming paused, a choice whose chapter is only partly filmed is shown as not filmed.
     services.config.TOTAL_VIDEO_SECONDS_CAP = 1;

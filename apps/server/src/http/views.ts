@@ -94,6 +94,7 @@ export class Views {
           posterUrl: playable ? this.url(child.posterPath) : null,
           tone: playable ? child.tone : null,
           sparks: free ? 0 : this.services.config.SCENE_COST_SPARKS,
+          filmed: playable && this.chapterFilmed(child),
         };
       });
     }

@@ -25,6 +25,11 @@ describe('auto pick', () => {
     expect(autoPickCandidates(state)).toEqual([]);
   });
 
+  it('never starts a chapter that is only partly filmed', () => {
+    const state = choosingWith([makeChoice(0, { filmed: false }), makeChoice(1, { filmed: true })]);
+    expect(autoPickCandidates(state)).toEqual([1]);
+  });
+
   it('skips paths that are closed', () => {
     const state = choosingWith([makeChoice(0), makeChoice(1, { nodeId: 'gone' })], ['gone']);
     expect(autoPickCandidates(state)).toEqual([0]);
