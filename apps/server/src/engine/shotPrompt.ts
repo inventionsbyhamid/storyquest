@@ -29,6 +29,14 @@ const voiceOf = (character: Character) => {
   return /^an? /i.test(voice) ? voice[0]!.toLowerCase() + voice.slice(1) : voice;
 };
 
+// Without this the model sometimes draws a character twice, or adds a stranger who looks like one.
+const onlyThese = (people: Character[]) => {
+  const names = people.map((c) => c.name);
+  if (names.length === 1) return `${names[0]} is the only character in the shot.`;
+  const list = `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+  return `${list} are the only characters in the shot, and each appears exactly once.`;
+};
+
 const spoken = (text: string) =>
   sentence(text.replace(/[<>"“”]/g, '').trim());
 
@@ -60,6 +68,7 @@ export function composeShotPrompt(shot: ShotDraft, context: ShotContext): string
     ...people.map(introduce),
     sentence(shot.action),
     ...said,
+    people.length ? onlyThese(people) : '',
     people.length ? LOOKS_LOCKED : '',
     ONE_TAKE,
     NO_TEXT,
