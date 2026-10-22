@@ -19,7 +19,7 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 
 ## Try it
 
-The release packages talk to our server, so you need no keys or accounts. The server stays online until November 20, 2026.
+The release packages talk to our server, so you need no keys or accounts.
 
 ### On a Fire TV Stick with Vega OS
 
@@ -141,6 +141,11 @@ docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data sto
 * Families buy Sparks in the app with Amazon In App Purchasing: 10 Sparks for $11.99 or 25 for $24.99.
 * A chapter filmed just for your family, from your own idea or a path nobody took yet, costs 3 Sparks. The first one is free.
 * A filmed chapter costs us about $1.80 in video. Shared paths are filmed once and replay for every family, so free stories stay cheap.
+
+## Next steps
+
+* Publish StoryQuest on the Amazon Appstore for Fire TV.
+* Family profiles, and characters who come back in new stories.
 
 ## Privacy
 
