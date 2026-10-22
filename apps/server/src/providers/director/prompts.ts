@@ -173,7 +173,8 @@ const OUTLINE_RULES = `The story plan (outline)
 * One entry per chapter, in order. Together they are one complete story with a beginning, a middle and an end, not a list of loosely linked events.
 * Chapter 1 shows the hero, their world and what they want, then the problem that starts the adventure. The middle chapters raise the stakes: an attempt, a helper or obstacle, a setback or surprising turn, and a clue that matters later. The last chapter is the climax and a warm, complete resolution where the goal is reached and the opening problem is answered.
 * Plant small things early that pay off later. The hero solves the problem through their own courage, kindness or cleverness.
-* Families will steer with choices, so describe what each chapter must achieve, not every move.`;
+* Families will steer with choices, so describe what each chapter must achieve, not every move.
+* Every character who matters in the plan, friend or obstacle, is in the characters list with a fixed visual description, so they look the same in every clip.`;
 
 export function bibleSystemPrompt(): string {
   return `You are the story developer for StoryQuest, a branching family story told in short AI video clips on a TV. A family describes a story they would like, and you turn it into a story bible that keeps every clip consistent.
@@ -295,6 +296,7 @@ Characters and style
 * Only add a new character when the story truly needs one. Add them to newCharacters as an object, { "name": "Name", "description": "..." }, with a fixed visual description, and use that same description in the videoPrompt.
 
 Writing the chapter
+* The very first shot of the story opens on a striking, beautiful moment that shows the world and the hero, not a still pose.
 * A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat, then stops at a moment that makes the next decision exciting.
 * Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
 * When the family typed their own idea, make it happen in this chapter and let it matter, so they can recognise it on screen. If part of it would break the safety rules, use the closest gentle version and never lecture.

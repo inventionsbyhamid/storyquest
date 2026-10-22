@@ -239,4 +239,42 @@ describe('chapters', () => {
     expect(list.stories.map((story) => story.id)).toEqual([second.id]);
     expect(first.id).not.toBe(second.id);
   });
+
+  it('lets an admin add a chosen story plan and take stories off Home', async () => {
+    const { app, services } = await boot();
+    const drafted = await app.inject({ method: 'POST', url: '/v1/admin/plans', headers: ADMIN, payload: { count: 1 } });
+    expect(drafted.statusCode).toBe(200);
+    const [plan] = drafted.json().plans;
+    expect(plan.title).toBeTruthy();
+
+    const outline = ['Mia finds a door in the garden wall.', 'Mia and Biscuit cross the moon meadow.'];
+    const added = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/ideas',
+      headers: ADMIN,
+      payload: { plan: { ...plan, title: 'The Moon Door', outline } },
+    });
+    expect(added.statusCode).toBe(201);
+    const ideaId = added.json().idea.id;
+    await services.engine.idle();
+    let today = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
+    expect(today.ideas.map((idea) => idea.title)).toContain('The Moon Door');
+    expect(services.repo.getTree(services.repo.getIdea(ideaId)!.treeId)!.bible!.outline).toEqual(outline);
+
+    const others = today.ideas.filter((idea) => idea.id !== ideaId);
+    for (const idea of others) {
+      expect(
+        (await app.inject({ method: 'POST', url: `/v1/admin/ideas/${idea.id}/unlist`, headers: ADMIN })).statusCode,
+      ).toBe(200);
+    }
+    today = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
+    expect(today.ideas.map((idea) => idea.id)).toEqual([ideaId]);
+    const missingOutline = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/ideas',
+      headers: ADMIN,
+      payload: { plan: { ...plan, outline: undefined } },
+    });
+    expect(missingOutline.statusCode).toBe(400);
+  });
 });

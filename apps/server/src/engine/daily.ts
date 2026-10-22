@@ -1,6 +1,6 @@
 import type { Config } from '../config';
 import type { Repository } from '../db/repo';
-import { utcDay, type IdeaRecord } from '../domain';
+import { utcDay, type Bible, type IdeaRecord } from '../domain';
 import { errorDetails, type Logger } from '../log';
 import type { Director } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
@@ -108,19 +108,22 @@ export class DailyIdeas {
     // Today's ideas show while their opening is still being made; older ones only once playable.
     let ideas = repo
       .listIdeasBetween(oldest, today)
+      .filter((idea) => !idea.unlistedAt)
       .filter((idea) => (idea.date === today && !hidden(idea)) || ready(idea));
     if (!ideas.some(ready)) {
       const fallback = repo.latestDateWithReadyIdeas();
       if (fallback && fallback < oldest) {
         date = fallback;
-        ideas = repo.listIdeas(fallback).filter(ready);
+        ideas = repo.listIdeas(fallback).filter((idea) => !idea.unlistedAt && ready(idea));
       }
     }
 
     if (!config.DAILY_PLANNER && ideas[0] && ideas[0].date !== today) date = ideas[0].date;
 
     const listed = new Set(ideas.map((idea) => idea.id));
-    const featured = repo.listFeatured().filter((idea) => idea.date < today && !listed.has(idea.id) && ready(idea));
+    const featured = repo
+      .listFeatured()
+      .filter((idea) => idea.date < today && !listed.has(idea.id) && !idea.unlistedAt && ready(idea));
     const cap = config.DAILY_IDEAS * config.IDEA_LIFETIME_DAYS + FEATURED_EXTRA;
     return { date, ideas: [...ideas, ...featured].slice(0, cap) };
   }
@@ -139,6 +142,37 @@ export class DailyIdeas {
       this.scheduleRetry(date, errorDetails(err).message);
       throw err;
     }
+  }
+
+  /** Story plans to choose from, written but not filmed. */
+  async draftPlans(count: number): Promise<Bible[]> {
+    const { config, director } = this.deps;
+    const titles = this.listForHome().ideas.map((idea) => idea.title);
+    return (await director.planIdeas(this.today(), count, titles, config.SCENES_PER_STORY)).map(sanitizeBible);
+  }
+
+  /** Puts a chosen story plan on Home today and starts filming its opening. */
+  async addIdea(plan: Bible): Promise<IdeaRecord> {
+    const { config, repo, safety, engine, log } = this.deps;
+    const bible = sanitizeBible(plan);
+    const verdict = await safety.check(
+      [bible.title, bible.logline, bible.setting, ...bible.characters.map((c) => c.description), ...(bible.outline ?? [])].join('\n'),
+      { source: 'output', audience: bible.audience },
+    );
+    if (!verdict.ok) throw new Error(`the story plan failed the safety check: ${verdict.reason}`);
+    const date = this.today();
+    const idea = repo.createDailyIdea({
+      date,
+      position: repo.nextIdeaPosition(date),
+      bible,
+      totalScenes: bible.outline?.length || config.SCENES_PER_STORY,
+      clipsPerChapter: config.CLIPS_PER_CHAPTER,
+      warm: 0,
+    });
+    if (!idea) throw new Error('the story could not be added');
+    engine.enqueue(idea.rootNodeId, 'high');
+    log.info({ ideaId: idea.id, title: idea.title }, 'story added by an admin');
+    return idea;
   }
 
   private scheduleRetry(date: string, reason: string): void {

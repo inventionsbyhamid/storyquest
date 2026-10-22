@@ -66,6 +66,8 @@ export interface IdeaRecord {
   moods: Mood[];
   plays: number;
   featuredAt: string | null;
+  /** Set when an admin took the story off Home. Families who started it can still continue. */
+  unlistedAt: string | null;
   createdAt: string;
 }
 

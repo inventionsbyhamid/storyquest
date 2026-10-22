@@ -190,6 +190,9 @@ const MIGRATIONS: string[] = [
   UPDATE stories SET updated_at = COALESCE(finished_at, created_at);
   CREATE INDEX stories_device_recent ON stories(device_id, updated_at);
   `,
+  `
+  ALTER TABLE ideas ADD COLUMN unlisted_at TEXT;
+  `,
 ];
 
 export function openDatabase(file: string): Db {

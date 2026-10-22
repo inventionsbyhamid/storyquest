@@ -49,6 +49,7 @@ interface IdeaRow {
   moods: string;
   plays: number;
   featured_at: string | null;
+  unlisted_at: string | null;
   created_at: string;
 }
 
@@ -135,6 +136,7 @@ const toIdea = (row: IdeaRow): IdeaRecord => ({
   moods: JSON.parse(row.moods) as Mood[],
   plays: row.plays,
   featuredAt: row.featured_at,
+  unlistedAt: row.unlisted_at,
   createdAt: row.created_at,
 });
 
@@ -438,6 +440,16 @@ export class Repository {
        WHERE nodes.status = 'ready' AND nodes.hidden_at IS NULL ORDER BY ideas.date DESC LIMIT 1`,
     ).get() as { date: string } | undefined;
     return row?.date ?? null;
+  }
+
+  setUnlisted(id: string, unlisted: boolean): boolean {
+    const info = this.stmt('UPDATE ideas SET unlisted_at = ? WHERE id = ?').run(unlisted ? this.timestamp() : null, id);
+    return info.changes === 1;
+  }
+
+  nextIdeaPosition(date: string): number {
+    const row = this.stmt('SELECT MAX(position) AS top FROM ideas WHERE date = ?').get(date) as { top: number | null };
+    return (row.top ?? -1) + 1;
   }
 
   setFeatured(id: string, featured: boolean): boolean {

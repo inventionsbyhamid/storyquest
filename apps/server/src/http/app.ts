@@ -25,6 +25,8 @@ import {
 import { z } from 'zod';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import type { Config } from '../config';
+import type { Bible } from '../domain';
+import { PlannedIdeaSchema } from '../providers/director/schemas';
 import { AppError, badRequest, MESSAGES, notFound, rateLimited } from '../engine/errors';
 import { PATH_ID, SLUG } from '../ids';
 import { createServices, type ServiceOverrides, type Services } from '../services';
@@ -356,6 +358,29 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     if (!repo.setFeatured(id, featured)) throw notFound();
     return { featured, idea: views.idea(repo.getIdea(id)!) };
   };
+  const PlanRequest = z.object({ count: z.number().int().min(1).max(6).default(3) });
+  app.post('/v1/admin/plans', async (request) => {
+    requireAdmin(request);
+    const body = parse(PlanRequest, request.body ?? {});
+    return { plans: await daily.draftPlans(body.count) };
+  });
+
+  app.post('/v1/admin/ideas', async (request, reply) => {
+    requireAdmin(request);
+    const body = parse(z.object({ plan: PlannedIdeaSchema.required({ outline: true }) }), request.body);
+    const idea = await daily.addIdea(body.plan as Bible);
+    return reply.code(201).send({ idea: views.idea(idea) });
+  });
+
+  const setUnlisted = (request: FastifyRequest<{ Params: { id: string } }>, unlisted: boolean) => {
+    requireAdmin(request);
+    const id = idParam(request.params.id);
+    if (!repo.setUnlisted(id, unlisted)) throw notFound();
+    return { unlisted, idea: views.idea(repo.getIdea(id)!) };
+  };
+  app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/unlist', async (request) => setUnlisted(request, true));
+  app.delete<{ Params: { id: string } }>('/v1/admin/ideas/:id/unlist', async (request) => setUnlisted(request, false));
+
   app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/feature', async (request) => setFeatured(request, true));
   app.delete<{ Params: { id: string } }>('/v1/admin/ideas/:id/feature', async (request) => setFeatured(request, false));
 
