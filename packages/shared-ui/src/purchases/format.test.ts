@@ -32,6 +32,13 @@ describe('wallet formatting', () => {
     expect(formatFreeScenes(3)).toBe('3 free scenes');
   });
 
+  it('counts free Sparks as chapters when a chapter costs several', () => {
+    expect(walletLabel(wallet({ freeSparks: 6, sceneCost: 3 }))).toBe('2 free chapters');
+    expect(walletLabel(wallet({ freeSparks: 3, sceneCost: 3 }))).toBe('Your first chapter is free');
+    expect(walletLabel(wallet({ sparks: 10, freeSparks: 3, sceneCost: 3 }))).toBe('10 Sparks and 1 free chapter');
+    expect(costLabel(wallet({ freeSparks: 3, sceneCost: 3 }), 3)).toBe('Uses your free chapter');
+  });
+
   it('welcomes new families and otherwise shows the balance', () => {
     expect(walletLabel(wallet({ freeSparks: 1 }))).toBe('Your first scene is free');
     expect(walletLabel(wallet({ freeSparks: 3 }))).toBe('3 free scenes');
@@ -54,7 +61,7 @@ describe('wallet formatting', () => {
     expect(costLabel(wallet(), 0)).toBeNull();
     expect(balanceLine(wallet({ sparks: 2 }))).toBe('You have 2 Sparks.');
     expect(balanceLine(wallet({ freeSparks: 1 }))).toBe('You have 0 Sparks and 1 free scene.');
-    expect(SPARKS_EXPLAINER).toBe("Scenes made only for your family use Sparks. Tonight's stories stay free.");
+    expect(SPARKS_EXPLAINER).toBe("Stories filmed only for your family use Sparks. Tonight's stories stay free.");
     expect(packPrice('$11.99')).toBe('$11.99');
     expect(packPrice(null)).toBe('Price shown by Amazon');
     expect(bestValueSku(wallet().products)).toBe('storyquest.sparks.25');

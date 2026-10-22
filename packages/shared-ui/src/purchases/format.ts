@@ -5,8 +5,11 @@ export function formatSparks(count: number): string {
   return count === 1 ? '1 Spark' : `${formatCount(count)} Sparks`;
 }
 
-export function formatFreeScenes(count: number): string {
-  return count === 1 ? '1 free scene' : `${formatCount(count)} free scenes`;
+/** Free Sparks counted in what they buy: a chapter when one costs several Sparks, otherwise a scene. */
+export function formatFreeScenes(freeSparks: number, sceneCost = 1): string {
+  const unit = sceneCost > 1 ? 'chapter' : 'scene';
+  const count = Math.floor(freeSparks / Math.max(1, sceneCost));
+  return count === 1 ? `1 free ${unit}` : `${formatCount(count)} free ${unit}s`;
 }
 
 export function spendable(wallet: WalletView): number {
@@ -19,24 +22,29 @@ export function canAfford(wallet: WalletView | null, cost: number): boolean {
 }
 
 export function walletLabel(wallet: WalletView): string {
+  const unit = wallet.sceneCost > 1 ? 'chapter' : 'scene';
   if (wallet.freeSparks > 0 && wallet.sparks === 0) {
-    return wallet.freeSparks === 1 ? 'Your first scene is free' : formatFreeScenes(wallet.freeSparks);
+    return wallet.freeSparks === Math.max(1, wallet.sceneCost)
+      ? `Your first ${unit} is free`
+      : formatFreeScenes(wallet.freeSparks, wallet.sceneCost);
   }
-  if (wallet.freeSparks > 0) return `${formatSparks(wallet.sparks)} and ${formatFreeScenes(wallet.freeSparks)}`;
+  if (wallet.freeSparks > 0) {
+    return `${formatSparks(wallet.sparks)} and ${formatFreeScenes(wallet.freeSparks, wallet.sceneCost)}`;
+  }
   return formatSparks(wallet.sparks);
 }
 
 export function costLabel(wallet: WalletView | null, cost: number): string | null {
   if (cost <= 0) return null;
-  if (wallet && wallet.freeSparks >= cost) return 'Uses your free scene';
+  if (wallet && wallet.freeSparks >= cost) return cost > 1 ? 'Uses your free chapter' : 'Uses your free scene';
   return `Uses ${formatSparks(cost)}`;
 }
 
-export const SPARKS_EXPLAINER = "Scenes made only for your family use Sparks. Tonight's stories stay free.";
+export const SPARKS_EXPLAINER = "Stories filmed only for your family use Sparks. Tonight's stories stay free.";
 
 export function balanceLine(wallet: WalletView): string {
   if (wallet.freeSparks > 0)
-    return `You have ${formatSparks(wallet.sparks)} and ${formatFreeScenes(wallet.freeSparks)}.`;
+    return `You have ${formatSparks(wallet.sparks)} and ${formatFreeScenes(wallet.freeSparks, wallet.sceneCost)}.`;
   return `You have ${formatSparks(wallet.sparks)}.`;
 }
 
