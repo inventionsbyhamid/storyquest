@@ -57,7 +57,9 @@ export class Media {
         '-map', '0:v:0', '-map', '0:a?',
         '-c:v', 'libx264', '-profile:v', 'high', '-level', '4.1', '-preset', 'veryfast', '-crf', '20',
         '-maxrate', '6M', '-bufsize', '12M', '-g', '48', '-pix_fmt', 'yuv420p',
-        '-c:a', 'copy',
+        // A few milliseconds of fade at each end, so clips that play back to back join without a click.
+        '-af', 'afade=t=in:d=0.02,areverse,afade=t=in:d=0.04,areverse',
+        '-c:a', 'aac', '-b:a', '192k',
         '-movflags', '+faststart',
         output,
       ],

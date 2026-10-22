@@ -49,7 +49,8 @@ export class FalVideo implements VideoProvider {
   async render(request: RenderRequest): Promise<RenderResult> {
     const endpoint = request.startFramePath ? this.options.imageToVideoModel : this.options.textToVideoModel;
     const input: Record<string, unknown> = {
-      prompt: request.prompt + NO_TEXT,
+      // Prompts in MiniMax's layout already say this inside the description.
+      prompt: request.prompt.includes('integrated_multimodal_description') ? request.prompt : request.prompt + NO_TEXT,
       duration: request.seconds,
       resolution: this.options.resolution,
       prompt_expansion_mode: this.options.promptExpansion,

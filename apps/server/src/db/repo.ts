@@ -18,6 +18,7 @@ import type {
   StoryStatus,
   TreeRecord,
   WalletRecord,
+  WrittenChapter,
 } from '../domain';
 
 interface TreeRow {
@@ -31,6 +32,7 @@ interface TreeRow {
   prompt: string | null;
   total_scenes: number;
   clips_per_chapter: number;
+  scripts: string | null;
   is_private: number;
   warm_depth: number;
   warm_force: number;
@@ -118,6 +120,7 @@ const toTree = (row: TreeRow): TreeRecord => ({
   prompt: row.prompt,
   totalScenes: row.total_scenes,
   clipsPerChapter: row.clips_per_chapter,
+  scripts: row.scripts ? (JSON.parse(row.scripts) as Record<string, WrittenChapter>) : {},
   isPrivate: row.is_private === 1,
   warmDepth: row.warm_depth,
   warmForce: row.warm_force === 1,
@@ -340,6 +343,15 @@ export class Repository {
   getTree(id: string): TreeRecord | null {
     const row = this.stmt('SELECT * FROM trees WHERE id = ?').get(id) as TreeRow | undefined;
     return row ? toTree(row) : null;
+  }
+
+  setTreeScript(id: string, key: string, chapter: WrittenChapter): void {
+    this.transaction(() => {
+      const row = this.stmt('SELECT scripts FROM trees WHERE id = ?').get(id) as { scripts: string | null } | undefined;
+      const scripts = row?.scripts ? (JSON.parse(row.scripts) as Record<string, WrittenChapter>) : {};
+      scripts[key] = chapter;
+      this.stmt('UPDATE trees SET scripts = ? WHERE id = ?').run(JSON.stringify(scripts), id);
+    });
   }
 
   setTreeBible(id: string, bible: Bible): void {

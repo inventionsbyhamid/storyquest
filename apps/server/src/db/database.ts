@@ -193,6 +193,9 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE ideas ADD COLUMN unlisted_at TEXT;
   `,
+  `
+  ALTER TABLE trees ADD COLUMN scripts TEXT;
+  `,
 ];
 
 export function openDatabase(file: string): Db {

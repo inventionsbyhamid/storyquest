@@ -6,6 +6,7 @@ import { Repository } from './db/repo';
 import { Budget } from './engine/budget';
 import { DailyIdeas } from './engine/daily';
 import { AdminJobs } from './engine/film';
+import { ScriptDesk } from './engine/scripts';
 import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
@@ -40,6 +41,7 @@ export interface Services {
   moderation: Moderation;
   budget: Budget;
   jobs: AdminJobs;
+  scripts: ScriptDesk;
   now: () => Date;
 }
 
@@ -190,6 +192,7 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
 
   const moderation = new Moderation({ repo, store, log: log.child({ module: 'moderation' }) });
   const jobs = new AdminJobs({ repo, engine, budget, log: log.child({ module: 'jobs' }), now });
+  const scripts = new ScriptDesk({ config, repo, director, safety });
 
-  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, budget, jobs, now };
+  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, budget, jobs, scripts, now };
 }

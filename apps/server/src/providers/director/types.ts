@@ -1,4 +1,4 @@
-import type { Audience, Bible, Character, Mood, Shot } from '../../domain';
+import type { Audience, Bible, Character, Mood, ShotDraft } from '../../domain';
 
 export interface SceneHistoryItem {
   sceneNumber: number;
@@ -38,7 +38,7 @@ export interface Scene {
 /** A chapter: several continuous clips, written in one go, ending at a choice. */
 export interface Chapter {
   summary: string;
-  shots: Shot[];
+  shots: ShotDraft[];
   choices: string[];
   isEnding: boolean;
   newCharacters: Character[];

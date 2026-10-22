@@ -393,8 +393,16 @@ describe('chapter validation', () => {
     expect(parseModelJson(chapterSchema(1, 4, 3), JSON.stringify({ ...chapter, shots: [shot, shot] })).ok).toBe(false);
   });
 
+  it('reads shots written loosely, with the cast as text and lines as "Name: words"', () => {
+    const loose = { caption: 'Mia opens the moon door.', cast: 'Mia, Biscuit', action: goodScene.videoPrompt, dialogue: ['Mia: Look at the moon!'], sound: 'Wind.' };
+    const parsed = parseModelJson(chapterSchema(1, 4, 3), JSON.stringify({ ...chapter, shots: [loose, loose, loose] }));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.value.shots[0]).toMatchObject({ cast: ['Mia', 'Biscuit'], dialogue: [{ speaker: 'Mia', line: 'Look at the moon!' }] });
+  });
+
   it('shows every shot in the reply format', () => {
-    const format = chapterSystemPrompt(15, 3).split('"shots": [')[1]!.split(']')[0]!;
+    const format = chapterSystemPrompt(15, 3).split('"shots": [')[1]!.split('"choices"')[0]!;
     expect(format.match(/"caption"/g)).toHaveLength(3);
   });
 });
@@ -502,17 +510,21 @@ describe('FakeDirector', () => {
 describe('chapter clean up', () => {
   it('drops a copied shot label from captions and prompts', async () => {
     const { sanitizeChapter } = await import('../src/engine/scenes');
+    const nicoBible = { ...bible, characters: [{ name: 'Nico', description: 'A small boy in a starry blue cloak.' }] };
     const clean = sanitizeChapter(
       {
         summary: 'They chased the stardust.',
-        shots: [{ caption: 'Shot 1: Nico runs.', videoPrompt: 'Shot 1. A boy runs across the sky.' }],
+        shots: [{ caption: 'Shot 1: Nico runs.', cast: ['Nico'], action: 'Shot 1. Nico runs across the sky.', dialogue: [], sound: '' }],
         choices: [],
         isEnding: true,
         newCharacters: [],
       },
       4,
       4,
+      { bible: nicoBible, cast: nicoBible.characters, opensStory: false },
     );
-    expect(clean.shots[0]).toEqual({ caption: 'Nico runs.', videoPrompt: 'A boy runs across the sky.' });
+    expect(clean.shots[0]!.caption).toBe('Nico runs.');
+    expect(clean.shots[0]!.videoPrompt).toContain('Nico is a small boy in a starry blue cloak. Nico runs across the sky.');
+    expect(clean.shots[0]!.videoPrompt).not.toContain('Shot 1.');
   });
 });

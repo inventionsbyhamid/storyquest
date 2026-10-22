@@ -6,6 +6,7 @@ const wordCount = (text: string) => text.trim().split(/\s+/).filter(Boolean).len
 export const CharacterSchema = z.object({
   name: z.string().trim().min(1).max(40),
   description: z.string().trim().min(10).max(400),
+  voice: z.string().trim().min(3).max(160).optional().catch(undefined),
 });
 
 // Some models write a character as "Name: description" instead of an object.
@@ -73,6 +74,48 @@ export function sceneSchema(sceneNumber: number, totalScenes: number) {
     });
 }
 
+const LineSchema = z.object({
+  speaker: z.string().trim().min(1).max(40),
+  line: z
+    .string()
+    .trim()
+    .min(1)
+    .max(90)
+    .refine((text) => wordCount(text) <= 14, 'a spoken line is at most 12 words'),
+});
+
+const ShotDraftSchema = z.object({
+  caption: z.string().trim().min(2).max(140),
+  cast: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
+  action: z.string().trim().min(40).max(1200),
+  dialogue: z.array(LineSchema).max(2).default([]),
+  sound: z.string().trim().max(300).default(''),
+});
+
+// Models drift from the format: an older single videoPrompt still counts as the action, and a
+// line written as "Name: words" or a bare string is read as dialogue.
+function looseShot(value: unknown): unknown {
+  if (!value || typeof value !== 'object') return value;
+  const shot = { ...(value as Record<string, unknown>) };
+  if (typeof shot.action !== 'string' && typeof shot.videoPrompt === 'string') shot.action = shot.videoPrompt;
+  if (typeof shot.cast === 'string') shot.cast = shot.cast.split(',').map((name) => name.trim()).filter(Boolean);
+  if (shot.dialogue && !Array.isArray(shot.dialogue)) shot.dialogue = [shot.dialogue];
+  if (Array.isArray(shot.dialogue)) {
+    shot.dialogue = shot.dialogue
+      .map((line) => {
+        if (typeof line !== 'string') return line;
+        const colon = line.indexOf(':');
+        return colon > 0 ? { speaker: line.slice(0, colon).trim(), line: line.slice(colon + 1).trim() } : null;
+      })
+      .filter(Boolean)
+      .slice(0, 2);
+  }
+  return shot;
+}
+
+const hasAction = (shot: unknown) =>
+  typeof (shot as { action?: unknown })?.action === 'string' && ((shot as { action: string }).action.trim().length >= 40);
+
 export function chapterSchema(chapterNumber: number, totalChapters: number, clips: number) {
   const isLast = chapterNumber >= totalChapters;
   return z
@@ -80,20 +123,8 @@ export function chapterSchema(chapterNumber: number, totalChapters: number, clip
       summary: z.string().trim().min(10).max(900),
       // Extra or empty shots are dropped before counting, so a long reply still makes a chapter.
       shots: z.preprocess(
-        (value) =>
-          Array.isArray(value)
-            ? value
-                .filter((shot) => typeof shot?.videoPrompt === 'string' && shot.videoPrompt.trim().length >= 80)
-                .slice(0, clips)
-            : value,
-        z
-          .array(
-            z.object({
-              caption: z.string().trim().min(2).max(140),
-              videoPrompt: z.string().trim().min(80).max(2200),
-            }),
-          )
-          .length(clips, `must contain exactly ${clips} shots`),
+        (value) => (Array.isArray(value) ? value.map(looseShot).filter(hasAction).slice(0, clips) : value),
+        z.array(ShotDraftSchema).length(clips, `must contain exactly ${clips} shots`),
       ),
       choices: z
         .array(

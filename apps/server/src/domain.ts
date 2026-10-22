@@ -5,6 +5,8 @@ export type { Audience, Mood, MovieStatus, NodeStatus, StoryStatus };
 export interface Character {
   name: string;
   description: string;
+  /** How they sound, repeated in every clip they speak in so the voice stays close. */
+  voice?: string;
 }
 
 export interface Bible {
@@ -20,10 +22,35 @@ export interface Bible {
   outline?: string[];
 }
 
-/** One clip of a chapter, written ahead with the rest of the chapter. */
+/** One clip of a chapter, written ahead with the rest of the chapter. videoPrompt is exactly what the video model gets. */
 export interface Shot {
   caption: string;
   videoPrompt: string;
+}
+
+/** A spoken line in a clip. */
+export interface Line {
+  speaker: string;
+  line: string;
+}
+
+/** A clip as the director writes it. The video prompt is put together from it and the story bible. */
+export interface ShotDraft {
+  caption: string;
+  /** Names of the characters on screen. */
+  cast: string[];
+  action: string;
+  dialogue: Line[];
+  sound: string;
+}
+
+/** A whole chapter ready to film, written by the director or approved ahead by an admin. */
+export interface WrittenChapter {
+  summary: string;
+  shots: Shot[];
+  choices: string[];
+  isEnding: boolean;
+  newCharacters: Character[];
 }
 
 /** The rest of a chapter after the clip that carries it. */
@@ -47,6 +74,8 @@ export interface TreeRecord {
   totalScenes: number;
   /** Continuous clips that make up one chapter before the next choice. */
   clipsPerChapter: number;
+  /** Chapters approved ahead of filming, keyed by the choices that lead to them ("" is chapter 1, "0,1" follows choice 0 then 1). */
+  scripts: Record<string, WrittenChapter>;
   isPrivate: boolean;
   /** Scenes deep that an admin asked to pre generate, and whether that may exceed the daily cap. */
   warmDepth: number;

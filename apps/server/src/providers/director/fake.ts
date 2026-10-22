@@ -1,4 +1,4 @@
-import type { Bible, Character, Shot } from '../../domain';
+import type { Bible, Character, ShotDraft } from '../../domain';
 import { clipText, lowerFirst, provisionalTitle, sanitizeUserText } from '../../text';
 import { TEMPLATES, type StoryTemplate } from './templates';
 import {
@@ -150,12 +150,12 @@ export class FakeDirector implements Director {
 
   async writeChapter(request: ChapterRequest): Promise<Chapter> {
     // One stand in scene per shot, each a step further along the same path, sharing one set of choices.
-    const shots: Shot[] = [];
+    const shots: ShotDraft[] = [];
     let last: Scene | null = null;
     this.metered({ task: 'scene', nodeId: request.nodeId, treeId: request.treeId });
     for (let i = 0; i < request.clips; i++) {
       last = this.compose({ ...request, pathKey: `${request.pathKey}#${i}` });
-      shots.push({ caption: last.caption, videoPrompt: `${last.videoPrompt} Shot ${i + 1} of ${request.clips}.` });
+      shots.push({ caption: last.caption, cast: [], action: `${last.videoPrompt} Shot ${i + 1} of ${request.clips}.`, dialogue: [], sound: '' });
     }
     return {
       summary: last!.summary,

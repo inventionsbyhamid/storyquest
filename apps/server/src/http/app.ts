@@ -370,8 +370,8 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   app.post('/v1/admin/ideas', async (request, reply) => {
     requireAdmin(request);
-    const body = parse(z.object({ plan: PlannedIdeaSchema.required({ outline: true }) }), request.body);
-    const idea = await daily.addIdea(body.plan as Bible);
+    const body = parse(z.object({ plan: PlannedIdeaSchema.required({ outline: true }), film: z.boolean().optional() }), request.body);
+    const idea = await daily.addIdea(body.plan as Bible, body.film ?? true);
     return reply.code(201).send({ idea: views.idea(idea) });
   });
 
@@ -418,6 +418,25 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   app.get<{ Params: { id: string } }>('/v1/admin/film/:id', async (request) => {
     requireAdmin(request);
     return services.jobs.get(idParam(request.params.id));
+  });
+
+  // Chapters can be drafted and approved before filming, so nothing is paid for until the text is right.
+  const ScriptPath = z.array(z.number().int().min(0).max(1)).max(10);
+  app.get<{ Params: { id: string } }>('/v1/admin/ideas/:id/scripts', async (request) => {
+    requireAdmin(request);
+    return { scripts: services.scripts.list(idParam(request.params.id)) };
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/draft', async (request) => {
+    requireAdmin(request);
+    const body = parse(z.object({ path: z.array(z.union([z.number().int().min(0).max(1), z.string().trim().min(2).max(200)])).max(10) }), request.body);
+    return services.scripts.draft(idParam(request.params.id), body.path);
+  });
+
+  app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/script', async (request) => {
+    requireAdmin(request);
+    const body = parse(z.object({ path: ScriptPath, chapter: z.unknown(), dryRun: z.boolean().optional() }), request.body);
+    return services.scripts.approve(idParam(request.params.id), body.path, body.chapter, body.dryRun ?? false);
   });
 
   app.post<{ Params: { id: string } }>('/v1/admin/nodes/:id/redo', async (request, reply) => {

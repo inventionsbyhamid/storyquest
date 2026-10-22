@@ -152,7 +152,8 @@ export class DailyIdeas {
   }
 
   /** Puts a chosen story plan on Home today and starts filming its opening. */
-  async addIdea(plan: Bible): Promise<IdeaRecord> {
+  /** With film false the story stays off Home and nothing is filmed, so its chapters can be approved first. */
+  async addIdea(plan: Bible, film = true): Promise<IdeaRecord> {
     const { config, repo, safety, engine, log } = this.deps;
     const bible = sanitizeBible(plan);
     const verdict = await safety.check(
@@ -170,6 +171,11 @@ export class DailyIdeas {
       warm: 0,
     });
     if (!idea) throw new Error('the story could not be added');
+    if (!film) {
+      repo.setUnlisted(idea.id, true);
+      log.info({ ideaId: idea.id, title: idea.title }, 'story added by an admin for scripting');
+      return repo.getIdea(idea.id)!;
+    }
     engine.enqueue(idea.rootNodeId, 'high');
     log.info({ ideaId: idea.id, title: idea.title }, 'story added by an admin');
     return idea;

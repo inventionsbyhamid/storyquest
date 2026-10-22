@@ -103,7 +103,7 @@ Art style: ${bible.artStyle}
 Setting: ${bible.setting}
 Tone: ${bible.tone}
 Characters:
-${cast.map((character) => `* ${character.name}: ${character.description}`).join('\n')}
+${cast.map((character) => `* ${character.name}: ${character.description}${character.voice ? ` Voice: ${character.voice}.` : ''}`).join('\n')}
 </bible>`;
 }
 
@@ -165,7 +165,7 @@ const BIBLE_FORMAT = `{
   "artStyle": "One line describing a consistent visual style, for example: Soft 3D animated feature film look, rounded shapes, warm golden light, rich saturated colours",
   "setting": "One or two sentences about the world",
   "tone": "A few words",
-  "characters": [{ "name": "Name", "description": "20 to 40 words: species or type, age feel, size, colours, clothing and one memorable detail" }],
+  "characters": [{ "name": "Name", "description": "20 to 40 words: species or type, age feel, size, colours, clothing and one memorable detail", "voice": "a short phrase for how they sound, starting with a, like a bright, quick young boy's voice or a deep, slow, kindly old voice" }],
   "outline": ["One or two sentences per chapter, in order, together telling one complete story"]
 }`;
 
@@ -174,7 +174,8 @@ const OUTLINE_RULES = `The story plan (outline)
 * Chapter 1 shows the hero, their world and what they want, then the problem that starts the adventure. The middle chapters raise the stakes: an attempt, a helper or obstacle, a setback or surprising turn, and a clue that matters later. The last chapter is the climax and a warm, complete resolution where the goal is reached and the opening problem is answered.
 * Plant small things early that pay off later. The hero solves the problem through their own courage, kindness or cleverness.
 * Families will steer with choices, so describe what each chapter must achieve, not every move.
-* Every character who matters in the plan, friend or obstacle, is in the characters list with a fixed visual description, so they look the same in every clip.`;
+* Every character who matters in the plan, friend or obstacle, is in the characters list with a fixed visual description and a voice, so they look and sound the same in every clip.
+* Keep the cast small: one to three characters. Every extra character is one more face the video model can get wrong.`;
 
 export function bibleSystemPrompt(): string {
   return `You are the story developer for StoryQuest, a branching family story told in short AI video clips on a TV. A family describes a story they would like, and you turn it into a story bible that keeps every clip consistent.
@@ -182,7 +183,7 @@ export function bibleSystemPrompt(): string {
 What makes a good bible
 * A title and logline that feel like a film the family would pick.
 * One art style line that a video model can follow in every clip. Pick a style that suits the story, such as storybook watercolour, claymation, soft 3D animation, paper cut out or painterly anime.
-* One to four characters, the hero first. Each description is fixed for the whole story, so be concrete and visual: species or type, size, colours, clothing and one memorable detail. Names are short and easy to say.
+* One to three characters, the hero first. Each description is fixed for the whole story, so be concrete and visual: species or type, size, colours, clothing and one memorable detail. Give each one a voice that is easy to tell apart. Names are short and easy to say.
 * Keep what the family asked for at the heart of it. If the idea names a real person, brand or someone else's character, invent an original stand in. If part of the idea does not suit the audience, keep its spirit and make a gentle version.
 
 ${OUTLINE_RULES}
@@ -222,7 +223,7 @@ Reply with a single JSON object and nothing else, no code fences:
 { "ideas": [ {
   "title": "...", "logline": "...", "audience": "kids | family | grownups", "moods": ["one to three of: funny, adventure, cozy, mystery, spooky"],
   "artStyle": "...", "setting": "...", "tone": "...",
-  "characters": [{ "name": "...", "description": "..." }],
+  "characters": [{ "name": "...", "description": "...", "voice": "..." }],
   "outline": ["chapter 1 ...", "chapter 2 ...", "..."]
 } ] }
 Field rules: ${BIBLE_FORMAT.replace(/\s+/g, ' ')}`;
@@ -285,24 +286,26 @@ export function chapterBeat(chapterNumber: number, totalChapters: number): strin
 }
 
 export function chapterSystemPrompt(clipSeconds: number, clips: number): string {
-  return `You are the head writer and director of StoryQuest, a branching story that a family watches together on their TV. The story is told in chapters. Each chapter is ${clips} video clips of about ${clipSeconds} seconds that play back to back as one continuous piece of film, about ${clips * clipSeconds} seconds in all. At the end of a chapter the family picks one of two choices with the remote, or types their own idea, and the next chapter is written from that.
+  const shot = `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "cast": ["Names of the characters on screen"], "action": "40 to 90 words in present tense: what the camera sees from the first frame to the last, as one continuous take with three beats and one camera move.", "dialogue": [{ "speaker": "Name", "line": "At most 12 simple words." }], "sound": "One sentence: the ambience and the sounds of the action." }`;
+  return `You are the head writer and director of StoryQuest, a branching story that a family watches together on their TV. The story is told in chapters. Each chapter is ${clips} video clips of ${clipSeconds} seconds that play back to back as one continuous piece of film, ${clips * clipSeconds} seconds in all. At the end of a chapter the family picks one of two choices with the remote, or says their own idea, and the next chapter is written from that.
 
 How the video works
-* Every clip is one AI video with sound, made from your videoPrompt alone. The video model has no memory, so every videoPrompt must stand on its own.
-* Each clip starts on the exact last frame of the clip before it, including across chapters. Shots in a chapter are one continuous take: same place, same characters, same light, no time jumps and no cuts. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill.
-* ${clipSeconds} seconds is room for one moment that unfolds: an action and what it leads to, with at most one camera move. Never a list of events.
+* Every clip is one AI video with sound. Each clip starts on the exact last frame of the clip before it, including across chapters, so a chapter plays as one unbroken take: same place, same characters, same light, no time jumps.
+* Each clip is a single continuous shot with no cuts. Every cut would make the video model redraw the characters, so never ask for one. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill.
+* ${clipSeconds} seconds holds three beats in one take: the action starts, it develops, and it lands on a result or reaction. Name one camera move, such as a slow push in, a gentle pan or the camera following the hero.
+* The server adds the art style and every character's fixed look and voice to the video prompt word for word. So in the action, refer to characters only by name and never describe what they look like. Never change anyone's look.
 * Video models draw text badly. Never ask for signs, labels, letters or written words in the picture.
-
-Characters and style
-* The story bible gives the art style and a fixed visual description for every character. Copy the art style line and each description word for word into every videoPrompt where that character appears. Never change a character's look, size, colours or clothes.
-* Only add a new character when the story truly needs one. Add them to newCharacters as an object, { "name": "Name", "description": "..." }, with a fixed visual description, and use that same description in the videoPrompt.
+* There is no music track, only the sounds of the scene and the characters' voices.
 
 Writing the chapter
-* The very first shot of the story opens on a striking, beautiful moment that shows the world and the hero, not a still pose.
-* A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat, then stops at a moment that makes the next decision exciting.
+* The very first clip of the story opens on a striking, beautiful moment that shows the world and the hero doing something, not a still pose.
+* A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat.
+* End the last shot of every chapter on a clear, steady view of the main characters, faces visible, in the place where the next chapter will begin. Never end on an empty landscape, a blur or an extreme close up, because the next chapter starts from that exact frame.
+* Spoken lines carry the story, so the family understands what is happening without reading. Give most shots one short line, at most 12 simple words, said by a character in that shot. Never more than one line per shot. Lines should sound natural for a child to hear: what they see, what they want, what they decide.
+* Keep two or three characters on screen at most, and keep them in view and recognisable rather than tiny in the distance.
 * Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
-* When the family typed their own idea, make it happen in this chapter and let it matter, so they can recognise it on screen. If part of it would break the safety rules, use the closest gentle version and never lecture.
-* Sound brings it to life: ambience, music mood, and at most one short spoken line per shot, said by a named character.
+* When the family gave their own idea, make it happen in this chapter and let it matter, so they can recognise it on screen. If part of it would break the safety rules, use the closest gentle version and never lecture.
+* Only add a new character when the story truly needs one. Add them to newCharacters as { "name": "Name", "description": "fixed look", "voice": "how they sound" }.
 * Choices: exactly two, each at most five words, written as actions the heroes could take next. Both must move the story toward its planned ending in different ways, and both must be tempting. Never offer going home or giving up.
 * The final chapter sets isEnding to true, has an empty choices array, reaches the ending the plan promised, closes every open thread and ends on a warm, satisfying image.
 
@@ -311,11 +314,11 @@ ${SAFETY_RULES}
 ${TEXT_RULES}
 
 Reply format
-Reply with a single JSON object and nothing else, no code fences. Escape any double quotes inside strings.
+Reply with a single JSON object and nothing else, no code fences. Escape any double quotes inside strings. A shot with nobody speaking has an empty dialogue array.
 {
-  "summary": "Two or three sentences in past tense about what happened in this chapter, naming the people, objects and promises later chapters must remember.",
+  "summary": "Two or three sentences in past tense about what happened in this chapter, naming the people, objects and promises later chapters must remember, and ending with where everyone is in the final frame.",
   "shots": [
-${Array.from({ length: clips }, () => `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }`).join(',\n')}
+${Array.from({ length: clips }, () => shot).join(',\n')}
   ],
   "choices": ["First choice", "Second choice"],
   "isEnding": false,

@@ -12,6 +12,7 @@ import {
   type NodeRecord,
   type NodeTimings,
   type TreeRecord,
+  type WrittenChapter,
 } from '../domain';
 import { newFileTag } from '../ids';
 import { errorDetails, type Logger } from '../log';
@@ -23,6 +24,7 @@ import type { MediaStore } from '../storage';
 import { clipText, sanitizeUserText } from '../text';
 import { BudgetExhausted, type Budget } from './budget';
 import { GenerationError, MESSAGES } from './errors';
+import { composeShotPrompt } from './shotPrompt';
 
 export interface SceneGeneratorDeps {
   config: Config;
@@ -44,6 +46,15 @@ const FALLBACK_CHOICES = ['Follow the glowing trail', 'Ask a new friend for help
 
 const clean = (text: string) => sanitizeUserText(text);
 
+function cleanCharacter(character: Character): Character {
+  const voice = character.voice ? clipText(clean(character.voice), 120) : '';
+  return {
+    name: clipText(clean(character.name), 40),
+    description: clean(character.description),
+    ...(voice ? { voice } : {}),
+  };
+}
+
 export function sanitizeBible(bible: Bible): Bible {
   return {
     ...bible,
@@ -53,10 +64,7 @@ export function sanitizeBible(bible: Bible): Bible {
     artStyle: clean(bible.artStyle),
     setting: clean(bible.setting),
     tone: clean(bible.tone),
-    characters: bible.characters.map((character) => ({
-      name: clipText(clean(character.name), 40),
-      description: clean(character.description),
-    })),
+    characters: bible.characters.map(cleanCharacter),
   };
 }
 
@@ -77,10 +85,7 @@ export function sanitizeScene(scene: Scene, sceneNumber: number, totalScenes: nu
     videoPrompt: clean(scene.videoPrompt),
     choices,
     isEnding,
-    newCharacters: scene.newCharacters.map((character) => ({
-      name: clipText(clean(character.name), 40),
-      description: clean(character.description),
-    })),
+    newCharacters: scene.newCharacters.map(cleanCharacter),
   };
 }
 
@@ -97,25 +102,56 @@ function cleanChoices(choices: string[]): string[] {
   return cleaned;
 }
 
-export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalChapters: number): Chapter {
+export interface ChapterContext {
+  bible: Bible;
+  /** Everyone in the story before this chapter, in a fixed order. */
+  cast: Character[];
+  /** True for chapter 1 of a story, whose first clip has no frame to start from. */
+  opensStory: boolean;
+}
+
+/** Cleans what the director wrote and puts together the exact prompt for every clip. */
+export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalChapters: number, context: ChapterContext): WrittenChapter {
   const isEnding = chapterNumber >= totalChapters;
+  const newCharacters = chapter.newCharacters
+    .map(cleanCharacter)
+    .filter((character) => !context.cast.some((c) => c.name.toLowerCase() === character.name.toLowerCase()));
+  const characters = [...context.cast, ...newCharacters];
+  const artStyle = clean(context.bible.artStyle);
   return {
     summary: clean(chapter.summary),
-    shots: chapter.shots.map((shot) => ({
+    shots: chapter.shots.map((shot, i) => ({
       caption: clipText(clean(withoutShotLabel(shot.caption)), 90),
-      videoPrompt: clean(withoutShotLabel(shot.videoPrompt)),
+      videoPrompt: composeShotPrompt(
+        {
+          caption: shot.caption,
+          cast: shot.cast.map((name) => clean(name)),
+          action: clean(withoutShotLabel(shot.action)),
+          dialogue: shot.dialogue.slice(0, 1).map((line) => ({ speaker: clean(line.speaker), line: clipText(clean(line.line), 90) })),
+          sound: clean(shot.sound),
+        },
+        { artStyle, characters, firstFrame: !(i === 0 && context.opensStory) },
+      ),
     })),
     choices: isEnding ? [] : cleanChoices(chapter.choices),
     isEnding,
-    newCharacters: chapter.newCharacters.map((character) => ({
-      name: clipText(clean(character.name), 40),
-      description: clean(character.description),
-    })),
+    newCharacters,
   };
 }
 
+/** Which approved script a chapter would use: the choices taken at each chapter start, "" for chapter 1. */
+export function scriptKey(lineage: NodeRecord[]): string | null {
+  const keys: number[] = [];
+  for (const node of lineage.slice(1)) {
+    if (node.shot !== 0) continue;
+    if (node.customText !== null || node.choiceIndex === null) return null;
+    keys.push(node.choiceIndex);
+  }
+  return keys.join(',');
+}
+
 /** The first clip of a chapter as a scene, and the rest of the chapter to film after it. */
-export function splitChapter(chapter: Chapter): { scene: Scene; script: ChapterScript | null } {
+export function splitChapter(chapter: WrittenChapter): { scene: Scene; script: ChapterScript | null } {
   const [first, ...rest] = chapter.shots;
   const continues = rest.length > 0;
   return {
@@ -162,7 +198,8 @@ export class SceneGenerator {
       const forced = forcedWarm(tree, node.depth, node.ownerStoryId);
 
       let directorStarted = performance.now();
-      let draft = await this.write(node, tree, request, false);
+      const key = scriptKey(lineage);
+      let draft = await this.write(node, tree, request, false, key);
       timings.directorMs = Math.round(performance.now() - directorStarted);
 
       const files = await this.newFiles(node.id);
@@ -182,7 +219,7 @@ export class SceneGenerator {
         if (!(err instanceof VideoRejected) || draft.stricter) throw err;
         log.warn({ nodeId, error: err.message }, 'video provider rejected the scene, asking for a gentler one');
         directorStarted = performance.now();
-        draft = await this.write(node, tree, request, true);
+        draft = await this.write(node, tree, request, true, null);
         timings.directorMs += Math.round(performance.now() - directorStarted);
         rendered = await render(draft.scene);
       }
@@ -420,6 +457,7 @@ export class SceneGenerator {
     tree: TreeRecord,
     request: SceneRequest,
     stricter: boolean,
+    key: string | null,
   ): Promise<{ scene: Scene; script: ChapterScript | null; stricter: boolean }> {
     if (node.videoPrompt !== null && node.choiceIndex !== null && node.shot > 0) {
       // Already checked for safety with the rest of its chapter, so a rejection is final.
@@ -436,6 +474,9 @@ export class SceneGenerator {
         stricter: true,
       };
     }
+    // A chapter an admin approved ahead is filmed exactly as approved. It passed the safety check then.
+    const approved = key !== null && node.shot === 0 ? tree.scripts[key] : undefined;
+    if (approved) return { ...splitChapter(approved), stricter: true };
     if (tree.clipsPerChapter > 1) {
       const written = await this.writeSafeChapter({ ...request, clips: tree.clipsPerChapter }, tree.audience, stricter);
       return { ...splitChapter(written.chapter), stricter: written.stricter };
@@ -448,7 +489,7 @@ export class SceneGenerator {
     request: SceneRequest & { clips: number },
     audience: Audience,
     startStricter: boolean,
-  ): Promise<{ chapter: Chapter; stricter: boolean }> {
+  ): Promise<{ chapter: WrittenChapter; stricter: boolean }> {
     const { director, safety, log } = this.deps;
     for (const stricter of startStricter ? [true] : [false, true]) {
       let draft: Chapter;
@@ -461,7 +502,11 @@ export class SceneGenerator {
         }
         throw err;
       }
-      const chapter = sanitizeChapter(draft, request.sceneNumber, request.totalScenes);
+      const chapter = sanitizeChapter(draft, request.sceneNumber, request.totalScenes, {
+        bible: request.bible,
+        cast: request.cast,
+        opensStory: request.sceneNumber === 1 && request.history.length === 0,
+      });
       const text = [
         chapter.summary,
         ...chapter.choices,

@@ -282,6 +282,57 @@ describe('chapters', () => {
     expect(missingOutline.statusCode).toBe(400);
   });
 
+  it('films a chapter exactly as an admin approved it, and nothing before that', async () => {
+    const { app, services, video } = await boot();
+    const [plan] = (await app.inject({ method: 'POST', url: '/v1/admin/plans', headers: ADMIN, payload: { count: 1 } })).json().plans;
+    const outline = ['Pip finds a glowing seed.', 'Pip plants it and a tree of lanterns grows.'];
+    const added = await app.inject({
+      method: 'POST',
+      url: '/v1/admin/ideas',
+      headers: ADMIN,
+      payload: { plan: { ...plan, title: 'The Lantern Seed', outline }, film: false },
+    });
+    expect(added.statusCode).toBe(201);
+    const ideaId = added.json().idea.id;
+    const calls = video.calls.length;
+    await services.engine.idle();
+    const today = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
+    expect(today.ideas.map((idea) => idea.id)).not.toContain(ideaId);
+    expect(video.calls.length).toBe(calls);
+
+    const tooSoon = await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [0] } });
+    expect(tooSoon.statusCode).toBe(400);
+    const drafted = (await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [] } })).json();
+    expect(drafted.chapter.shots).toHaveLength(3);
+    expect(drafted.chapter.shots[0].videoPrompt).not.toContain('For the target video');
+    expect(drafted.chapter.shots[1].videoPrompt).toContain('For the target video');
+    expect(drafted.chapter.shots[2].videoPrompt).toContain('non_diegetic_music: N/A');
+
+    const edited = { ...drafted.draft, shots: drafted.draft.shots.map((shot: object, i: number) => ({ ...shot, caption: `Approved caption ${i + 1}` })) };
+    const preview = await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/script`, headers: ADMIN, payload: { path: [], chapter: edited, dryRun: true } });
+    expect(preview.statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: `/v1/admin/ideas/${ideaId}/scripts`, headers: ADMIN })).json().scripts).toEqual({});
+    const approved = await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/script`, headers: ADMIN, payload: { path: [], chapter: edited } });
+    expect(approved.statusCode).toBe(200);
+    const chapter = approved.json().chapter;
+    expect(Object.keys((await app.inject({ method: 'GET', url: `/v1/admin/ideas/${ideaId}/scripts`, headers: ADMIN })).json().scripts)).toEqual(['']);
+    expect((await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [1] } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [0, 0] } })).statusCode).toBe(400);
+
+    const job = (await app.inject({ method: 'POST', url: '/v1/admin/film', headers: ADMIN, payload: { ideaId, path: [] } })).json();
+    for (let i = 0; i < 50; i++) {
+      const state = (await app.inject({ method: 'GET', url: `/v1/admin/film/${job.id}`, headers: ADMIN })).json();
+      if (state.status !== 'running') break;
+      await services.engine.idle();
+    }
+    const filmed = video.calls.slice(calls).map((call) => call.prompt);
+    expect(filmed).toEqual(chapter.shots.map((shot: { videoPrompt: string }) => shot.videoPrompt));
+    const root = services.repo.getNode(services.repo.getIdea(ideaId)!.rootNodeId)!;
+    expect(root.caption).toBe('Approved caption 1');
+    const again = await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/script`, headers: ADMIN, payload: { path: [], chapter: edited } });
+    expect(again.statusCode).toBe(409);
+  });
+
   it('shows one picture per chapter on the website', async () => {
     const { app, services } = await boot();
     const story = await start(app);
