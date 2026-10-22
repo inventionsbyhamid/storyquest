@@ -5,6 +5,7 @@ import type { Config } from '../config';
 import type { Repository } from '../db/repo';
 import {
   continuesChapter,
+  isPaid,
   type Audience,
   type Bible,
   type ChapterScript,
@@ -19,7 +20,8 @@ import { errorDetails, type Logger } from '../log';
 import type { Media } from '../media';
 import { DirectorRefusal, type Chapter, type Director, type Scene, type SceneRequest } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
-import { VideoNotBilled, VideoRejected, type RenderResult, type VideoProvider } from '../providers/video/types';
+import type { FilmingStatus } from '../providers/video/filmingStatus';
+import { VideoNotBilled, VideoOutOfCredit, VideoRejected, type RenderResult, type VideoProvider } from '../providers/video/types';
 import type { MediaStore } from '../storage';
 import { clipText, sanitizeUserText } from '../text';
 import { BudgetExhausted, type Budget } from './budget';
@@ -37,6 +39,8 @@ export interface SceneGeneratorDeps {
   store: MediaStore;
   log: Logger;
   now: () => Date;
+  /** Whether the video account has credit. Absent means always. */
+  filming?: FilmingStatus;
 }
 
 export type GenerateOutcome = 'ready' | 'failed' | 'retry' | 'skipped';
@@ -196,6 +200,9 @@ export class SceneGenerator {
       }
       const request = this.sceneRequest(tree, bible, lineage);
       const forced = forcedWarm(tree, node.depth, node.ownerStoryId);
+      // A chapter paid for with Sparks is filmed past the free caps, every clip of it.
+      const chapterStart = [...lineage].reverse().find((item) => item.shot === 0) ?? node;
+      const paid = isPaid(chapterStart);
 
       let directorStarted = performance.now();
       const key = scriptKey(lineage);
@@ -207,7 +214,7 @@ export class SceneGenerator {
       const render = (scene: Scene) =>
         this.renderPaid(
           { prompt: scene.videoPrompt, caption: scene.caption, startFramePath: this.startFrame(parent), outPath: files.raw },
-          { task: 'scene', nodeId: node.id, treeId: node.treeId, forced },
+          { task: 'scene', nodeId: node.id, treeId: node.treeId, forced, paid },
         );
 
       const videoStarted = performance.now();
@@ -349,7 +356,7 @@ export class SceneGenerator {
    */
   private async renderPaid(
     input: { prompt: string; caption: string; startFramePath: string | null; outPath: string },
-    context: { task: string; nodeId: string; treeId: string; forced: boolean },
+    context: { task: string; nodeId: string; treeId: string; forced: boolean; paid?: boolean },
   ): Promise<RenderResult> {
     const { budget, config } = this.deps;
     const seconds = config.SCENE_SECONDS;
@@ -376,6 +383,12 @@ export class SceneGenerator {
     if (err instanceof GenerationError) {
       log.warn({ nodeId, code: err.code, error: err.message }, 'scene failed');
       repo.markFailed(nodeId, err.code === 'budget_exhausted' ? 'budget_exhausted' : 'generation_failed', err.userMessage);
+      return 'failed';
+    }
+    if (err instanceof VideoOutOfCredit) {
+      log.warn({ nodeId, error: err.message }, 'scene not made, the video account is out of credit');
+      this.deps.filming?.markOutOfCredit();
+      repo.markFailed(nodeId, 'budget_exhausted', MESSAGES.budget);
       return 'failed';
     }
     if (err instanceof VideoRejected) {

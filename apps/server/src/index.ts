@@ -26,6 +26,7 @@ app.log.info(
 
 services.engine.start();
 services.daily.start();
+services.filming.start();
 backfillTones(services)
   .then((count) => {
     if (count > 0) app.log.info({ count }, 'worked out night colors for older scenes');
@@ -43,6 +44,7 @@ async function shutdown(signal: string): Promise<void> {
   shuttingDown = true;
   app.log.info({ signal }, 'shutting down');
   services.daily.stop();
+  services.filming.stop();
   // Stopping the engine first releases long polls so the HTTP server can close quickly.
   const engineStopped = services.engine.stop(20_000);
   await app.close();

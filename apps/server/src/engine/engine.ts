@@ -102,9 +102,26 @@ export class StoryEngine {
     if (!this.stopping) this.queue.enqueue(nodeId, priority);
   }
 
-  /** True when the next scene could not be paid for under the daily or lifetime caps. */
+  /** True when the free filming budget is used up. Past it, new chapters cost Sparks. */
   budgetExhausted(): boolean {
     return this.deps.budget.exhausted() !== null;
+  }
+
+  /** False when the video account is out of credit, so nothing new can be filmed, paid or not. */
+  canFilm(): boolean {
+    // Without director calls nothing new can be written, paid or not.
+    if (this.deps.budget.exhausted() === 'director_calls' || this.deps.budget.hardExhausted()) return false;
+    return this.deps.filming?.available() ?? true;
+  }
+
+  /**
+   * A shared chapter that is not fully filmed costs Sparks once the free budget is used up.
+   * One a family already paid for, or that is being filmed right now, stays free.
+   */
+  sharedChapterPrice(child: NodeRecord | null): number {
+    if (!this.budgetExhausted()) return 0;
+    if (child && (isPaid(child) || child.status === 'generating' || this.deps.repo.chapterFilmed(child))) return 0;
+    return this.deps.config.SCENE_COST_SPARKS;
   }
 
   // Stories
@@ -128,7 +145,7 @@ export class StoryEngine {
 
     const prompt = clipText(sanitizeUserText(request.prompt), 240);
     await this.assertSafeInput(prompt, request.audience);
-    if (this.budgetExhausted()) throw budgetExhausted();
+    if (!this.canFilm()) throw budgetExhausted();
 
     const story = repo.transaction(() => {
       const charge = wallet.charge({ deviceId, userId: iapUserId });
@@ -193,22 +210,26 @@ export class StoryEngine {
     if (from.isEnding) throw conflict(MESSAGES.atEnding);
 
     let customText: string | null = null;
+    let sharedPrice = 0;
     const continuing = continuesChapter(from);
     if (continuing && (request.kind !== 'preset' || request.index !== 0)) throw badRequest(MESSAGES.noSuchChoice);
     if (request.kind === 'preset') {
       if (request.index >= from.choices.length) throw badRequest(MESSAGES.noSuchChoice);
-      const existing = repo.getPresetChildren(from.id).find((child) => child.choiceIndex === request.index);
+      const existing = repo.getPresetChildren(from.id).find((child) => child.choiceIndex === request.index) ?? null;
       if (existing?.hiddenAt) throw pathClosed();
-      if ((!existing || existing.status === 'failed') && this.budgetExhausted()) throw budgetExhausted();
+      if (!continuing && from.ownerStoryId === null) sharedPrice = this.sharedChapterPrice(existing);
+      const needsFilming = !existing || existing.status === 'failed' || (!continuing && !repo.chapterFilmed(existing));
+      if (needsFilming && !this.canFilm()) throw budgetExhausted();
     } else {
       customText = clipText(sanitizeUserText(request.text), 200);
       const tree = repo.getTree(from.treeId)!;
       await this.assertSafeInput(customText, tree.audience);
-      if (this.budgetExhausted()) throw budgetExhausted();
+      if (!this.canFilm()) throw budgetExhausted();
     }
 
     // Paying, creating the scene and moving the story forward happen together or not at all.
-    // Shared scenes are free; a scene filmed only for this family costs Sparks the first time it is chosen.
+    // Shared scenes are free while the free budget lasts; a scene filmed only for this family, or a
+    // shared one past the free budget, costs Sparks the first time it is chosen.
     const payer = { deviceId: story.deviceId, userId: iapUserId };
     const next = repo.transaction(() => {
       let node: NodeRecord;
@@ -217,7 +238,7 @@ export class StoryEngine {
         node = repo.getOrCreateContinuation(from).node;
       } else if (request.kind === 'preset') {
         node = repo.getOrCreatePresetChild(from, request.index, 0).node;
-        if (node.ownerStoryId !== null && !isPaid(node)) repo.setNodeCharge(node.id, wallet.charge(payer));
+        if ((node.ownerStoryId !== null || sharedPrice > 0) && !isPaid(node)) repo.setNodeCharge(node.id, wallet.charge(payer));
       } else {
         node = repo.createCustomChild(from, customText!, story.id, wallet.charge(payer));
       }
@@ -298,7 +319,7 @@ export class StoryEngine {
 
     const existing = repo.getPresetChildren(node.id).find((child) => child.choiceIndex === index);
     if (existing) return node;
-    if (this.budgetExhausted() || !wallet.canAfford({ deviceId: story.deviceId, userId: iapUserId })) return node;
+    if (!this.canFilm() || !wallet.canAfford({ deviceId: story.deviceId, userId: iapUserId })) return node;
     const { node: child, created } = repo.getOrCreatePresetChild(node, index, 0);
     if (created) this.enqueue(child.id, 'high');
     return node;
@@ -415,6 +436,14 @@ export class StoryEngine {
    * prefetch settings, once a family is on this chapter: it plays as one piece, so its clips are made back to back.
    * Returns true when the node is part way through a chapter.
    */
+  /** Whether the chapter this clip belongs to was paid for with Sparks. */
+  private paidChapter(node: NodeRecord): boolean {
+    const { repo } = this.deps;
+    let current: NodeRecord | null = node;
+    while (current && current.shot > 0) current = current.parentId ? repo.getNode(current.parentId) : null;
+    return current !== null && isPaid(current);
+  }
+
   private continueChapter(nodeId: string): boolean {
     const { repo } = this.deps;
     const node = repo.getNode(nodeId);
@@ -423,7 +452,9 @@ export class StoryEngine {
     if (node.status !== 'ready' || node.hiddenAt || !node.wantChildren) return true;
     const { node: next } = repo.getOrCreateContinuation(node);
     if (next.status === 'pending') this.enqueue(next.id, 'high');
-    else if (next.status === 'failed' && !this.budgetExhausted() && repo.resetFailed(next.id)) this.enqueue(next.id, 'high');
+    else if (next.status === 'failed' && this.canFilm() && (!this.budgetExhausted() || this.paidChapter(next)) && repo.resetFailed(next.id)) {
+      this.enqueue(next.id, 'high');
+    }
     return true;
   }
 

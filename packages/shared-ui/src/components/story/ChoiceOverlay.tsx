@@ -109,7 +109,7 @@ interface SomethingElseProps {
 }
 
 function somethingElseHint(cost: number, paused: boolean): string {
-  if (paused) return 'Paused. New scenes are paused right now';
+  if (paused) return "Paused. New chapters can't be filmed right now";
   return cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it';
 }
 

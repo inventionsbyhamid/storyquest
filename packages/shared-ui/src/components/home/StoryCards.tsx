@@ -145,7 +145,7 @@ export const MakeYourOwnCard = React.memo(({ paused, position, onFocusIndex, onS
   return (
     <Focusable
       label="Make your own"
-      hint={paused ? 'Paused. New stories are paused right now' : 'Describe a story and we will film the first scene'}
+      hint={paused ? "Paused. New stories can't be filmed right now" : 'Describe a story and we will film the first scene'}
       position={position}
       altLabels={MAKE_ALT_LABELS}
       onSelect={onSelect}

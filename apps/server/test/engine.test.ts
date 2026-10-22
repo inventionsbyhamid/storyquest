@@ -283,7 +283,7 @@ describe('guards', () => {
     );
   });
 
-  it('stops new generation when the daily budget is spent but keeps cached scenes playing', async () => {
+  it('keeps cached scenes free and charges Sparks for new ones once the daily budget is spent', async () => {
     const r = setup({ DAILY_IDEAS: '1', WARM_DEPTH: '1', DAILY_VIDEO_SECONDS_CAP: '3' });
     const idea = await firstIdea(r);
     await r.services.engine.idle();
@@ -294,16 +294,17 @@ describe('guards', () => {
     const story = await r.services.engine.startStory(DEVICE, { kind: 'idea', ideaId: idea.id });
     const cached = await r.services.engine.choose(story.id, DEVICE, { kind: 'preset', fromNodeId: root.id, index: 0 });
     expect(r.services.repo.getNode(cached.nextNodeId)!.status).toBe('ready');
+    expect(r.services.repo.getNode(cached.nextNodeId)!.charge).toBeNull();
     await expectAppError(
       r.services.engine.choose(story.id, DEVICE, { kind: 'preset', fromNodeId: cached.nextNodeId, index: 0 }),
-      'budget_exhausted',
-      429,
+      'payment_required',
+      402,
     );
-    await expectAppError(
-      r.services.engine.choose(story.id, DEVICE, { kind: 'custom', fromNodeId: cached.nextNodeId, text: 'a kite race' }),
-      'budget_exhausted',
-      429,
-    );
+    r.services.wallet.view({ deviceId: DEVICE, userId: null });
+    r.services.repo.changeWallet(`device:${DEVICE}`, { sparks: 10 });
+    const paid = await r.services.engine.choose(story.id, DEVICE, { kind: 'preset', fromNodeId: cached.nextNodeId, index: 0 });
+    expect(r.services.repo.getNode(paid.nextNodeId)!.charge).not.toBeNull();
+    expect((await r.services.engine.waitForNode(paid.nextNodeId, 20_000))!.status).toBe('ready');
   });
 });
 

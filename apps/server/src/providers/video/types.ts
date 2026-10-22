@@ -24,6 +24,11 @@ export class VideoNotBilled extends Error {
   override name = 'VideoNotBilled';
 }
 
+/** The provider account is out of credit. Nothing was rendered or billed. */
+export class VideoOutOfCredit extends VideoNotBilled {
+  override name = 'VideoOutOfCredit';
+}
+
 /** The provider's safety check turned the prompt down. If it happened after the job started, it may still be billed. */
 export class VideoRejected extends Error {
   override name = 'VideoRejected';

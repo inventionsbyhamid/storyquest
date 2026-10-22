@@ -10,6 +10,7 @@ import { openDatabase } from '../src/db/database';
 import { Repository } from '../src/db/repo';
 import type { Bible } from '../src/domain';
 import { Budget, BudgetExhausted } from '../src/engine/budget';
+import { VideoOutOfCredit } from '../src/providers/video/types';
 import { StoryEngine } from '../src/engine/engine';
 import { createServer } from '../src/http/app';
 import { silentLogger } from '../src/log';
@@ -358,14 +359,14 @@ describe('admin filming', () => {
     const started = await app.inject({ method: 'POST', url: '/v1/admin/film', headers: ADMIN, payload: { ideaId: idea.id, path: [0, 0] } });
     const done = await job(app, started.json().id);
     expect(done.status).toBe('failed');
-    expect(done.error).toContain('new scenes are back tomorrow');
+    expect(done.error).toContain('cannot be filmed right now');
     expect(done.steps.map((step: { status: string }) => step.status)).toEqual(['ready', 'ready', 'failed']);
     expect(services.repo.getTotal('video_seconds')).toBe(2);
   });
 });
 
 describe('filming paused', () => {
-  it('tells the TV once a cap stops new scenes', async () => {
+  it('asks for Sparks past the free budget, and tells the TV only when nothing can be filmed', async () => {
     const { app, services } = await boot({ AUTO_PREFETCH: 'false', TOTAL_VIDEO_SECONDS_CAP: '2' });
     const headers = { 'x-device-id': DEVICE };
     const home = async () => TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
@@ -383,8 +384,57 @@ describe('filming paused', () => {
     await services.engine.idle();
 
     expect(services.budget.exhausted()).toBe('total_video');
+    expect((await home()).filmingPaused).toBe(false);
+    // Free Sparks only spend the free budget, so past it the family buys Sparks.
+    expect((await wallet()).freeSparks).toBe(0);
+    services.repo.changeWallet(`device:${DEVICE}`, { sparks: 10 });
+    const next = await scene(app, chosen.nextNodeId);
+    expect(next.choices.every((choice) => choice.sparks > 0)).toBe(true);
+
+    // A choice past the free budget is filmed once the family pays, even past the cap.
+    const paid = ChooseResponse.parse(
+      (await app.inject({ method: 'POST', url: `/v1/stories/${story.id}/choose`, headers, payload: { kind: 'preset', fromNodeId: next.id, index: 0 } })).json(),
+    );
+    expect(services.repo.getNode(paid.nextNodeId)!.charge).not.toBeNull();
+    expect((await scene(app, paid.nextNodeId)).status).toBe('ready');
+
+    services.filming.markOutOfCredit();
     expect((await home()).filmingPaused).toBe(true);
     expect((await wallet()).filmingPaused).toBe(true);
+    const refused = await app.inject({ method: 'POST', url: '/v1/stories', headers, payload: { kind: 'custom', prompt: 'a kite race', audience: 'family', moods: [] } });
+    expect(refused.statusCode).toBe(429);
+    expect(refused.json().error.code).toBe('budget_exhausted');
+  });
+
+  it('stops all filming at the hard cap, paid or not', async () => {
+    const { app, services } = await boot({ AUTO_PREFETCH: 'false', TOTAL_VIDEO_SECONDS_CAP: '1', HARD_VIDEO_SECONDS_CAP: '1' });
+    const headers = { 'x-device-id': DEVICE };
+    const today = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json());
+    expect(services.budget.hardExhausted()).toBe(true);
+    expect(today.filmingPaused).toBe(true);
+    services.wallet.view({ deviceId: DEVICE, userId: null });
+    services.repo.changeWallet(`device:${DEVICE}`, { sparks: 10 });
+    const refused = await app.inject({ method: 'POST', url: '/v1/stories', headers, payload: { kind: 'custom', prompt: 'a kite race', audience: 'family', moods: [] } });
+    expect(refused.json().error.code).toBe('budget_exhausted');
+  });
+
+  it('gives Sparks back when the video account turns a paid chapter away for lack of credit', async () => {
+    const { app, services, video } = await boot({ AUTO_PREFETCH: 'false' });
+    const headers = { 'x-device-id': DEVICE };
+    const ideaId = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json()).ideas[0]!.id;
+    const story = StoryView.parse((await app.inject({ method: 'POST', url: '/v1/stories', headers, payload: { kind: 'idea', ideaId } })).json());
+    const root = await scene(app, story.currentNodeId);
+    const before = WalletView.parse((await app.inject({ method: 'GET', url: '/v1/wallet', headers })).json());
+    video.failWith = new VideoOutOfCredit('fal account is out of credit: User is locked. Reason: Exhausted balance.');
+    const chosen = ChooseResponse.parse(
+      (await app.inject({ method: 'POST', url: `/v1/stories/${story.id}/choose`, headers, payload: { kind: 'custom', fromNodeId: root.id, text: 'a kite race' } })).json(),
+    );
+    const failed = await scene(app, chosen.nextNodeId);
+    expect(failed.status).toBe('failed');
+    expect(failed.error).toContain('nothing was charged');
+    const after = WalletView.parse((await app.inject({ method: 'GET', url: '/v1/wallet', headers })).json());
+    expect(after.freeSparks + after.sparks).toBe(before.freeSparks + before.sparks);
+    expect(services.filming.available()).toBe(false);
   });
 });
 

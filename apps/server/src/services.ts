@@ -7,6 +7,7 @@ import { Budget } from './engine/budget';
 import { DailyIdeas } from './engine/daily';
 import { AdminJobs } from './engine/film';
 import { ScriptDesk } from './engine/scripts';
+import { FilmingStatus } from './providers/video/filmingStatus';
 import { Moderation } from './engine/moderation';
 import { StoryEngine } from './engine/engine';
 import type { Logger } from './log';
@@ -42,6 +43,7 @@ export interface Services {
   budget: Budget;
   jobs: AdminJobs;
   scripts: ScriptDesk;
+  filming: FilmingStatus;
   now: () => Date;
 }
 
@@ -173,12 +175,26 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const safety = overrides.safety ?? createSafety(config, log);
 
   const receipts = overrides.receipts !== undefined ? overrides.receipts : createReceiptVerifier(config, log, now);
-  const wallet = new Wallet({ config, repo, verifier: receipts, log: log.child({ module: 'wallet' }), now });
+  const wallet = new Wallet({
+    config,
+    repo,
+    verifier: receipts,
+    log: log.child({ module: 'wallet' }),
+    now,
+    freeFilming: () => budget.exhausted() === null,
+  });
 
+  const filming = new FilmingStatus({
+    billingKey: config.FAL_BILLING_KEY,
+    minBalance: config.FAL_MIN_BALANCE,
+    now: () => now().getTime(),
+    log: log.child({ module: 'filming' }),
+  });
   const engine = new StoryEngine({
     config,
     repo,
     budget,
+    filming,
     director,
     video,
     safety,
@@ -194,5 +210,5 @@ export function createServices(config: Config, log: Logger, overrides: ServiceOv
   const jobs = new AdminJobs({ repo, engine, budget, log: log.child({ module: 'jobs' }), now });
   const scripts = new ScriptDesk({ config, repo, director, safety });
 
-  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, budget, jobs, scripts, now };
+  return { config, db, repo, store, media, director, video, safety, engine, daily, wallet, moderation, budget, jobs, scripts, filming, now };
 }

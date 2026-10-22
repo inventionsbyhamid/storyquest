@@ -18,6 +18,8 @@ export interface WalletDeps {
   verifier: ReceiptVerifier | null;
   log: Logger;
   now: () => Date;
+  /** Whether the free filming budget has room. Free Sparks are only spent while it does; past it, families buy Sparks. */
+  freeFilming?: () => boolean;
 }
 
 /** Who is paying: the TV, and the Amazon account on it when the app knows it. */
@@ -57,14 +59,19 @@ export class Wallet {
     });
   }
 
+  private freeOpen(): boolean {
+    return this.deps.freeFilming?.() ?? true;
+  }
+
   private dailyFreeLeft(deviceId: string | null): number {
-    if (!deviceId) return 0;
+    if (!deviceId || !this.freeOpen()) return 0;
     const used = this.deps.repo.getUsage(this.today(), deviceId).freeUsed;
     return Math.max(0, this.deps.config.DAILY_FREE_SPARKS - used);
   }
 
   /** The welcome scene can be held back until a TV has watched a few shared scenes. */
   private welcomeLeft(wallet: WalletRecord, deviceId: string | null): number {
+    if (!this.freeOpen()) return 0;
     const needed = this.deps.config.FREE_SPARK_UNLOCK_AFTER_SCENES;
     if (needed > 0 && (!deviceId || this.deps.repo.scenesSeen(deviceId) < needed)) return 0;
     return wallet.freeSparks;

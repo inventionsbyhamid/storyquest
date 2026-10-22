@@ -1,5 +1,6 @@
 import type Database from 'better-sqlite3';
 import type { Db } from './database';
+import { continuesChapter } from '../domain';
 import { newId } from '../ids';
 import type {
   Audience,
@@ -540,6 +541,16 @@ export class Repository {
    * The next clip of a chapter, already written: it carries its caption and
    * prompt and the rest of the chapter, so filming it needs no director call.
    */
+  /** True when every clip of the chapter that starts at this node is filmed and up. */
+  chapterFilmed(start: NodeRecord): boolean {
+    let node: NodeRecord | undefined = start;
+    while (node && node.status === 'ready' && !node.hiddenAt) {
+      if (!continuesChapter(node)) return true;
+      node = this.getPresetChildren(node.id).find((child) => child.choiceIndex === 0);
+    }
+    return false;
+  }
+
   getOrCreateContinuation(parent: NodeRecord): { node: NodeRecord; created: boolean } {
     const script = parent.script;
     if (!script || script.shots.length === 0) throw new Error(`node ${parent.id} has no next clip`);

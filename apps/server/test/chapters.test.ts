@@ -178,8 +178,9 @@ describe('chapters', () => {
     // With filming paused, a choice whose chapter is only partly filmed is shown as not filmed.
     services.config.TOTAL_VIDEO_SECONDS_CAP = 1;
     const choicePoint = await scene(app, current.id);
-    expect(choicePoint.choices[1]!.nodeId).toBeNull();
-    expect(choicePoint.choices[0]!.nodeId).not.toBeNull();
+    // Past the free budget the half filmed preview costs Sparks; the filmed chapter stays free.
+    expect(choicePoint.choices[1]!).toMatchObject({ sparks: 3, filmed: false });
+    expect(choicePoint.choices[0]!).toMatchObject({ sparks: 0, filmed: true });
   }, 120_000);
 
   it('lists a TV story for Continue watching and marks chapter starts when shared', async () => {

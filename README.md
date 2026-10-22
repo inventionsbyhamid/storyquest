@@ -50,7 +50,7 @@ vega device launch-app -a com.storyquest.tv.main
 5. At the last choice, pick a finale, or choose Something else and say your own idea.
 6. At the end, scan the QR code to watch the whole story as one movie.
 
-Filming new chapters costs real money, so the server has a budget for them. While it lasts, your own ideas are filmed live. When it runs out, Something else and Make your own show Paused, and everything already filmed keeps playing.
+Shared chapters are free while the free filming budget lasts. After that, a new chapter costs Sparks like anything filmed just for your family, and the app offers Sparks if you have none. If nothing can be filmed at all right now, the app says so and charges nothing, and everything already filmed keeps playing.
 
 ## Run it yourself
 

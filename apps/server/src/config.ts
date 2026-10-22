@@ -51,6 +51,9 @@ const ConfigSchema = z
 
     VIDEO: z.enum(['fake', 'fal']).default('fake'),
     FAL_KEY: z.string().optional(),
+    // A fal key with billing read access. With it, filming stops before the balance runs out.
+    FAL_BILLING_KEY: z.string().optional(),
+    FAL_MIN_BALANCE: z.coerce.number().nonnegative().default(2),
     FAL_MODEL_T2V: z.string().min(1).default('minimax/h3-max-turbo/text-to-video'),
     FAL_MODEL_I2V: z.string().min(1).default('minimax/h3-max-turbo/image-to-video'),
     VIDEO_RESOLUTION: z.enum(['480P', '768P', '1080P']).default('768P'),
@@ -102,6 +105,8 @@ const ConfigSchema = z
     IAP_MODE: z.enum(['fake', 'sandbox', 'production']).default('fake'),
     AMAZON_IAP_SHARED_SECRET: z.string().optional(),
     DAILY_VIDEO_SECONDS_CAP: int(900, 0, 100_000_000),
+    // Every second of video, free or paid with Sparks, stops here. 0 means no hard cap.
+    HARD_VIDEO_SECONDS_CAP: int(0, 0, 100_000_000),
     // Lifetime caps that survive restarts. 0 means no cap.
     TOTAL_VIDEO_SECONDS_CAP: int(0, 0, 100_000_000),
     DIRECTOR_CALL_CAP: int(0, 0, 100_000_000),

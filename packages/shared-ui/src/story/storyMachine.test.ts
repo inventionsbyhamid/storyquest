@@ -274,7 +274,7 @@ describe('choices', () => {
     const failed = storyReducer(chosen, { type: 'CHOICE_FAILED', seq: chosen.requestSeq, code: 'budget_exhausted' });
     expect(failed.phase).toBe('choosing');
     expect(failed.disabledChoices).toEqual([]);
-    expect(failed.notice?.text).toBe('This path has not been filmed yet. Pick another choice.');
+    expect(failed.notice?.text).toBe("This chapter can't be filmed right now. Pick another choice.");
   });
 
   it('returns to the choices when the next scene takes too long', () => {
@@ -530,7 +530,7 @@ describe('something else', () => {
     const sent = run(inputOpen(), { type: 'SUBMIT_CUSTOM' });
     const rejected = storyReducer(sent, { type: 'CHOICE_FAILED', seq: sent.requestSeq, code: 'budget_exhausted' });
     expect(rejected.phase).toBe('choosing');
-    expect(rejected.notice?.text).toBe('New scenes are paused right now. Pick one of the choices.');
+    expect(rejected.notice?.text).toBe("Your idea can't be filmed right now, so nothing was charged. Pick one of the choices.");
   });
 
   it('returns to the choices when the custom scene fails', () => {
@@ -771,7 +771,7 @@ describe('filming paused', () => {
     const refused = storyReducer(state, { type: 'CHOOSE', index: 1 });
     expect(refused.phase).toBe('choosing');
     expect(refused.requestSeq).toBe(state.requestSeq);
-    expect(refused.notice?.text).toBe('This path has not been filmed yet. Pick another choice.');
+    expect(refused.notice?.text).toBe("This chapter can't be filmed right now. Pick another choice.");
 
     const filmed = storyReducer(state, { type: 'CHOOSE', index: 0 });
     expect(filmed.phase).toBe('waitingNext');
@@ -781,7 +781,7 @@ describe('filming paused', () => {
   it('keeps Something else closed while filming is paused', () => {
     const state = storyReducer(choosingBudget(true), { type: 'OPEN_CUSTOM' });
     expect(state.phase).toBe('choosing');
-    expect(state.notice?.text).toBe('New scenes are paused right now. Pick one of the choices.');
+    expect(state.notice?.text).toBe("Your idea can't be filmed right now, so nothing was charged. Pick one of the choices.");
     expect(storyReducer(choosingBudget(false), { type: 'OPEN_CUSTOM' }).phase).toBe('customInput');
   });
 

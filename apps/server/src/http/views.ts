@@ -40,15 +40,8 @@ export class Views {
     };
   }
 
-  /** True when every clip of the chapter that starts at this node is filmed and up. */
   private chapterFilmed(start: NodeRecord): boolean {
-    const { repo } = this.services;
-    let node: NodeRecord | undefined = start;
-    while (node && node.status === 'ready' && !node.hiddenAt) {
-      if (!continuesChapter(node)) return true;
-      node = repo.getPresetChildren(node.id).find((child) => child.choiceIndex === 0);
-    }
-    return false;
+    return this.services.repo.chapterFilmed(start);
   }
 
   scene(node: NodeRecord): SceneView {
@@ -76,15 +69,17 @@ export class Views {
     }
     const ready = node.status === 'ready';
     const continues = ready && continuesChapter(node);
-    // While filming is paused, a chapter that is only partly filmed could leave a family stuck half way.
-    const paused = this.services.budget.exhausted() !== null;
+    // When nothing can be filmed at all, a chapter that is only partly filmed could leave a family stuck half way.
+    const paused = !this.services.engine.canFilm();
     let choices: ChoiceView[] = [];
     if (ready && !node.isEnding) {
       const children = repo.getPresetChildren(node.id);
       choices = node.choices.map((label, index) => {
         const found = children.find((candidate) => candidate.choiceIndex === index) ?? null;
         const child = found && paused && !continues && !this.chapterFilmed(found) ? null : found;
-        const free = continues || node.ownerStoryId === null || (child !== null && isPaid(child));
+        // Shared chapters are free while the free budget lasts; after that, filming a new one costs Sparks.
+        const sharedPrice = !continues && node.ownerStoryId === null ? this.services.engine.sharedChapterPrice(found) : 0;
+        const free = continues || (node.ownerStoryId === null && sharedPrice === 0) || (child !== null && isPaid(child));
         const playable = child?.status === 'ready' && !child.hiddenAt;
         return {
           index,

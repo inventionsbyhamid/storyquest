@@ -13,8 +13,7 @@ export const MESSAGES = {
   noSuchChoice: 'That choice does not exist.',
   unsafeInput: "Let's keep the story friendly for everyone. Please try a different idea.",
   customLimit: 'You have made lots of new scenes today. Pick one of the story choices, and new ideas open again tomorrow.',
-  budget:
-    'The story studio has made all its new scenes for today. Stories you have already seen still play, and new scenes are back tomorrow.',
+  budget: 'New chapters cannot be filmed right now, so nothing was charged. Everything already filmed still plays. Please try again later.',
   sceneFailed: 'This scene could not be made. Please try another choice.',
   sceneUnsafe: 'This part of the story did not turn out right. Please try another choice.',
   rateLimited: 'That was a lot of requests. Please wait a moment and try again.',

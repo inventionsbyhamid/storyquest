@@ -47,8 +47,8 @@ export class Budget implements DirectorMeter {
   }
 
   /**
-   * Which limit would stop the next chapter, if any. Request handlers check this before creating work.
-   * A chapter needs room for all its clips, so a family never gets stuck half way through one.
+   * Which limit would stop the next free chapter, if any. A chapter needs room for all its
+   * clips, so a family never gets stuck half way through one. Past it, new chapters cost Sparks.
    */
   exhausted(options: { ignoreDaily?: boolean } = {}): BudgetLimit | null {
     const { config, repo } = this.deps;
@@ -61,17 +61,29 @@ export class Budget implements DirectorMeter {
     return null;
   }
 
-  /** Forced warming may go past the daily cap, never past the lifetime cap. */
+  /** True when the hard cap leaves no room for a whole chapter, so nothing new can be filmed, paid or not. */
+  hardExhausted(): boolean {
+    const { config, repo } = this.deps;
+    if (!config.HARD_VIDEO_SECONDS_CAP) return false;
+    return repo.getTotal('video_seconds') + config.SCENE_SECONDS * config.CLIPS_PER_CHAPTER > config.HARD_VIDEO_SECONDS_CAP;
+  }
+
+  /**
+   * Forced warming may go past the daily cap, never past the lifetime cap. A chapter a
+   * family paid for with Sparks is filmed whatever the caps say: the caps only limit
+   * what is filmed for free, and the video account's balance limits the rest.
+   */
   reserveVideo(
     seconds: number,
-    context: { task: string; nodeId?: string | null; treeId?: string | null; forced?: boolean },
+    context: { task: string; nodeId?: string | null; treeId?: string | null; forced?: boolean; paid?: boolean },
   ): VideoReservation {
     const { config, repo, log } = this.deps;
     const day = this.today();
     const dailyBefore = repo.spendSeconds(day);
     const totalBefore = repo.getTotal('video_seconds');
-    const dailyCap = context.forced ? Number.POSITIVE_INFINITY : config.DAILY_VIDEO_SECONDS_CAP;
-    const totalCap = config.TOTAL_VIDEO_SECONDS_CAP || Number.POSITIVE_INFINITY;
+    const dailyCap = context.forced || context.paid ? Number.POSITIVE_INFINITY : config.DAILY_VIDEO_SECONDS_CAP;
+    const hardCap = config.HARD_VIDEO_SECONDS_CAP || Number.POSITIVE_INFINITY;
+    const totalCap = context.paid ? hardCap : Math.min(config.TOTAL_VIDEO_SECONDS_CAP || Number.POSITIVE_INFINITY, hardCap);
     const result = repo.reserveVideo(day, seconds, dailyCap, totalCap);
     if (result !== 'ok') {
       const limit: BudgetLimit = result === 'daily' ? 'daily_video' : 'total_video';

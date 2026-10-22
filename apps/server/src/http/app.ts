@@ -185,7 +185,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     return parse(TodayResponse, {
       date,
       ideas: ideas.map((idea) => views.idea(idea)),
-      filmingPaused: services.budget.exhausted() !== null,
+      filmingPaused: !services.engine.canFilm(),
     });
   });
 
@@ -280,7 +280,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     const device = requireDevice(request);
     return parse(WalletView, {
       ...services.wallet.view({ deviceId: device, userId: iapUser(request) }),
-      filmingPaused: services.budget.exhausted() !== null,
+      filmingPaused: !services.engine.canFilm(),
     });
   });
 

@@ -6,7 +6,7 @@ import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { ApiError, createFalClient, type FalClient } from '@fal-ai/client';
 import type { Logger } from '../../log';
-import { VideoNotBilled, VideoRejected, type RenderRequest, type RenderResult, type VideoProvider } from './types';
+import { VideoNotBilled, VideoOutOfCredit, VideoRejected, type RenderRequest, type RenderResult, type VideoProvider } from './types';
 
 export interface FalVideoOptions {
   key: string;
@@ -90,6 +90,10 @@ export class FalVideo implements VideoProvider {
         this.log.warn({ endpoint, attempt, status, enqueued, error: message }, 'video render failed');
         // fal answers 422 when its safety checker or input validation turns a prompt down.
         if (status === 422 || status === 400) throw new VideoRejected(`video request rejected: ${message}`, enqueued);
+        // A locked account (out of balance) is turned away before any work starts.
+        if (status === 402 || (status === 403 && /balance|credit|locked|billing/i.test(message))) {
+          throw new VideoOutOfCredit(`fal account is out of credit: ${message}`);
+        }
         // Once fal has queued the job it may run and bill even if we stop waiting, so it counts and is not retried.
         if (enqueued) throw err;
         if (!isRetryable(err) || attempt === ATTEMPTS) throw new VideoNotBilled(`fal did not take the request: ${message}`);
