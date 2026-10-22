@@ -314,7 +314,7 @@ export function chapterSystemPrompt(clipSeconds: number, clips: number, audience
 
 How the video works
 * Every clip is one AI video with sound. Each clip starts on the exact last frame of the clip before it, including across chapters, so a chapter plays as one unbroken take: same place, same characters, same light, no time jumps.
-* Each clip is a single continuous shot with no cuts. Every cut would make the video model redraw the characters, so never ask for one. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill.
+* Each clip is a single continuous shot with no cuts. Every cut would make the video model redraw the characters, so never ask for one. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill. A shot covers only ${clipSeconds} seconds of real time in one place, so never skip ahead inside it or write "later".
 * ${clipSeconds} seconds holds three beats in one take: the action starts, it develops, and it lands on a result or reaction. ${voice.pace}
 * The server adds the art style and every character's fixed look and voice to the video prompt word for word. So in the action, refer to characters only by name and never describe what they look like. Never change anyone's look.
 * Video models draw text badly. Never ask for signs, labels, letters or written words in the picture.
