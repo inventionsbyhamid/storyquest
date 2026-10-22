@@ -154,6 +154,7 @@ docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data sto
 
 * Publish StoryQuest on the Amazon Appstore for Fire TV.
 * Family profiles, and characters who come back in new stories.
+* Move the database from SQLite to PostgreSQL when StoryQuest runs on more than one server.
 
 ## Privacy
 
