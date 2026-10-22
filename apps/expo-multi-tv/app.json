@@ -66,6 +66,9 @@
       "shortName": "StoryQuest",
       "backgroundColor": "#1C2240",
       "themeColor": "#1C2240"
+    },
+    "experiments": {
+      "baseUrl": "/play"
     }
   }
 }

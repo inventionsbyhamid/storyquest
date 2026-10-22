@@ -14,6 +14,7 @@ import { Focusable, FocusFrame, FocusScale } from '../Focusable';
 import { Icon } from '../Icons';
 import { Placeholder } from '../Placeholder';
 import { CostTag } from '../sparks/WalletText';
+import { isWatchOnly, ON_FIRE_TV } from '../../platform/watchOnly';
 
 const CARD_WIDTH = scaledPixels(440);
 const THUMB_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
@@ -33,7 +34,7 @@ interface ChoiceCardProps {
 
 function choiceHint(choice: ChoiceView, closed: boolean, notFilmed: boolean): string | undefined {
   if (closed) return 'Path closed. Pick another choice';
-  if (notFilmed) return 'Not filmed yet. Pick another choice';
+  if (notFilmed) return isWatchOnly() ? `${ON_FIRE_TV}. Pick another choice` : 'Not filmed yet. Pick another choice';
   const parts: string[] = [];
   if (choice.sparks > 0) parts.push(`Uses ${formatSparks(choice.sparks)}`);
   if (!choice.ready && choice.nodeId) parts.push('Still being drawn. You can pick it and wait');
@@ -73,7 +74,7 @@ const ChoiceCard = React.memo(({ choice, closed, notFilmed, freeSparks, onChoose
               </View>
               {unavailable ? (
                 <View style={[styles.status, styles.topRight, { backgroundColor: tone.night }]}>
-                  <Text style={styles.statusText}>{closed ? 'Path closed' : 'Not filmed yet'}</Text>
+                  <Text style={styles.statusText}>{closed ? 'Path closed' : isWatchOnly() ? 'On Fire TV' : 'Not filmed yet'}</Text>
                 </View>
               ) : !choice.ready && choice.nodeId ? (
                 <View style={[styles.status, styles.bottomLeft, { backgroundColor: tone.night }]}>
@@ -109,7 +110,7 @@ interface SomethingElseProps {
 }
 
 function somethingElseHint(cost: number, paused: boolean): string {
-  if (paused) return "Paused. New chapters can't be filmed right now";
+  if (paused) return isWatchOnly() ? ON_FIRE_TV : "Paused. New chapters can't be filmed right now";
   return cost > 0 ? `Say it or type it. Uses ${formatSparks(cost)}` : 'Say it or type it';
 }
 
@@ -133,7 +134,7 @@ const SomethingElseCard = React.memo(({ position, cost, paused, onSelect, onFocu
             </View>
             {paused ? (
               <View style={[styles.status, styles.topRight, { backgroundColor: tone.night }]}>
-                <Text style={styles.statusText}>Paused</Text>
+                <Text style={styles.statusText}>{isWatchOnly() ? 'On Fire TV' : 'Paused'}</Text>
               </View>
             ) : cost > 0 ? (
               <View style={styles.cost}>

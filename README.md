@@ -3,6 +3,7 @@
 Family stories on Fire TV where every chapter is a short film made by AI, and the family decides what happens next.
 
 * Demo video: [watch on YouTube](https://youtu.be/TZKUhnOkTNk)
+* Watch a story in your browser: [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play)
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
 * Made for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
 
@@ -29,6 +30,10 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 ## Try it
 
 The release packages talk to our server, so you need no keys or accounts.
+
+### In your browser
+
+Open [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play) and use the arrow keys and Enter like a remote, or your mouse. Esc is Back. The browser version is for watching: making your own idea is on Fire TV.
 
 ### On a Fire TV Stick with Vega OS
 
@@ -113,7 +118,12 @@ vega device install-app -p apps/vega/build/x86_64-release/vega_x86_64.vpkg
 vega device launch-app -a com.storyquest.tv.main
 ```
 
-The same screens also run in a browser for quick work on the interface: `yarn dev:web`.
+The same screens also run in a browser: `yarn dev:web` while you work. To serve the watching version at `/play`, build it and point the server's `WEB_DIR` at the output:
+
+```bash
+cd apps/expo-multi-tv
+EXPO_PUBLIC_API_BASE_URL=https://your.server npx expo export --platform web --output-dir dist
+```
 
 ### Run the tests
 

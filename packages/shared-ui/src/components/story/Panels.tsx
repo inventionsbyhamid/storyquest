@@ -11,6 +11,7 @@ import { Icon, IconName } from '../Icons';
 import { MicHint, PromptField } from '../PromptField';
 import { WalletText } from '../sparks/WalletText';
 import { WaitingDots } from '../WaitingDots';
+import { isWatchOnly } from '../../platform/watchOnly';
 
 function useFadeIn(): Animated.Value {
   const opacity = useRef(new Animated.Value(0)).current;
@@ -178,7 +179,11 @@ export function PathEndPanel({ active, restarting, onStartOver, onExit }: PathEn
       <Animated.View style={[styles.cover, { backgroundColor: tone.scrim, opacity }]}>
         <View style={[styles.sheet, { backgroundColor: tone.raised }]}>
           <Text style={styles.sheetTitle}>The filmed path ends here</Text>
-          <Text style={styles.body}>What happens next has not been filmed yet. Start over to try another path.</Text>
+          <Text style={styles.body}>
+            {isWatchOnly()
+              ? 'What happens next is filmed on Fire TV. Start over to try another path.'
+              : 'What happens next has not been filmed yet. Start over to try another path.'}
+          </Text>
           <SpatialNavigationView direction="vertical" style={styles.buttons}>
             <DefaultFocus>
               <Button

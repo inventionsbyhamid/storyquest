@@ -9,6 +9,7 @@ import { Focusable, FocusFrame, FocusScale } from '../Focusable';
 import { Icon } from '../Icons';
 import { Placeholder } from '../Placeholder';
 import { WaitingDots } from '../WaitingDots';
+import { isWatchOnly, ON_FIRE_TV } from '../../platform/watchOnly';
 
 export const CARD_WIDTH = scaledPixels(380);
 export const CARD_HEIGHT = Math.round((CARD_WIDTH * 9) / 16);
@@ -145,7 +146,7 @@ export const MakeYourOwnCard = React.memo(({ paused, position, onFocusIndex, onS
   return (
     <Focusable
       label="Make your own"
-      hint={paused ? "Paused. New stories can't be filmed right now" : 'Describe a story and we will film the first scene'}
+      hint={paused ? (isWatchOnly() ? ON_FIRE_TV : "Paused. New stories can't be filmed right now") : 'Describe a story and we will film the first scene'}
       position={position}
       altLabels={MAKE_ALT_LABELS}
       onSelect={onSelect}
@@ -160,7 +161,7 @@ export const MakeYourOwnCard = React.memo(({ paused, position, onFocusIndex, onS
               <Icon name="pen" size={48} color={paused ? colors.paperDim : colors.paper} />
               {paused && (
                 <View style={[styles.tag, { backgroundColor: tone.night }]}>
-                  <Text style={styles.tagText}>Paused</Text>
+                  <Text style={styles.tagText}>{isWatchOnly() ? 'On Fire TV' : 'Paused'}</Text>
                 </View>
               )}
             </View>

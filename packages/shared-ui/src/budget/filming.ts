@@ -1,3 +1,5 @@
+import { isWatchOnly } from '../platform/watchOnly';
+
 // Whether new scenes can be filmed. The server says so on today and the wallet; any
 // budget_exhausted answer during this session also counts, since caps do not lift mid session.
 let serverPaused = false;
@@ -9,7 +11,7 @@ function emit(): void {
 }
 
 export function isFilmingPaused(): boolean {
-  return serverPaused || exhaustedSeen;
+  return isWatchOnly() || serverPaused || exhaustedSeen;
 }
 
 export function reportFilmingPaused(paused: boolean | undefined): void {

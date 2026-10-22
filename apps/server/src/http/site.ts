@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance } from 'fastify';
@@ -95,8 +95,8 @@ function renderShowcase(config: Config, showcase: Showcase): Record<string, stri
   const featured = showcase.featured;
   const scenes =
     featured && featured.scenes.length > 1
-      ? `<h2>One story, scene by scene</h2>
-<p>${escapeHtml(featured.title)}, as one family steered it. Every picture is a frame from a filmed scene.</p>
+      ? `<h2>One story, chapter by chapter</h2>
+<p>${escapeHtml(featured.title)}, as one family steered it. Every picture is a frame from a filmed chapter.</p>
 <ol class="scenes">${featured.scenes
           .map(
             (scene) =>
@@ -122,6 +122,10 @@ export async function registerSite(
     updated: escapeHtml(config.POLICY_UPDATED),
     providers: providersSentence(config),
     year: String(new Date().getUTCFullYear()),
+    play:
+      config.WEB_DIR && existsSync(path.join(config.WEB_DIR, 'index.html'))
+        ? '<p class="cta"><a href="/play/">Watch a story in your browser</a><span>Use the arrow keys and Enter, or your mouse. Making your own story is on Fire TV.</span></p>'
+        : '',
   };
   const fill = (template: string, extra: Record<string, string>) =>
     template.replace(/\{\{(\w+)\}\}/g, (_match, key: string) => extra[key] ?? values[key] ?? '');
@@ -150,4 +154,22 @@ export async function registerSite(
     cacheControl: true,
     maxAge: '30d',
   });
+
+  // The web version of the TV app, built separately, for watching stories in a browser.
+  if (config.WEB_DIR && existsSync(path.join(config.WEB_DIR, 'index.html'))) {
+    const index = readFileSync(path.join(config.WEB_DIR, 'index.html'), 'utf8');
+    app.get('/play', async (_request, reply) => reply.redirect('/play/'));
+    await app.register(fastifyStatic, {
+      root: config.WEB_DIR,
+      prefix: '/play/',
+      decorateReply: false,
+      index: false,
+      list: false,
+      cacheControl: true,
+      maxAge: '1h',
+    });
+    app.get('/play/', async (_request, reply) =>
+      reply.type('text/html; charset=utf-8').header('cache-control', 'public, max-age=60').send(index),
+    );
+  }
 }

@@ -55,10 +55,10 @@ describe('website', () => {
     expect(visibleText(res.body)).toContain('Amazon Appstore');
   });
 
-  it('shows the filmed stories and one story scene by scene on the home page', async () => {
+  it('shows the filmed stories and one story chapter by chapter on the home page', async () => {
     const app = await start({ DAILY_IDEAS: '2', WARM_DEPTH: '1' });
     let html = '';
-    for (let i = 0; i < 150 && !html.includes('scene by scene'); i++) {
+    for (let i = 0; i < 150 && !html.includes('chapter by chapter'); i++) {
       // The TV asking for today's stories is what starts them being made.
       await app.inject({ method: 'GET', url: '/v1/today' });
       await new Promise((resolve) => setTimeout(resolve, 100));
@@ -66,7 +66,7 @@ describe('website', () => {
     }
     const text = visibleText(html);
     expect(text).toContain("Tonight's stories");
-    expect(text).toContain('One story, scene by scene');
+    expect(text).toContain('One story, chapter by chapter');
     expect(text).toContain('They chose');
     expect(html).toMatch(/<img src="http:\/\/tv\.test\/media\/nodes\/[^"]+\/poster-/);
     expect(html).toMatch(/style="--tone:#[0-9A-F]{6}"/);

@@ -72,6 +72,8 @@ const ConfigSchema = z
     FONT_FILE: z.string().default('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'),
 
     SITE_DIR: z.string().default('site'),
+    // Built web version of the TV app, served at /play when set.
+    WEB_DIR: z.string().optional(),
     COMPANY_NAME: z.string().min(1).default('StoryQuest'),
     SUPPORT_EMAIL: z.string().default(''),
     POLICY_UPDATED: z.string().min(1).default('October 18, 2026'),

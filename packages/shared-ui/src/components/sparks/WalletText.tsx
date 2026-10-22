@@ -4,11 +4,12 @@ import { colors, radii, space, type, useTone } from '../../theme';
 import { scaledPixels } from '../../hooks/useScale';
 import { formatSparks, useSparks, walletLabel } from '../../purchases';
 import { SparkCoin } from '../Icons';
+import { isWatchOnly } from '../../platform/watchOnly';
 
 // The wallet as plain text with the coin, for screen headers.
 export const WalletText = React.memo(({ style }: { style?: ViewStyle }) => {
   const { wallet } = useSparks();
-  if (!wallet) return null;
+  if (!wallet || isWatchOnly()) return null;
   const label = walletLabel(wallet);
   return (
     <View style={[styles.row, style]} accessible accessibilityLabel={label}>

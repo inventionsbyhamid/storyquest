@@ -2,6 +2,7 @@ import type { ChoiceView, SceneView } from '@storyquest/contracts';
 import type { ApiErrorCode } from '../api/errors';
 import { CUSTOM_CHOICE_LIMITS, checkPromptText } from './format';
 import { messageForError, messages } from './messages';
+import { isWatchOnly } from '../platform/watchOnly';
 
 export type StoryPhase =
   | 'loadingScene'
@@ -555,8 +556,11 @@ export function notFilmedChoices(state: StoryState): number[] {
   const scene = state.scene;
   if (!state.filmingPaused || !scene) return [];
   const closed = closedChoices(state);
+  // Watching on the web never films or charges, so anything that would cost Sparks waits for Fire TV.
+  const needsFilming = (choice: SceneView['choices'][number]) =>
+    (choice.nodeId === null && !choice.ready) || (isWatchOnly() && choice.sparks > 0);
   return scene.choices
-    .filter((choice) => choice.nodeId === null && !choice.ready && !closed.includes(choice.index))
+    .filter((choice) => needsFilming(choice) && !closed.includes(choice.index))
     .map((choice) => choice.index);
 }
 

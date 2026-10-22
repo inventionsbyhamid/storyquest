@@ -1,4 +1,5 @@
 import type { ApiErrorCode } from '../api/errors';
+import { isWatchOnly } from '../platform/watchOnly';
 
 export type MessageContext = 'preset' | 'custom' | 'start' | 'today' | 'general';
 
@@ -35,6 +36,12 @@ export function messageForError(code: ApiErrorCode | 'node_failed', context: Mes
     case 'purchase_invalid':
       return messages.purchaseInvalid;
     case 'budget_exhausted':
+      if (isWatchOnly()) {
+        if (context === 'custom') return 'Your own ideas are filmed on Fire TV. Pick one of the choices.';
+        if (context === 'preset') return 'This chapter is filmed on Fire TV. Pick another choice.';
+        if (context === 'start') return "Make your own story on Fire TV. Pick one of tonight's stories.";
+        return 'Filming new chapters is available on Fire TV.';
+      }
       if (context === 'custom') return "Your idea can't be filmed right now, so nothing was charged. Pick one of the choices.";
       if (context === 'preset') return "This chapter can't be filmed right now. Pick another choice.";
       if (context === 'start') return "New stories can't be filmed right now. Pick one of tonight's stories.";
