@@ -35,7 +35,7 @@ vega device launch-app -a com.storyquest.tv.main
 4. Back on Home, your story is first in the row with its chapter. Select it to continue where you left off.
 5. At the end, scan the QR code with a phone to watch your whole story as one movie.
 
-The filmed path for judging: Climb the star ladder, then Enter the dark nebula, then either Befriend the shadow imp (the full ending) or Chase the scattered stardust.
+The filmed path for judging: Climb the star ladder, then Enter the dark nebula, then Befriend the shadow imp for the ending. Other choices show a picture of where they lead and say "Not filmed yet".
 
 ## About filming during judging
 
