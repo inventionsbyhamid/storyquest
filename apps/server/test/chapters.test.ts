@@ -301,8 +301,10 @@ describe('chapters', () => {
     expect(video.calls.length).toBe(calls);
 
     await services.daily.ensure();
+    services.engine.start();
     await services.engine.idle();
     expect(video.calls.length).toBe(calls);
+    expect(services.repo.listWantedPendingIds()).not.toContain(services.repo.getIdea(ideaId)!.rootNodeId);
     const replanned = await app.inject({
       method: 'POST',
       url: `/v1/admin/ideas/${ideaId}/outline`,

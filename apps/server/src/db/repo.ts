@@ -1184,7 +1184,7 @@ export class Repository {
   listWantedPendingIds(): string[] {
     const rows = this.stmt(
       `SELECT n.id FROM nodes n WHERE n.status = 'pending' AND (
-         EXISTS (SELECT 1 FROM ideas i WHERE i.root_node_id = n.id)
+         EXISTS (SELECT 1 FROM ideas i WHERE i.root_node_id = n.id AND i.unlisted_at IS NULL)
          OR EXISTS (SELECT 1 FROM stories s WHERE s.path LIKE '%"' || n.id || '"%')
        ) ORDER BY n.depth, n.created_at`,
     ).all() as { id: string }[];
