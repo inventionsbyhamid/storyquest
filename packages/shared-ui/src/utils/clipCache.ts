@@ -1,5 +1,6 @@
 import type { ClipFs } from './clipFs';
 import { loadClipFs } from './clipFs';
+import { warmClip } from './warmClip';
 
 const MAX_CLIPS = 4;
 const DIR_NAME = 'storyquest-clips/';
@@ -38,7 +39,12 @@ export class ClipCache {
   }
 
   prefetch(url: string | null | undefined): void {
-    if (!url || !this.enabled || this.entries.has(url) || !/^https?:\/\//i.test(url)) return;
+    if (!url || !/^https?:\/\//i.test(url)) return;
+    if (!this.enabled) {
+      warmClip(url);
+      return;
+    }
+    if (this.entries.has(url)) return;
     const fs = this.fs!;
     const file = `${this.directory()}${fileNameFor(url)}`;
     const entry: Entry = { file, ready: false, usedAt: this.now() };

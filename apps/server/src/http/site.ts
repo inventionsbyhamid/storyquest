@@ -157,7 +157,7 @@ export async function registerSite(
 
   // The web version of the TV app, built separately, for watching stories in a browser.
   if (config.WEB_DIR && existsSync(path.join(config.WEB_DIR, 'index.html'))) {
-    const index = readFileSync(path.join(config.WEB_DIR, 'index.html'), 'utf8');
+    const indexFile = path.join(config.WEB_DIR, 'index.html');
     app.get('/play', async (_request, reply) => reply.redirect('/play/'));
     await app.register(fastifyStatic, {
       root: config.WEB_DIR,
@@ -168,8 +168,9 @@ export async function registerSite(
       cacheControl: true,
       maxAge: '1h',
     });
+    // Read on every visit, so a new web build goes live without a restart.
     app.get('/play/', async (_request, reply) =>
-      reply.type('text/html; charset=utf-8').header('cache-control', 'public, max-age=60').send(index),
+      reply.type('text/html; charset=utf-8').header('cache-control', 'public, max-age=60').send(readFileSync(indexFile, 'utf8')),
     );
   }
 }

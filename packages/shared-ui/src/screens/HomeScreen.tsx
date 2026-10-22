@@ -33,6 +33,7 @@ import { Notice } from '../components/Notice';
 import { SkeletonBlock, usePulse } from '../components/Skeleton';
 import { WalletText } from '../components/sparks/WalletText';
 import type { ScreenNavigation } from '../navigation/types';
+import { warmClip } from '../utils/warmClip';
 
 const MAX_CONTINUE = 4;
 
@@ -313,6 +314,13 @@ export default function HomeScreen() {
 
   const ideas = load.status === 'ready' ? load.today.ideas : [];
   const focusedIdea = focusedIndex > 0 ? (ideas[focusedIndex - 1] ?? null) : null;
+  // A story left in focus is probably the one the family will open, so its first clip starts loading.
+  const focusedTrailer = focusedIdea?.trailerUrl ?? null;
+  useEffect(() => {
+    if (!focusedTrailer) return;
+    const timer = setTimeout(() => warmClip(focusedTrailer), 800);
+    return () => clearTimeout(timer);
+  }, [focusedTrailer]);
   const focusedStory = focusedIndex < 0 ? (stories[-focusedIndex - 1] ?? null) : null;
   const billboardUri = focusedStory
     ? focusedStory.posterUrl
