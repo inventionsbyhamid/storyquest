@@ -84,6 +84,9 @@ export function sanitizeScene(scene: Scene, sceneNumber: number, totalScenes: nu
   };
 }
 
+// Models sometimes copy a "Shot 2:" label from the reply format into the text.
+const withoutShotLabel = (text: string) => text.replace(/^\s*shot\s*\d+\s*[:.)]\s*/i, '');
+
 function cleanChoices(choices: string[]): string[] {
   let cleaned = choices.map((label) => clipText(clean(label), 48)).filter(Boolean);
   for (const fallback of FALLBACK_CHOICES) {
@@ -98,7 +101,10 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
   const isEnding = chapterNumber >= totalChapters;
   return {
     summary: clean(chapter.summary),
-    shots: chapter.shots.map((shot) => ({ caption: clipText(clean(shot.caption), 90), videoPrompt: clean(shot.videoPrompt) })),
+    shots: chapter.shots.map((shot) => ({
+      caption: clipText(clean(withoutShotLabel(shot.caption)), 90),
+      videoPrompt: clean(withoutShotLabel(shot.videoPrompt)),
+    })),
     choices: isEnding ? [] : cleanChoices(chapter.choices),
     isEnding,
     newCharacters: chapter.newCharacters.map((character) => ({

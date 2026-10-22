@@ -315,7 +315,7 @@ Reply with a single JSON object and nothing else, no code fences. Escape any dou
 {
   "summary": "Two or three sentences in past tense about what happened in this chapter, naming the people, objects and promises later chapters must remember.",
   "shots": [
-${Array.from({ length: clips }, (_, i) => `    { "caption": "Shot ${i + 1}: one short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "Shot ${i + 1}: 80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }`).join(',\n')}
+${Array.from({ length: clips }, () => `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }`).join(',\n')}
   ],
   "choices": ["First choice", "Second choice"],
   "isEnding": false,

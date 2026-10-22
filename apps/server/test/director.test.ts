@@ -394,7 +394,8 @@ describe('chapter validation', () => {
   });
 
   it('shows every shot in the reply format', () => {
-    expect(chapterSystemPrompt(15, 3)).toContain('Shot 3:');
+    const format = chapterSystemPrompt(15, 3).split('"shots": [')[1]!.split(']')[0]!;
+    expect(format.match(/"caption"/g)).toHaveLength(3);
   });
 });
 
@@ -495,5 +496,23 @@ describe('FakeDirector', () => {
     expect(result.title).toBe('A Robot Who Wants to');
     expect(result.audience).toBe('family');
     expect(result.characters.length).toBeGreaterThan(0);
+  });
+});
+
+describe('chapter clean up', () => {
+  it('drops a copied shot label from captions and prompts', async () => {
+    const { sanitizeChapter } = await import('../src/engine/scenes');
+    const clean = sanitizeChapter(
+      {
+        summary: 'They chased the stardust.',
+        shots: [{ caption: 'Shot 1: Nico runs.', videoPrompt: 'Shot 1. A boy runs across the sky.' }],
+        choices: [],
+        isEnding: true,
+        newCharacters: [],
+      },
+      4,
+      4,
+    );
+    expect(clean.shots[0]).toEqual({ caption: 'Nico runs.', videoPrompt: 'A boy runs across the sky.' });
   });
 });
