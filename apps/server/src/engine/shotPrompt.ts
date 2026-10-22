@@ -23,6 +23,12 @@ const sentence = (text: string) => {
   return !trimmed || /[.!?]$/.test(trimmed) ? trimmed : `${trimmed}.`;
 };
 
+// "A quick, excited voice." reads as "a quick, excited voice" inside a sentence.
+const voiceOf = (character: Character) => {
+  const voice = character.voice?.trim().replace(/[.!?,;:]+$/, '') || DEFAULT_VOICE;
+  return /^an? /i.test(voice) ? voice[0]!.toLowerCase() + voice.slice(1) : voice;
+};
+
 const spoken = (text: string) =>
   sentence(text.replace(/[<>"“”]/g, '').trim());
 
@@ -46,7 +52,7 @@ export function composeShotPrompt(shot: ShotDraft, context: ShotContext): string
 
   const said = lines.map(({ text, character }) => {
     const id = context.characters.indexOf(character) + 1;
-    return `${character.name} (S${id}) says in ${character.voice?.trim() || DEFAULT_VOICE}: <d>[English] ${text}</d>`;
+    return `${character.name} (S${id}) says in ${voiceOf(character)}: <d>[English] ${text}</d>`;
   });
   const description = [
     '[Shot 1]',

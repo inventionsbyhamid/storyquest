@@ -140,7 +140,12 @@ export function chapterSchema(chapterNumber: number, totalChapters: number, clip
       newCharacters: z.array(LooseCharacterSchema).max(3).optional().default([]),
     })
     .superRefine((chapter, ctx) => {
-      if (isLast) return;
+      if (isLast) {
+        if (chapter.newCharacters?.length) {
+          ctx.addIssue({ code: 'custom', path: ['newCharacters'], message: 'the final chapter must not add new characters, finish the story with the ones the family knows' });
+        }
+        return;
+      }
       if (chapter.isEnding) {
         ctx.addIssue({
           code: 'custom',

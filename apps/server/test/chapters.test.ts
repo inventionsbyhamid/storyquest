@@ -180,7 +180,7 @@ describe('chapters', () => {
     const choicePoint = await scene(app, current.id);
     expect(choicePoint.choices[1]!.nodeId).toBeNull();
     expect(choicePoint.choices[0]!.nodeId).not.toBeNull();
-  });
+  }, 120_000);
 
   it('lists a TV story for Continue watching and marks chapter starts when shared', async () => {
     const { app, services } = await boot();

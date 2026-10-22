@@ -305,8 +305,8 @@ Writing the chapter
 * Spoken lines carry the story, so the family understands what is happening without reading. Give most shots one short line, at most 12 simple words, said by a character in that shot. Never more than one line per shot. Lines should sound natural for a child to hear: what they see, what they want, what they decide.
 * Keep two or three characters on screen at most, and keep them in view and recognisable rather than tiny in the distance.
 * Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
-* When the family gave their own idea, make it happen in this chapter and let it matter, so they can recognise it on screen. If part of it would break the safety rules, use the closest gentle version and never lecture.
-* Only add a new character when the story truly needs one. Add them to newCharacters as { "name": "Name", "description": "fixed look", "voice": "how they sound" }.
+* When the family gave their own idea, make it happen in this chapter and let it work, so they can recognise it on screen and see that it mattered. Never make their idea fail or fall short. If part of it would break the safety rules, use the closest gentle version and never lecture.
+* Only add a new character when the story truly needs one, and never in the final chapter, which belongs to the characters the family already knows. Add them to newCharacters as { "name": "Name", "description": "fixed look", "voice": "how they sound" }.
 * Choices: exactly two, each at most five words, written as actions the heroes could take next. Both must move the story toward its planned ending in different ways, and both must be tempting. Never offer going home or giving up.
 * The final chapter sets isEnding to true, has an empty choices array, reaches the ending the plan promised, closes every open thread and ends on a warm, satisfying image.
 

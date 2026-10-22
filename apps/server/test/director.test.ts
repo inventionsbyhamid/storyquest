@@ -401,6 +401,14 @@ describe('chapter validation', () => {
     expect(parsed.value.shots[0]).toMatchObject({ cast: ['Mia', 'Biscuit'], dialogue: [{ speaker: 'Mia', line: 'Look at the moon!' }] });
   });
 
+  it('turns down a final chapter that brings in new characters', () => {
+    const shotDraft = { caption: 'Mia opens the moon door.', cast: ['Mia'], action: goodScene.videoPrompt, dialogue: [], sound: '' };
+    const ending = { summary: goodScene.summary, choices: [], isEnding: true, shots: [shotDraft, shotDraft, shotDraft] };
+    expect(parseModelJson(chapterSchema(3, 3, 3), JSON.stringify({ ...ending, newCharacters: [] })).ok).toBe(true);
+    const twins = { ...ending, newCharacters: [{ name: 'Tilly', description: 'A small girl in a blue raincoat.' }] };
+    expect(parseModelJson(chapterSchema(3, 3, 3), JSON.stringify(twins)).ok).toBe(false);
+  });
+
   it('shows every shot in the reply format', () => {
     const format = chapterSystemPrompt(15, 3).split('"shots": [')[1]!.split('"choices"')[0]!;
     expect(format.match(/"caption"/g)).toHaveLength(3);
