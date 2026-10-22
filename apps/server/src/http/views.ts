@@ -152,11 +152,15 @@ export class Views {
       if (!options[0]) break;
       path.push((next = options[0]));
     }
-    return path.map((node, index) => ({
-      posterUrl: this.url(node.posterPath)!,
-      caption: node.caption ?? '',
-      choiceTaken: index > 0 ? choiceLabel(path[index - 1]!, node) : null,
-    }));
+    // One picture per chapter: the clips that follow on their own are not separate steps.
+    return path
+      .map((node, index) => ({ node, parent: index > 0 ? path[index - 1]! : null }))
+      .filter(({ parent }) => !parent || !continuesChapter(parent))
+      .map(({ node, parent }) => ({
+        posterUrl: this.url(node.posterPath)!,
+        caption: node.caption ?? '',
+        choiceTaken: parent ? choiceLabel(parent, node) : null,
+      }));
   }
 
   storySummary(story: StoryRecord): StorySummary {

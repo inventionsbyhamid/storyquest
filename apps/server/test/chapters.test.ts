@@ -277,4 +277,22 @@ describe('chapters', () => {
     });
     expect(missingOutline.statusCode).toBe(400);
   });
+
+  it('shows one picture per chapter on the website', async () => {
+    const { app, services } = await boot();
+    const story = await start(app);
+    let current = await scene(app, story.currentNodeId);
+    while (current.continues) {
+      await services.engine.idle();
+      current = await scene(
+        app,
+        (await choose(app, story.id, { kind: 'preset', fromNodeId: current.id, index: 0 })).nextNodeId,
+      );
+    }
+    await choose(app, story.id, { kind: 'preset', fromNodeId: current.id, index: 0 });
+    await services.engine.idle();
+    const html = (await app.inject({ method: 'GET', url: '/' })).body;
+    expect(html).not.toContain('They chose Continue');
+    expect(html.match(/They chose /g)).toHaveLength(1);
+  });
 });
