@@ -556,7 +556,11 @@ export default function StoryScreen() {
           onError={onClipError}
           onMediaCommand={onMediaCommand}
         />
-        <StillFrame uri={state.still} visible={isStillVisible(state) || (!state.still && !state.clipStarted)} />
+        <StillFrame
+          uri={state.still}
+          upcoming={scene?.lastFrameUrl}
+          visible={isStillVisible(state) || (!state.still && !state.clipStarted)}
+        />
 
         {scene && (
           <CaptionBar

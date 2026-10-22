@@ -267,9 +267,13 @@ function ClipPlayer(props: ClipPlayerProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // The source switches before the paused state applies, so the old clip never resumes for a moment.
+  // Loading blocks the JS thread for a moment and blanks the surface, so wait one frame for the
+  // still frame to cover it. The old clip has ended or is being replaced, so it never resumes meanwhile.
   useEffect(() => {
-    if (props.source) controllerRef.current!.load(props.source);
+    const source = props.source;
+    if (!source) return;
+    const frame = requestAnimationFrame(() => controllerRef.current?.load(source));
+    return () => cancelAnimationFrame(frame);
   }, [props.source]);
 
   useEffect(() => {
