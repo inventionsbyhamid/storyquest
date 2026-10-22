@@ -422,7 +422,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
   });
 
   // Chapters can be drafted and approved before filming, so nothing is paid for until the text is right.
-  const ScriptPath = z.array(z.number().int().min(0).max(1)).max(10);
+  const ScriptPath = z.array(z.union([z.number().int().min(0).max(1), z.string().trim().min(2).max(200)])).max(10);
   app.get<{ Params: { id: string } }>('/v1/admin/ideas/:id/scripts', async (request) => {
     requireAdmin(request);
     return { scripts: services.scripts.list(idParam(request.params.id)) };
@@ -436,7 +436,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/draft', async (request) => {
     requireAdmin(request);
-    const body = parse(z.object({ path: z.array(z.union([z.number().int().min(0).max(1), z.string().trim().min(2).max(200)])).max(10) }), request.body);
+    const body = parse(z.object({ path: ScriptPath }), request.body);
     return services.scripts.draft(idParam(request.params.id), body.path);
   });
 

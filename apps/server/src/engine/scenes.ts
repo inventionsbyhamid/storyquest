@@ -146,13 +146,22 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
   };
 }
 
-/** Which approved script a chapter would use: the choices taken at each chapter start, "" for chapter 1. */
+/** A family's own idea as a script step: the same words match whatever the case or punctuation. */
+export const ideaStep = (text: string) =>
+  `idea:${text.toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()}`;
+
+/**
+ * Which approved script a chapter would use: the choices taken at each chapter start, "" for
+ * chapter 1. Only the last step can be a family's own idea.
+ */
 export function scriptKey(lineage: NodeRecord[]): string | null {
-  const keys: number[] = [];
+  const keys: Array<number | string> = [];
   for (const node of lineage.slice(1)) {
     if (node.shot !== 0) continue;
-    if (node.customText !== null || node.choiceIndex === null) return null;
-    keys.push(node.choiceIndex);
+    if (typeof keys[keys.length - 1] === 'string') return null;
+    if (node.customText !== null) keys.push(ideaStep(node.customText));
+    else if (node.choiceIndex === null) return null;
+    else keys.push(node.choiceIndex);
   }
   return keys.join(',');
 }

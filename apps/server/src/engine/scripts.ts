@@ -5,7 +5,7 @@ import { chapterSchema } from '../providers/director/schemas';
 import type { Chapter, ChapterRequest, Director } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
 import { badRequest, conflict, MESSAGES, notFound } from './errors';
-import { sanitizeChapter } from './scenes';
+import { ideaStep, sanitizeChapter } from './scenes';
 
 export interface ScriptDeskDeps {
   config: Config;
@@ -37,7 +37,7 @@ export class ScriptDesk {
   }
 
   /** Checks and stores a chapter so filming that point of the story uses it word for word. */
-  async approve(ideaId: string, path: number[], body: unknown, dryRun: boolean): Promise<{ key: string; chapter: WrittenChapter }> {
+  async approve(ideaId: string, path: ChapterPath, body: unknown, dryRun: boolean): Promise<{ key: string; chapter: WrittenChapter }> {
     const { tree, bible, root } = this.tree(ideaId);
     this.request(tree, bible, root, path);
     const number = path.length + 1;
@@ -48,9 +48,10 @@ export class ScriptDesk {
     const text = [chapter.summary, ...chapter.choices, ...chapter.shots.flatMap((shot) => [shot.caption, shot.videoPrompt])].join('\n');
     const verdict = await this.deps.safety.check(text, { source: 'output', audience: tree.audience });
     if (!verdict.ok) throw badRequest(`${MESSAGES.badRequest} The chapter did not pass the safety check.`);
-    const key = path.join(',');
+    const key = path.map((step) => (typeof step === 'string' ? ideaStep(step) : step)).join(',');
     if (!dryRun) {
-      const start = this.chapterStart(root, path);
+      // A family's own idea is filmed fresh for each family, so its script can always change.
+      const start = path.every((step) => typeof step === 'number') ? this.chapterStart(root, path as number[]) : null;
       if (start && start.status !== 'pending') throw conflict('That chapter was already filmed.');
       this.deps.repo.setTreeScript(tree.id, key, chapter);
     }
