@@ -427,6 +427,12 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     return { scripts: services.scripts.list(idParam(request.params.id)) };
   });
 
+  app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/outline', async (request) => {
+    requireAdmin(request);
+    const body = parse(z.object({ outline: z.array(z.string().trim().min(10).max(400)).min(1).max(8) }), request.body);
+    return { bible: daily.setOutline(idParam(request.params.id), body.outline) };
+  });
+
   app.post<{ Params: { id: string } }>('/v1/admin/ideas/:id/draft', async (request) => {
     requireAdmin(request);
     const body = parse(z.object({ path: z.array(z.union([z.number().int().min(0).max(1), z.string().trim().min(2).max(200)])).max(10) }), request.body);

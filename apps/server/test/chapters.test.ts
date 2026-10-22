@@ -300,6 +300,17 @@ describe('chapters', () => {
     expect(today.ideas.map((idea) => idea.id)).not.toContain(ideaId);
     expect(video.calls.length).toBe(calls);
 
+    await services.daily.ensure();
+    await services.engine.idle();
+    expect(video.calls.length).toBe(calls);
+    const replanned = await app.inject({
+      method: 'POST',
+      url: `/v1/admin/ideas/${ideaId}/outline`,
+      headers: ADMIN,
+      payload: { outline: [outline[0], 'Pip plants it and a tree of lanterns grows by the river.'] },
+    });
+    expect(replanned.json().bible.outline[1]).toBe('Pip plants it and a tree of lanterns grows by the river.');
+
     const tooSoon = await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [0] } });
     expect(tooSoon.statusCode).toBe(400);
     const drafted = (await app.inject({ method: 'POST', url: `/v1/admin/ideas/${ideaId}/draft`, headers: ADMIN, payload: { path: [] } })).json();

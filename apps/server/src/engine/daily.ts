@@ -5,6 +5,7 @@ import { errorDetails, type Logger } from '../log';
 import type { Director } from '../providers/director/types';
 import type { SafetyChecker } from '../providers/safety/types';
 import type { StoryEngine } from './engine';
+import { badRequest, MESSAGES, notFound } from './errors';
 import { sanitizeBible } from './scenes';
 
 export interface DailyIdeasDeps {
@@ -152,6 +153,19 @@ export class DailyIdeas {
   }
 
   /** Puts a chosen story plan on Home today and starts filming its opening. */
+  /** Replaces a story's chapter plan before it is filmed past chapter 1. */
+  setOutline(ideaId: string, outline: string[]): Bible {
+    const { repo } = this.deps;
+    const idea = repo.getIdea(ideaId);
+    if (!idea) throw notFound();
+    const tree = repo.getTree(idea.treeId)!;
+    if (!tree.bible) throw notFound();
+    if (outline.length !== tree.totalScenes) throw badRequest(`${MESSAGES.badRequest} The plan needs ${tree.totalScenes} chapters.`);
+    const bible = sanitizeBible({ ...tree.bible, outline });
+    repo.setTreeBible(tree.id, bible);
+    return bible;
+  }
+
   /** With film false the story stays off Home and nothing is filmed, so its chapters can be approved first. */
   async addIdea(plan: Bible, film = true): Promise<IdeaRecord> {
     const { config, repo, safety, engine, log } = this.deps;
@@ -240,6 +254,8 @@ export class DailyIdeas {
     const { repo, engine } = this.deps;
     let failed = 0;
     for (const idea of ideas) {
+      // A story kept off Home is being scripted or was taken down, so it is never filmed on its own.
+      if (idea.unlistedAt) continue;
       const root = repo.getNode(idea.rootNodeId);
       if (!root) continue;
       if (root.status === 'pending') engine.enqueue(root.id, 'high');
