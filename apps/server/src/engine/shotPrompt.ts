@@ -6,6 +6,7 @@ import type { Character, ShotDraft } from '../domain';
 const FIRST_FRAME = 'For the target video, at 0.00 seconds into the target video, <Picture 1> (from [Shot 1]) is fully referenced.';
 const LOOKS_LOCKED = 'Every character keeps exactly the face, hair, colours, size and clothes described here for the whole clip.';
 const ONE_TAKE = 'One continuous shot with no cuts.';
+const REAL_TIME = 'Everyone moves briskly and with purpose and speaks at a natural conversational speed, with no slow motion, no long pauses and no idle staring.';
 const NO_TEXT = 'No subtitles, captions or written words anywhere on screen.';
 const DEFAULT_VOICE = 'a clear, friendly voice';
 const DEFAULT_SOUND = 'Soft ambience of the place and the sounds of the action.';
@@ -42,7 +43,9 @@ const spoken = (text: string) =>
 
 function introduce(character: Character): string {
   const description = character.description.trim();
-  const rest = description.toLowerCase().startsWith(character.name.toLowerCase())
+  // "Sergeant Okafor, a tall man" already names him; "Okafor is sergeant Okafor" reads like two people.
+  const lead = description.split(/\s+/).slice(0, 3).join(' ').toLowerCase();
+  const rest = lead.includes(character.name.toLowerCase())
     ? description
     : `${character.name} is ${description[0]!.toLowerCase()}${description.slice(1)}`;
   return sentence(rest);
@@ -67,6 +70,7 @@ export function composeShotPrompt(shot: ShotDraft, context: ShotContext): string
     sentence(context.artStyle),
     ...people.map(introduce),
     sentence(shot.action),
+    /slow motion/i.test(shot.action) ? '' : REAL_TIME,
     ...said,
     people.length ? onlyThese(people) : '',
     people.length ? LOOKS_LOCKED : '',

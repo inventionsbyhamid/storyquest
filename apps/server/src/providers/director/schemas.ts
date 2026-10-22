@@ -88,7 +88,7 @@ const ShotDraftSchema = z.object({
   caption: z.string().trim().min(2).max(140),
   cast: z.array(z.string().trim().min(1).max(40)).max(4).default([]),
   action: z.string().trim().min(40).max(1200),
-  dialogue: z.array(LineSchema).max(2).default([]),
+  dialogue: z.array(LineSchema).max(4).default([]),
   sound: z.string().trim().max(300).default(''),
 });
 

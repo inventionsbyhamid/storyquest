@@ -131,9 +131,9 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
           caption: shot.caption,
           cast: shot.cast.map((name) => clean(name)),
           action: clean(withoutShotLabel(shot.action)),
-          // Kids get one simple line per clip; older audiences can have a short exchange.
+          // Kids get one simple line per clip; older audiences get a real back and forth.
           dialogue: shot.dialogue
-            .slice(0, context.bible.audience === 'kids' ? 1 : 2)
+            .slice(0, LINES_PER_SHOT[context.bible.audience])
             .map((line) => ({ speaker: clean(line.speaker), line: clipText(clean(line.line), 100) })),
           sound: clean(shot.sound),
         },
@@ -145,6 +145,8 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
     newCharacters,
   };
 }
+
+const LINES_PER_SHOT: Record<Audience, number> = { kids: 1, family: 3, grownups: 4 };
 
 /** A family's own idea as a script step: the same words match whatever the case or punctuation. */
 export const ideaStep = (text: string) =>
