@@ -415,6 +415,18 @@ describe('filming a scene again', () => {
   });
 });
 
+describe('chapter budget', () => {
+  it('pauses filming unless a whole chapter fits under the cap', async () => {
+    const { services } = await boot({ DAILY_IDEAS: '0', CLIPS_PER_CHAPTER: '3', TOTAL_VIDEO_SECONDS_CAP: '5' });
+    const { budget } = services;
+    expect(budget.exhausted()).toBeNull();
+    budget.settleVideo(budget.reserveVideo(3, { task: 'scene', nodeId: 'nd_a' }), 3, 'ok');
+    // Two seconds are left, enough for one more clip but not a three clip chapter.
+    expect(budget.exhausted()).toBe('total_video');
+    expect(() => budget.reserveVideo(1, { task: 'scene', nodeId: 'nd_b' })).not.toThrow();
+  });
+});
+
 describe('spend report', () => {
   it('adds up seconds, calls and tokens into dollars and what is left', async () => {
     const { app, services } = await boot({ DAILY_IDEAS: '0', TOTAL_VIDEO_SECONDS_CAP: '100', DIRECTOR_CALL_CAP: '10' });

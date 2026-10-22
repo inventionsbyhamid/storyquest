@@ -46,11 +46,14 @@ export class Budget implements DirectorMeter {
     return utcDay(this.deps.now());
   }
 
-  /** Which limit would stop the next scene, if any. Request handlers check this before creating work. */
+  /**
+   * Which limit would stop the next chapter, if any. Request handlers check this before creating work.
+   * A chapter needs room for all its clips, so a family never gets stuck half way through one.
+   */
   exhausted(options: { ignoreDaily?: boolean } = {}): BudgetLimit | null {
     const { config, repo } = this.deps;
     if (config.DIRECTOR_CALL_CAP > 0 && repo.getTotal('director_calls') >= config.DIRECTOR_CALL_CAP) return 'director_calls';
-    const seconds = config.SCENE_SECONDS;
+    const seconds = config.SCENE_SECONDS * config.CLIPS_PER_CHAPTER;
     if (config.TOTAL_VIDEO_SECONDS_CAP > 0 && repo.getTotal('video_seconds') + seconds > config.TOTAL_VIDEO_SECONDS_CAP) {
       return 'total_video';
     }
