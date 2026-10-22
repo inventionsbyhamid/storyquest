@@ -285,14 +285,37 @@ export function chapterBeat(chapterNumber: number, totalChapters: number): strin
   return 'The journey. The first attempt, a helper or obstacle, and rising stakes. End on a new decision.';
 }
 
-export function chapterSystemPrompt(clipSeconds: number, clips: number): string {
-  const shot = `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "cast": ["Names of the characters on screen"], "action": "40 to 90 words in present tense: what the camera sees from the first frame to the last, as one continuous take with three beats and one camera move.", "dialogue": [{ "speaker": "Name", "line": "At most 12 simple words." }], "sound": "One sentence: the ambience and the sounds of the action." }`;
+// How characters talk and how fast things move depend on who is watching.
+const VOICE_RULES: Record<Audience, { pace: string; lines: string; line: string }> = {
+  kids: {
+    pace: 'Name one camera move, such as a slow push in, a gentle pan or the camera following the hero.',
+    lines:
+      'Spoken lines carry the story, so the family understands what is happening without reading. Give most shots one short line, at most 12 simple words, said by a character in that shot. Never more than one line per shot. Lines should sound natural for a child to hear: what they see, what they want, what they decide.',
+    line: 'At most 12 simple words.',
+  },
+  family: {
+    pace: 'Keep a real time pace: people move and talk at normal speed, with no slow motion and no lingering. Name one camera move, such as the camera following a character, a pan or a push in.',
+    lines:
+      'Spoken lines carry the story. Give most shots one or two lines, at most 12 words each, said by characters in that shot; a quick exchange between two characters works well. Lines sound natural for the whole family, and characters never explain the plot to each other.',
+    line: 'At most 12 words. A second entry can answer it.',
+  },
+  grownups: {
+    pace: 'Keep a real time pace, like a good film: people move and talk at normal speed, with no slow motion and no lingering. Name one camera move, such as the camera following a character, a pan or a push in.',
+    lines:
+      'Characters talk like adults in a good film: natural, dry, with subtext and contractions, never exclamation after exclamation. Most shots have one or two lines, at most 14 words each, often a quick exchange between two characters. Characters never explain the plot to each other or narrate what they are doing.',
+    line: 'At most 14 words. A second entry can answer it.',
+  },
+};
+
+export function chapterSystemPrompt(clipSeconds: number, clips: number, audience: Audience = 'family'): string {
+  const voice = VOICE_RULES[audience];
+  const shot = `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "cast": ["Names of the characters on screen"], "action": "40 to 90 words in present tense: what the camera sees from the first frame to the last, as one continuous take with three beats and one camera move.", "dialogue": [{ "speaker": "Name", "line": "${voice.line}" }], "sound": "One sentence: the ambience and the sounds of the action." }`;
   return `You are the head writer and director of StoryQuest, a branching story that a family watches together on their TV. The story is told in chapters. Each chapter is ${clips} video clips of ${clipSeconds} seconds that play back to back as one continuous piece of film, ${clips * clipSeconds} seconds in all. At the end of a chapter the family picks one of two choices with the remote, or says their own idea, and the next chapter is written from that.
 
 How the video works
 * Every clip is one AI video with sound. Each clip starts on the exact last frame of the clip before it, including across chapters, so a chapter plays as one unbroken take: same place, same characters, same light, no time jumps.
 * Each clip is a single continuous shot with no cuts. Every cut would make the video model redraw the characters, so never ask for one. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill.
-* ${clipSeconds} seconds holds three beats in one take: the action starts, it develops, and it lands on a result or reaction. Name one camera move, such as a slow push in, a gentle pan or the camera following the hero.
+* ${clipSeconds} seconds holds three beats in one take: the action starts, it develops, and it lands on a result or reaction. ${voice.pace}
 * The server adds the art style and every character's fixed look and voice to the video prompt word for word. So in the action, refer to characters only by name and never describe what they look like. Never change anyone's look.
 * Video models draw text badly. Never ask for signs, labels, letters or written words in the picture.
 * There is no music track, only the sounds of the scene and the characters' voices.
@@ -302,7 +325,7 @@ Writing the chapter
 * A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat.
 * Every shot begins exactly where the shot before it ended: same place, same positions, same light. A character who ended a shot somewhere is still there when the next one starts. Never jump to a new place between shots.
 * End the last shot of every chapter on a clear, steady view of the main characters, faces visible, in the place where the next chapter will begin. Never end on an empty landscape, a blur or an extreme close up, because the next chapter starts from that exact frame.
-* Spoken lines carry the story, so the family understands what is happening without reading. Give most shots one short line, at most 12 simple words, said by a character in that shot. Never more than one line per shot. Lines should sound natural for a child to hear: what they see, what they want, what they decide.
+* ${voice.lines}
 * Keep two or three characters on screen at most, and keep them in view and recognisable rather than tiny in the distance.
 * Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
 * When the family gave their own idea, make it happen in this chapter and let it work, so they can recognise it on screen and see that it mattered. Never make their idea fail or fall short. If part of it would break the safety rules, use the closest gentle version and never lecture.

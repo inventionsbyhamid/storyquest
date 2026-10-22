@@ -80,8 +80,8 @@ const LineSchema = z.object({
     .string()
     .trim()
     .min(1)
-    .max(90)
-    .refine((text) => wordCount(text) <= 14, 'a spoken line is at most 12 words'),
+    .max(100)
+    .refine((text) => wordCount(text) <= 16, 'a spoken line is at most 14 words'),
 });
 
 const ShotDraftSchema = z.object({

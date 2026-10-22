@@ -69,7 +69,7 @@ export class LlmDirector implements Director {
   async writeChapter(request: ChapterRequest): Promise<Chapter> {
     const chapter = await this.ask(
       { task: 'scene', nodeId: request.nodeId, treeId: request.treeId },
-      chapterSystemPrompt(request.sceneSeconds, request.clips),
+      chapterSystemPrompt(request.sceneSeconds, request.clips, request.bible.audience),
       chapterUserPrompt(request),
       chapterSchema(request.sceneNumber, request.totalScenes, request.clips),
       2500 + 1200 * request.clips,

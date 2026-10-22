@@ -131,7 +131,10 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
           caption: shot.caption,
           cast: shot.cast.map((name) => clean(name)),
           action: clean(withoutShotLabel(shot.action)),
-          dialogue: shot.dialogue.slice(0, 1).map((line) => ({ speaker: clean(line.speaker), line: clipText(clean(line.line), 90) })),
+          // Kids get one simple line per clip; older audiences can have a short exchange.
+          dialogue: shot.dialogue
+            .slice(0, context.bible.audience === 'kids' ? 1 : 2)
+            .map((line) => ({ speaker: clean(line.speaker), line: clipText(clean(line.line), 100) })),
           sound: clean(shot.sound),
         },
         { artStyle, characters, firstFrame: !(i === 0 && context.opensStory) },

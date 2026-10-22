@@ -409,6 +409,12 @@ describe('chapter validation', () => {
     expect(parseModelJson(chapterSchema(3, 3, 3), JSON.stringify(twins)).ok).toBe(false);
   });
 
+  it('lets characters talk more for older audiences and keeps kids to one simple line', () => {
+    expect(chapterSystemPrompt(15, 3, 'kids')).toContain('Never more than one line per shot');
+    expect(chapterSystemPrompt(15, 3, 'grownups')).toContain('subtext');
+    expect(chapterSystemPrompt(15, 3, 'grownups')).not.toContain('slow push in');
+  });
+
   it('shows every shot in the reply format', () => {
     const format = chapterSystemPrompt(15, 3).split('"shots": [')[1]!.split('"choices"')[0]!;
     expect(format.match(/"caption"/g)).toHaveLength(3);
@@ -534,5 +540,17 @@ describe('chapter clean up', () => {
     expect(clean.shots[0]!.caption).toBe('Nico runs.');
     expect(clean.shots[0]!.videoPrompt).toContain('Nico is a small boy in a starry blue cloak. Nico runs across the sky.');
     expect(clean.shots[0]!.videoPrompt).not.toContain('Shot 1.');
+
+    const exchange = {
+      summary: 'They talked.',
+      shots: [{ caption: 'Nico asks.', cast: ['Nico'], action: 'Nico turns to the door and listens.', dialogue: [{ speaker: 'Nico', line: 'Who is there?' }, { speaker: 'Nico', line: 'Show yourself.' }], sound: '' }],
+      choices: [],
+      isEnding: true,
+      newCharacters: [],
+    };
+    const kids = sanitizeChapter(exchange, 4, 4, { bible: { ...nicoBible, audience: 'kids' }, cast: nicoBible.characters, opensStory: false });
+    const grownups = sanitizeChapter(exchange, 4, 4, { bible: { ...nicoBible, audience: 'grownups' }, cast: nicoBible.characters, opensStory: false });
+    expect(kids.shots[0]!.videoPrompt.match(/<d>/g)).toHaveLength(1);
+    expect(grownups.shots[0]!.videoPrompt.match(/<d>/g)).toHaveLength(2);
   });
 });
