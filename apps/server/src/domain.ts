@@ -7,6 +7,8 @@ export interface Character {
   description: string;
   /** How they sound, repeated in every clip they speak in so the voice stays close. */
   voice?: string;
+  /** How a viewer would point them out, like "the small fox kit in the blue scarf". Clip prompts use it in place of the name. */
+  handle?: string;
 }
 
 export interface Bible {

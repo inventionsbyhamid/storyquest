@@ -7,6 +7,7 @@ export const CharacterSchema = z.object({
   name: z.string().trim().min(1).max(40),
   description: z.string().trim().min(10).max(400),
   voice: z.string().trim().min(3).max(160).optional().catch(undefined),
+  handle: z.string().trim().min(3).max(80).optional().catch(undefined),
 });
 
 // Some models write a character as "Name: description" instead of an object.

@@ -50,13 +50,56 @@ const FALLBACK_CHOICES = ['Follow the glowing trail', 'Ask a new friend for help
 
 const clean = (text: string) => sanitizeUserText(text);
 
+// "a fox kit" in every sentence can read as several fox kits, so a handle always starts with "the".
+function cleanHandle(handle: string | undefined): string {
+  if (!handle) return '';
+  const words = clean(handle)
+    .toLowerCase()
+    .replace(/^["'“‘]+|["'”’.!?,;:]+$/g, '')
+    .trim()
+    .replace(/^(?:the|an?) /, '')
+    .split(/\s+/)
+    .filter(Boolean);
+  return words.length >= 2 && words.length <= 8 ? `the ${words.join(' ')}` : '';
+}
+
+// "Pip is a small red fox kit with a blue scarf" gives "the small red fox kit".
+function derivedHandle(character: Character): string | undefined {
+  const body = character.description.trim().replace(/^[^,.;:!?]*?(?:,| is )\s*/, '');
+  const kind = /^an? ((?:[\p{L}']+ ){1,5}?[\p{L}']+?)(?= (?:with|in|wearing|who|whose|that|and|of|from|carrying)\b|[,.;:!?]|$)/iu.exec(body);
+  return kind ? `the ${kind[1]!.toLowerCase()}` : undefined;
+}
+
 function cleanCharacter(character: Character): Character {
   const voice = character.voice ? clipText(clean(character.voice), 120) : '';
+  const handle = cleanHandle(character.handle);
   return {
     name: clipText(clean(character.name), 40),
     description: clean(character.description),
     ...(voice ? { voice } : {}),
+    ...(handle ? { handle } : {}),
   };
+}
+
+/**
+ * Two characters with one handle would turn into one person on screen, so both go back to
+ * their names. A newcomer whose handle is already taken loses it, since earlier clips used it.
+ * A handle with a name in it brings back the name the handle is there to avoid.
+ */
+function uniqueHandles(characters: Character[], taken: Character[] = []): Character[] {
+  const key = (c: Character) => c.handle?.toLowerCase();
+  const words = (text: string) => ` ${text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+  const used = new Set(taken.map(key));
+  const names = [...taken, ...characters].map((c) => words(c.name));
+  return characters.map((character) => {
+    const handle = key(character);
+    if (!handle) return character;
+    const shared = used.has(handle) || characters.some((other) => other !== character && key(other) === handle);
+    if (!shared && !names.some((name) => words(handle).includes(name))) return character;
+    const named = { ...character };
+    delete named.handle;
+    return named;
+  });
 }
 
 export function sanitizeBible(bible: Bible): Bible {
@@ -68,7 +111,7 @@ export function sanitizeBible(bible: Bible): Bible {
     artStyle: clean(bible.artStyle),
     setting: clean(bible.setting),
     tone: clean(bible.tone),
-    characters: bible.characters.map(cleanCharacter),
+    characters: uniqueHandles(bible.characters.map(cleanCharacter)),
   };
 }
 
@@ -117,10 +160,13 @@ export interface ChapterContext {
 /** Cleans what the director wrote and puts together the exact prompt for every clip. */
 export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalChapters: number, context: ChapterContext): WrittenChapter {
   const isEnding = chapterNumber >= totalChapters;
-  const newCharacters = chapter.newCharacters
-    .map(cleanCharacter)
-    .filter((character) => !context.cast.some((c) => c.name.toLowerCase() === character.name.toLowerCase()));
-  const characters = [...context.cast, ...newCharacters];
+  const newCharacters = uniqueHandles(
+    chapter.newCharacters
+      .map(cleanCharacter)
+      .filter((character) => !context.cast.some((c) => c.name.toLowerCase() === character.name.toLowerCase())),
+    context.cast,
+  );
+  const characters = composingCast([...context.cast, ...newCharacters]);
   const artStyle = clean(context.bible.artStyle);
   return {
     summary: clean(chapter.summary),
@@ -147,6 +193,20 @@ export function sanitizeChapter(chapter: Chapter, chapterNumber: number, totalCh
 }
 
 const LINES_PER_SHOT: Record<Audience, number> = { kids: 1, family: 3, grownups: 4 };
+
+/** The cast as the clip prompts call them. Older stories have no handles, so one is made from each description. */
+function composingCast(characters: Character[]): Character[] {
+  const derived = uniqueHandles(
+    characters
+      .filter((c) => !c.handle)
+      .map((c) => {
+        const handle = derivedHandle(c);
+        return handle ? { ...c, handle } : c;
+      }),
+    characters.filter((c) => c.handle),
+  );
+  return characters.map((c) => (c.handle ? c : derived.shift()!));
+}
 
 /** A family's own idea as a script step: the same words match whatever the case or punctuation. */
 export const ideaStep = (text: string) =>

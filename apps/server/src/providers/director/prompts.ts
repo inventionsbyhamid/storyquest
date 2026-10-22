@@ -103,7 +103,7 @@ Art style: ${bible.artStyle}
 Setting: ${bible.setting}
 Tone: ${bible.tone}
 Characters:
-${cast.map((character) => `* ${character.name}: ${character.description}${character.voice ? ` Voice: ${character.voice}.` : ''}`).join('\n')}
+${cast.map((character) => `* ${character.name}: ${character.description}${character.handle ? ` Handle: ${character.handle}.` : ''}${character.voice ? ` Voice: ${character.voice}.` : ''}`).join('\n')}
 </bible>`;
 }
 
@@ -165,7 +165,7 @@ const BIBLE_FORMAT = `{
   "artStyle": "One line describing a consistent visual style, for example: Soft 3D animated feature film look, rounded shapes, warm golden light, rich saturated colours",
   "setting": "One or two sentences about the world",
   "tone": "A few words",
-  "characters": [{ "name": "Name", "description": "20 to 40 words that start with the name and is, like Pip is a small red fox kit, then age feel, size, colours, clothing and one memorable detail, using the name only once", "voice": "a short phrase for how they sound, starting with a, like a bright, quick young boy's voice or a deep, slow, kindly old voice" }],
+  "characters": [{ "name": "A name that is short, easy to say and never an everyday English word, like Pip or Tilly, not Moss, Storm or Hope", "description": "20 to 40 words that start with the name and is, like Pip is a small red fox kit, then age feel, size, colours, clothing and one memorable detail, using the name only once", "handle": "3 to 7 words a viewer would use to point them out on screen, starting with the word the, then their most visible fixed feature and then their kind or role, like the silver haired inspector or the blue scarfed fox kit. No name in it, and no two characters share one", "voice": "a short phrase starting with a that gives gender, rough age, timbre and one manner word, for natural, brisk speech, never slow, sleepy or unhurried, like a bright, quick young boy's voice or a deep, warm, kindly old man's voice" }],
   "outline": ["One or two sentences per chapter, in order, together telling one complete story"]
 }`;
 
@@ -174,7 +174,8 @@ const OUTLINE_RULES = `The story plan (outline)
 * Chapter 1 shows the hero, their world and what they want, then the problem that starts the adventure. The middle chapters raise the stakes: an attempt, a helper or obstacle, a setback or surprising turn, and a clue that matters later. The last chapter is the climax and a warm, complete resolution where the goal is reached and the opening problem is answered.
 * Plant small things early that pay off later. The hero solves the problem through their own courage, kindness or cleverness.
 * Families will steer with choices, so describe what each chapter must achieve, not every move.
-* Every character who matters in the plan, friend or obstacle, is in the characters list with a fixed visual description and a voice, so they look and sound the same in every clip.
+* Every character who matters in the plan, friend or obstacle, is in the characters list with a fixed visual description, a handle and a voice, so they look, sound and are called the same in every clip.
+* Characters are easy to tell apart at a glance: a different build and different hair and clothing colours, never two who could be mistaken for each other.
 * Keep the cast small: one to three characters. Every extra character is one more face the video model can get wrong.`;
 
 export function bibleSystemPrompt(): string {
@@ -183,7 +184,10 @@ export function bibleSystemPrompt(): string {
 What makes a good bible
 * A title and logline that feel like a film the family would pick.
 * One art style line that a video model can follow in every clip. Pick a style that suits the story, such as storybook watercolour, claymation, soft 3D animation, paper cut out or painterly anime.
-* One to three characters, the hero first. Each description is fixed for the whole story, so be concrete and visual: species or type, size, colours, clothing and one memorable detail. Give each one a voice that is easy to tell apart. Names are short and easy to say.
+* One to three characters, the hero first. Each description is fixed for the whole story, so be concrete and visual: species or type, size, colours, clothing and one memorable detail. Make them easy to tell apart at a glance, with a different build and different hair and clothing colours, never two who could be mistaken for each other.
+* Each character has a handle, the few words a viewer would use to point them out on screen, such as the silver haired inspector. The video prompts call them by it in every clip.
+* Each character has a voice that is easy to tell apart: gender, rough age, timbre and one manner word, speaking naturally and briskly, never slow, sleepy or unhurried.
+* Names are short, easy to say and never an everyday English word, like Pip or Tilly, not Moss, Storm or Hope.
 * Keep what the family asked for at the heart of it. If the idea names a real person, brand or someone else's character, invent an original stand in. If part of the idea does not suit the audience, keep its spirit and make a gentle version.
 
 ${OUTLINE_RULES}
@@ -209,7 +213,7 @@ Write the story bible now as one JSON object.`;
 export function planSystemPrompt(): string {
   return `You are the programme planner for StoryQuest, a family TV app with a fresh set of branching stories every day. Every family starts from the same openings and then picks their own path, so each idea needs a strong hook and room for many different adventures.
 
-For each idea write a full story bible with a story plan. The art style line and fixed character descriptions are copied into every video clip, so make them concrete and visual.
+For each idea write a full story bible with a story plan. The art style line and every character's fixed description, handle and voice are copied into every video clip, so make them concrete and visual.
 
 ${OUTLINE_RULES}
 
@@ -223,7 +227,7 @@ Reply with a single JSON object and nothing else, no code fences:
 { "ideas": [ {
   "title": "...", "logline": "...", "audience": "kids | family | grownups", "moods": ["one to three of: funny, adventure, cozy, mystery, spooky"],
   "artStyle": "...", "setting": "...", "tone": "...",
-  "characters": [{ "name": "...", "description": "...", "voice": "..." }],
+  "characters": [{ "name": "...", "description": "...", "handle": "...", "voice": "..." }],
   "outline": ["chapter 1 ...", "chapter 2 ...", "..."]
 } ] }
 Field rules: ${BIBLE_FORMAT.replace(/\s+/g, ' ')}`;
@@ -309,14 +313,15 @@ const VOICE_RULES: Record<Audience, { pace: string; lines: string; line: string 
 
 export function chapterSystemPrompt(clipSeconds: number, clips: number, audience: Audience = 'family'): string {
   const voice = VOICE_RULES[audience];
-  const shot = `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "cast": ["Names of the characters on screen"], "action": "40 to 90 words in present tense: what the camera sees from the first frame to the last, as one continuous take with three beats and one camera move, calling characters by their visual handles, never by name.", "dialogue": [{ "speaker": "Name", "line": "${voice.line}" }], "sound": "One sentence: the ambience and the sounds of the action." }`;
+  const shot = `    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "cast": ["Names of the characters on screen"], "action": "40 to 90 words in present tense: what the camera sees from the first frame to the last, as one continuous take with three beats and one camera move, calling each character only by name.", "dialogue": [{ "speaker": "Name", "line": "${voice.line}" }], "sound": "One sentence: the ambience and the sounds of the action." }`;
   return `You are the head writer and director of StoryQuest, a branching story that a family watches together on their TV. The story is told in chapters. Each chapter is ${clips} video clips of ${clipSeconds} seconds that play back to back as one continuous piece of film, ${clips * clipSeconds} seconds in all. At the end of a chapter the family picks one of two choices with the remote, or says their own idea, and the next chapter is written from that.
 
 How the video works
 * Every clip is one AI video with sound. Each clip starts on the exact last frame of the clip before it, including across chapters, so a chapter plays as one unbroken take: same place, same characters, same light, no time jumps.
 * Each clip is a single continuous shot with no cuts. Every cut would make the video model redraw the characters, so never ask for one. If the story moves somewhere new, show the move on screen, such as walking through a door or flying over a hill. A shot covers only ${clipSeconds} seconds of real time in one place, so never skip ahead inside it or write "later".
 * ${clipSeconds} seconds holds three beats in one take: the action starts, it develops, and it lands on a result or reaction. ${voice.pace}
-* The server adds the art style and every character's full look and voice to the video prompt word for word, and says who is in the shot. The video model links names to people poorly, so in the action never use names: call each character by a short visual handle made from their role or kind and one or two fixed features of their look, such as "the silver haired inspector" or "the small fox kit in the blue scarf". Use the exact same handle for that character every time, in every shot. Names stay in "cast" and in each line's "speaker". Never add to or change anyone's look.
+* The server adds the art style to the video prompt and says who is in the shot. In the action, refer to characters by name only. Never describe what they look like and never invent labels for them, such as "the tall woman" or "the little fox". The server swaps each name for that character's fixed visual handle and adds their full look and voice word for word, so every clip calls them the same way. Never add to or change anyone's look.
+* Never put spoken words in the action. Every spoken word goes in dialogue.
 * Everyone in a shot is on screen from its first frame. Avoid having a character walk into the shot, because the video model may draw an extra person who looks like them.
 * Video models draw text badly. Never ask for signs, labels, letters or written words in the picture.
 * There is no music track, only the sounds of the scene and the characters' voices.
@@ -330,7 +335,7 @@ Writing the chapter
 * Keep two or three characters on screen at most, and keep them in view and recognisable rather than tiny in the distance.
 * Follow the story plan when there is one, and keep continuity with everything so far. Pay off earlier details. The story must feel like one film, not separate episodes.
 * When the family gave their own idea, make it happen in this chapter and let it work, so they can recognise it on screen and see that it mattered. Never make their idea fail or fall short. If part of it would break the safety rules, use the closest gentle version and never lecture.
-* Only add a new character when the story truly needs one, and never in the final chapter, which belongs to the characters the family already knows. Add them to newCharacters as { "name": "Name", "description": "fixed look, starting with the name and is, like Ada is a tall woman in her fifties, using the name only once", "voice": "how they sound" }.
+* Only add a new character when the story truly needs one, and never in the final chapter, which belongs to the characters the family already knows. Add them to newCharacters as { "name": "A name that is short, easy to say and never an everyday English word, like Pip or Tilly, not Moss, Storm or Hope", "description": "fixed look, starting with the name and is, like Ada is a tall woman in her fifties, using the name only once", "handle": "3 to 7 words a viewer would use to point them out on screen, starting with the word the, then their most visible fixed feature and then their kind or role, like the grey bearded sergeant. No name in it", "voice": "a short phrase starting with a that gives gender, rough age, timbre and one manner word, for natural, brisk speech, never slow, sleepy or unhurried, like a deep, warm, kindly old man's voice" }. A new character is easy to tell apart at a glance from everyone already in the story: a different build, different hair and clothing colours and a handle nobody else has.
 * Choices: exactly two, each at most five words, written as actions the heroes could take next. Both must move the story toward its planned ending in different ways, and both must be tempting. Never offer going home or giving up.
 * The final chapter sets isEnding to true, has an empty choices array, reaches the ending the plan promised, closes every open thread and ends on a warm, satisfying image.
 

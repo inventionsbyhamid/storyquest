@@ -538,7 +538,9 @@ describe('chapter clean up', () => {
       { bible: nicoBible, cast: nicoBible.characters, opensStory: false },
     );
     expect(clean.shots[0]!.caption).toBe('Nico runs.');
-    expect(clean.shots[0]!.videoPrompt).toContain('Nico is a small boy in a starry blue cloak. Nico runs across the sky.');
+    expect(clean.shots[0]!.videoPrompt).toContain(
+      'Nico is a small boy in a starry blue cloak. In this description, Nico is called the small boy. The small boy runs across the sky.',
+    );
     expect(clean.shots[0]!.videoPrompt).not.toContain('Shot 1.');
 
     const exchange = {
