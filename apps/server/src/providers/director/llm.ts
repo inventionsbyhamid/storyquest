@@ -88,12 +88,12 @@ export class LlmDirector implements Director {
     return { ...draft, audience: request.audience, moods: request.moods };
   }
 
-  async planIdeas(date: string, count: number, avoidTitles: string[] = [], chapters?: number): Promise<Bible[]> {
+  async planIdeas(date: string, count: number, avoidTitles: string[] = [], chapters?: number, brief?: string): Promise<Bible[]> {
     if (count <= 0) return [];
     const plan = await this.ask(
       { task: 'plan' },
       planSystemPrompt(),
-      planUserPrompt(date, count, avoidTitles, chapters),
+      planUserPrompt(date, count, avoidTitles, chapters, brief),
       ideaPlanSchema(count),
       8000,
     );

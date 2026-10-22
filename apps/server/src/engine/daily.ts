@@ -145,10 +145,10 @@ export class DailyIdeas {
   }
 
   /** Story plans to choose from, written but not filmed. */
-  async draftPlans(count: number): Promise<Bible[]> {
+  async draftPlans(count: number, brief?: string): Promise<Bible[]> {
     const { config, director } = this.deps;
     const titles = this.listForHome().ideas.map((idea) => idea.title);
-    return (await director.planIdeas(this.today(), count, titles, config.SCENES_PER_STORY)).map(sanitizeBible);
+    return (await director.planIdeas(this.today(), count, titles, config.SCENES_PER_STORY, brief)).map(sanitizeBible);
   }
 
   /** Puts a chosen story plan on Home today and starts filming its opening. */

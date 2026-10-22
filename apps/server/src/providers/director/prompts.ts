@@ -228,9 +228,11 @@ Reply with a single JSON object and nothing else, no code fences:
 Field rules: ${BIBLE_FORMAT.replace(/\s+/g, ' ')}`;
 }
 
-export function planUserPrompt(date: string, count: number, avoidTitles: string[], chapters = 6): string {
+export function planUserPrompt(date: string, count: number, avoidTitles: string[], chapters = 6, brief?: string): string {
   const avoid = avoidTitles.length ? `\nThese stories already exist today, so do something different: ${avoidTitles.join(', ')}.` : '';
-  return `Today is ${date}. ${seasonNote(date)}${avoid}
+  // An editor's direction replaces the seasonal hint, for stories meant to stay up for weeks.
+  const direction = brief ? `Direction from the editor: ${brief}` : seasonNote(date);
+  return `Today is ${date}. ${direction}${avoid}
 Each story has ${chapters} chapters, so each outline has exactly ${chapters} entries.
 
 Plan ${count} stories for today as one JSON object.`;

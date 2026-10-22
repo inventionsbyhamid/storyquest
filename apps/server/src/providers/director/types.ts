@@ -63,7 +63,7 @@ export interface Director {
   writeScene(request: SceneRequest): Promise<Scene>;
   writeChapter(request: ChapterRequest): Promise<Chapter>;
   createBible(request: BibleRequest): Promise<Bible>;
-  planIdeas(date: string, count: number, avoidTitles?: string[], chapters?: number): Promise<Bible[]>;
+  planIdeas(date: string, count: number, avoidTitles?: string[], chapters?: number, brief?: string): Promise<Bible[]>;
 }
 
 export interface ChatMessage {

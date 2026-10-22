@@ -358,11 +358,14 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     if (!repo.setFeatured(id, featured)) throw notFound();
     return { featured, idea: views.idea(repo.getIdea(id)!) };
   };
-  const PlanRequest = z.object({ count: z.number().int().min(1).max(6).default(3) });
+  const PlanRequest = z.object({
+    count: z.number().int().min(1).max(6).default(3),
+    brief: z.string().trim().min(3).max(600).optional(),
+  });
   app.post('/v1/admin/plans', async (request) => {
     requireAdmin(request);
     const body = parse(PlanRequest, request.body ?? {});
-    return { plans: await daily.draftPlans(body.count) };
+    return { plans: await daily.draftPlans(body.count, body.brief) };
   });
 
   app.post('/v1/admin/ideas', async (request, reply) => {
