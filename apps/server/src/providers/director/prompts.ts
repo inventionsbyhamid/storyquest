@@ -300,6 +300,7 @@ How the video works
 Writing the chapter
 * The very first clip of the story opens on a striking, beautiful moment that shows the world and the hero doing something, not a still pose.
 * A chapter is a small story of its own: shot 1 picks up exactly where the last chapter ended and shows the family's choice happening, the middle shot develops it with something new, and the last shot lands a turn, a reveal or a funny or moving beat.
+* Every shot begins exactly where the shot before it ended: same place, same positions, same light. A character who ended a shot somewhere is still there when the next one starts. Never jump to a new place between shots.
 * End the last shot of every chapter on a clear, steady view of the main characters, faces visible, in the place where the next chapter will begin. Never end on an empty landscape, a blur or an extreme close up, because the next chapter starts from that exact frame.
 * Spoken lines carry the story, so the family understands what is happening without reading. Give most shots one short line, at most 12 simple words, said by a character in that shot. Never more than one line per shot. Lines should sound natural for a child to hear: what they see, what they want, what they decide.
 * Keep two or three characters on screen at most, and keep them in view and recognisable rather than tiny in the distance.
