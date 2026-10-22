@@ -1,5 +1,9 @@
 import { AudioContentType, AudioPlayer, AudioUsageType } from '@amazon-devices/react-native-w3cmedia';
-import type { SoundPlayer } from './soundPlayer';
+
+// On Vega './soundPlayer' resolves to this file, so the shared shape is declared here too.
+export interface SoundPlayer {
+  play(name: string): void;
+}
 
 const VOLUME = 0.7;
 
