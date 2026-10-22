@@ -43,15 +43,14 @@ vega device launch-app -a com.storyquest.tv.main
 
 ### What to try
 
-1. On Tonight's Stories, select **The Star Keeper's Apprentice**.
-2. Watch the first chapter. When it ends, pick a choice. Choices with a picture are already filmed and play at once.
+1. On Tonight's Stories, select **Maya and the Foggy Lighthouse**.
+2. Watch the first chapter: three clips that play as one film. When it ends, pick a choice with the remote, or let the countdown pick one for you.
 3. Press Back at any time to pause, report a scene or go Home.
 4. Go Home. Your story is first in the row. Select it to continue.
-5. At the end, scan the QR code to watch the whole story as one movie.
+5. At the last choice, pick a finale, or choose Something else and say your own idea.
+6. At the end, scan the QR code to watch the whole story as one movie.
 
-Filmed path: Climb the star ladder, then Enter the dark nebula, then Befriend the shadow imp.
-
-Filming costs real money, so the server has a small budget for new chapters during judging. While it lasts, Something else and Make your own film your idea live. When it runs out they show Paused, and everything already filmed keeps playing.
+Filming new chapters costs real money, so the server has a budget for them. While it lasts, your own ideas are filmed live. When it runs out, Something else and Make your own show Paused, and everything already filmed keeps playing.
 
 ## Run it yourself
 
