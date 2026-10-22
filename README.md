@@ -1,126 +1,102 @@
 # StoryQuest
 
-**Tonight's story is yours to choose.** StoryQuest is a Fire TV app where every scene of a family story is an AI generated video clip with sound. When a scene ends, the family picks what happens next with the remote, or presses the microphone button and says their own idea, and the next scene plays.
-
-New stories arrive regularly. Every family starts from the same openings, every family ends somewhere different, and every ending can be shared with a QR code.
+Family stories on Fire TV where every chapter is a short film made by AI, and the family decides what happens next.
 
 * Demo video: _link coming with the submission_
-* Website and hosted server: [storyquest.dijmo.com](https://storyquest.dijmo.com)
-* Built for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
-* Runs on Fire TV with Vega OS (React Native for Vega), with the same UI on Android TV and the web for development
+* Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
+* Made for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
 
 ## What it does
 
-* **Tonight's Stories.** Fresh stories planned by the story director with a seasonal touch.
-* **Every scene is video, told in chapters.** A story is four chapters. Each chapter is three continuous 15 second clips with music, sound effects and voices, made by MiniMax H3 Max Turbo, so the family watches 45 seconds of film before the next decision. The first clip of a chapter from a family's own idea is ready in about 12 seconds, and the rest is filmed while it plays.
-* **Choices with the D pad, ideas with your voice.** Two choices at the end of every chapter, plus Something else, where the remote microphone dictates any idea into the story. When nobody presses anything, a countdown picks a fully filmed path, so the story carries on for families who just want to watch.
-* **Stories that hold together.** Before the first clip, the story director writes a plan for the whole story: what each chapter must achieve and how it ends. Every chapter follows it, whatever the family picks, so stories arrive somewhere.
-* **Continue watching.** Home keeps each TV's recent stories at the front of the row, so a family can pick up exactly where they left off, or rewatch a finished story.
-* **Seamless cuts.** Each clip starts on the exact last frame of the previous one, so the story flows like one film.
-* **Instant choices.** The next clip of a chapter is filmed while the current one plays, and filmed choices are downloaded to the TV ahead of time.
-* **Shared story trees.** Popular paths are made once and then play instantly for every family. Custom ideas grow a private branch.
-* **Share the ending.** The end screen shows a QR code to a web page with the whole story as one movie, plus stats like "Only 8% of families opened the moon door".
-* **Safe for everyone.** An audience setting (Kids, Family, Grown ups) shapes the writing, and every typed idea and every scene passes a safety check.
-* **Free to watch, Sparks to film your own.** Daily stories and their paths are free. Chapters filmed only for your family use 3 Sparks, bought with Amazon In App Purchasing. No sign up: Sparks follow your Amazon account. Your first custom chapter is free.
+* **Pick a story.** New stories wait on Home under Tonight's Stories.
+* **Watch a chapter.** Each chapter is 45 seconds of film with music, sound and voices: three 15 second clips that play as one.
+* **Choose what happens next.** Pick one of two choices with the remote, or choose Something else and say your own idea with the remote's microphone. The next chapter is written and filmed in seconds.
+* **Or just watch.** If nobody presses anything, a countdown picks a filmed path.
+* **Continue watching.** Your recent stories sit at the front of Home.
+* **Share the ending.** A QR code opens the whole story as one movie on your phone.
+* **Safe for kids.** An audience setting shapes every story, every idea and scene is checked before filming, and any scene can be reported.
+* **Free to watch.** Chapters filmed just for your family cost 3 Sparks, bought with Amazon In App Purchasing. Your first one is free. No sign up.
 
-## Try it (judges)
+## Try it
 
-1. **Watch the demo video** linked above.
-2. **Sideload on a Fire TV Stick with Vega OS:** download `StoryQuest_armv7.vpkg` from the latest GitHub release, then follow the steps in [docs/judges.md](docs/judges.md).
-3. **Run it in the Vega Virtual Device:** download `StoryQuest_x86_64.vpkg` (Intel Mac or Ubuntu) or `StoryQuest_aarch64.vpkg` (Apple Silicon) from the release and run `vega device install-app -p <file>` then `vega device launch-app -a com.storyquest.tv.main`.
+The release packages talk to our server, so you need no keys or accounts. The server stays online until November 20, 2026.
 
-The release build talks to our hosted server, so no keys or setup are needed. The server stays up until judging ends on November 20, 2026.
+### On a Fire TV Stick with Vega OS
 
-## How it works
+Works on Fire TV Stick 4K Select (2025), Fire TV Stick HD (2026) and Fire TV Stick 4K (2026).
 
-```
-Fire TV app (Vega OS, React Native)
-        │  HTTPS JSON and MP4
-        ▼
-StoryQuest server (Node 22, Fastify, SQLite)
-  ├─ story director   any LLM: DeepSeek V4.1 Flash on OpenRouter in production, Claude on Amazon Bedrock supported
-  ├─ safety           word list and the video model's checker, Amazon Bedrock Guardrails optional
-  ├─ video            fal, MiniMax H3 Max Turbo (image to video)
-  └─ media            ffmpeg: posters, last frames, the shared movie
+1. Install the [Vega SDK](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html) on your computer.
+2. Put the stick in developer mode: run `vega devmode login` and follow the prompts.
+3. Download `StoryQuest_armv7.vpkg` from the latest [release](../../releases).
+4. Install and open it:
+
+```bash
+vega device install-app -p StoryQuest_armv7.vpkg
+vega device launch-app -a com.storyquest.tv.main
 ```
 
-1. **Story bible.** Each story has a fixed art style and a fixed description for every character. They are copied into every video prompt so characters stay recognisable.
-2. **Director.** For every new scene, the language model gets the bible, the story so far, the choice taken and where the scene sits in the story's arc (four scenes in production), and returns the scene as JSON: a summary for memory, an on screen caption, the video prompt and the next two choices.
-3. **Video.** The video model renders the scene starting from the last frame of the previous clip.
-4. **Prefetch.** When a family arrives at a scene, both next scenes start generating at once, so a choice usually plays immediately.
-5. **Dedupe.** A unique constraint on (parent, choice) means two families picking the same new path at the same time share one generation.
+### In the Vega Virtual Device
 
-More detail in [docs/design.md](docs/design.md).
+1. Install the Vega SDK and start the device: `vega virtual-device start`
+2. Download `StoryQuest_x86_64.vpkg` (Intel Mac or Linux) or `StoryQuest_aarch64.vpkg` (Apple Silicon Mac) from the latest [release](../../releases).
+3. Install and open it with the same two commands as above.
 
-### Fire TV and Vega features used
+### What to try
 
-* React Native for Vega with the Vega W3C media player for playback, one decoder reused for every clip.
-* Spatial focus navigation for the remote, with accessibility labels on every focusable card so Alexa voice navigation can select them.
-* Remote microphone dictation into the system keyboard for custom story ideas.
-* Vega Media Controls, so Play, Pause and "Alexa, pause" work.
-* Built and tested with the Vega SDK 0.24 and the Vega Virtual Device.
+1. On Tonight's Stories, select **The Star Keeper's Apprentice**.
+2. Watch the first chapter. When it ends, pick a choice. Choices with a picture are already filmed and play at once.
+3. Press Back at any time to pause, report a scene or go Home.
+4. Go Home. Your story is first in the row. Select it to continue.
+5. At the end, scan the QR code to watch the whole story as one movie.
 
-### Design
+Filmed path: Climb the star ladder, then Enter the dark nebula, then Befriend the shadow imp.
 
-The look is "picture book at night": warm paper type, story titles in Fraunces, and the AI scenes as the illustrations. Every scene brings its own night: the server picks a deep color from each poster and last frame, and the screens around it take that color, like a streaming app's hero. Pictures melt into their night at the edges; nothing else uses gradients or glows. The full system is in [docs/ui.md](docs/ui.md) and the logo, a Q whose tail forks into two paths, is in [assets/brand](assets/brand).
-
-### Models and services
-
-* **Story director:** DeepSeek V4.1 Flash through OpenRouter in our hosted server (about 2 seconds and $0.001 a scene). The same prompts run on Claude in Amazon Bedrock, the Anthropic API or any OpenAI compatible model with one setting. See `apps/server/src/providers/director`.
-* **Video:** fal, MiniMax H3 Max Turbo, image to video from the previous scene's last frame. Clips are served as H.264 High profile copies (about 4 MB a scene); the originals are kept.
-* **Safety:** a word list on every idea and scene, the video model's own safety checker, and Amazon Bedrock Guardrails when configured (`apps/server/src/providers/safety`).
-
-## Repository
-
-```
-apps/vega/            Fire TV app for Vega OS
-apps/expo-multi-tv/   the same UI for Android TV, Fire OS and web (development)
-apps/server/          API, story engine, providers, share page, Dockerfile
-packages/shared-ui/   screens, components, API client, story state machine
-packages/contracts/   request and response schemas shared by app and server
-assets/brand/         logo, Fraunces font, store icons and background
-docs/                 design, UI system, economics, friction log, product feedback, store listing
-```
+Filming costs real money, so the server has a small budget for new chapters during judging. While it lasts, Something else and Make your own film your idea live. When it runs out they show Paused, and everything already filmed keeps playing.
 
 ## Run it yourself
 
-### Prerequisites
-* Node 22 and Yarn 4 (`corepack enable`)
-* ffmpeg (for the server)
-* Vega SDK 0.24 for the Fire TV app ([install guide](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html))
-* Optional for real AI: a fal API key, and for the story director either an AWS account with Claude enabled in Amazon Bedrock or an Anthropic, OpenRouter or OpenAI compatible key
+### You need
 
-### Server
+* Node 22 and Yarn 4 (`corepack enable`)
+* ffmpeg
+* The [Vega SDK](https://developer.amazon.com/docs/vega/0.24/install-vega-sdk.html) for the Fire TV app
+
+### Start the server
 
 ```bash
 yarn install
-cp apps/server/.env.example apps/server/.env   # fill in keys only if you want real AI
-yarn dev:server                                # http://localhost:8080
+cp apps/server/.env.example apps/server/.env
+yarn dev:server
 ```
 
-Without keys the server uses built in fakes: a scripted story writer and ffmpeg generated placeholder clips, so the whole app works offline. Set `DIRECTOR=bedrock`, `VIDEO=fal` and `SAFETY=guardrails` with the matching keys to use the real services. Every variable is described in [apps/server/.env.example](apps/server/.env.example).
+The server runs at http://localhost:8080. With no keys it uses a stand in story writer and placeholder clips, so everything works offline.
 
-The story director is not tied to one model. Prompts, JSON validation, retries and spend tracking live in one place (`apps/server/src/providers/director/llm.ts`), and each provider is a small adapter that sends text and returns text. Pick one with `DIRECTOR`:
+### Use real AI
 
-| `DIRECTOR` | Key | Default model |
-| --- | --- | --- |
-| `bedrock` | `BEDROCK_API_KEY` or AWS credentials | `anthropic.claude-opus-5-5` |
-| `anthropic` | `ANTHROPIC_API_KEY` | `claude-opus-5-5` |
-| `openrouter` | `OPENROUTER_API_KEY` | `anthropic/claude-opus-5.5` |
-| `openai` | `OPENAI_API_KEY` and `OPENAI_BASE_URL` | set `DIRECTOR_MODEL` |
+Set these in `apps/server/.env`:
 
-`DIRECTOR_MODEL` swaps the model on any of them. `openai` covers every service that speaks the OpenAI chat API, including Groq, Together, DeepSeek, Gemini and a local Ollama. On OpenRouter, `OPENROUTER_PROVIDERS=amazon-bedrock` keeps Claude running on Amazon Bedrock with one OpenRouter key, `OPENROUTER_SORT=throughput` picks the fastest host, and hosts that keep or train on prompts are always skipped. For example, DeepSeek V4.1 Flash (`DIRECTOR_MODEL=deepseek/deepseek-v4.1-flash`, `DIRECTOR_EFFORT=none`, `OPENROUTER_SORT=throughput`) writes a scene in about 2 seconds for about $0.001. The privacy page names whichever services are configured.
+| What | Setting |
+| --- | --- |
+| Video | `VIDEO=fal` and `FAL_KEY` |
+| Story writer on OpenRouter | `DIRECTOR=openrouter` and `OPENROUTER_API_KEY` |
+| Story writer on Amazon Bedrock | `DIRECTOR=bedrock` and `BEDROCK_API_KEY` or AWS credentials |
+| Story writer on the Anthropic API | `DIRECTOR=anthropic` and `ANTHROPIC_API_KEY` |
+| Any OpenAI compatible API | `DIRECTOR=openai`, `OPENAI_API_KEY` and `OPENAI_BASE_URL` |
 
-With Docker:
+`DIRECTOR_MODEL` picks the model. Our server uses DeepSeek V4.1 Flash on OpenRouter:
 
 ```bash
-docker build -f apps/server/Dockerfile -t storyquest-api .
-docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data storyquest-api
+DIRECTOR=openrouter
+DIRECTOR_MODEL=deepseek/deepseek-v4.1-flash
+DIRECTOR_EFFORT=none
+OPENROUTER_SORT=throughput
 ```
 
-### Fire TV app
+Every setting is explained in [apps/server/.env.example](apps/server/.env.example). Spending caps such as `TOTAL_VIDEO_SECONDS_CAP` keep costs bounded.
 
-Point the app at your server in `apps/vega/src/config.ts`, then:
+### Build the Fire TV app
+
+Set your server address in `apps/vega/src/config.ts`, then:
 
 ```bash
 yarn build:vega
@@ -129,35 +105,47 @@ vega device install-app -p apps/vega/build/x86_64-release/vega_x86_64.vpkg
 vega device launch-app -a com.storyquest.tv.main
 ```
 
-For quick UI work the same screens run on Android TV or the web: `yarn dev:web`.
+The same screens also run in a browser for quick work on the interface: `yarn dev:web`.
 
-### Tests
+### Run the tests
 
 ```bash
-yarn workspace @storyquest/server test
-yarn workspace @multi-tv/shared-ui test
+yarn test
 ```
 
-## Safety and privacy
+### Run the server with Docker
 
-* No sign up and no personal data. Each TV gets a random device id, used for rate limits and to keep a family's private scenes together. Purchases use the anonymous user id that Amazon In App Purchasing provides, never a name or email.
-* Typed ideas and generated scenes pass a safety check (a word list, plus Amazon Bedrock Guardrails when configured), and the video model's own safety checker is on.
-* Family text is treated only as story material, never as instructions to the model.
+```bash
+docker build -f apps/server/Dockerfile -t storyquest-api .
+docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data storyquest-api
+```
 
-## Costs and business model
+## How it works
 
-Every filmed scene costs about $0.48 (12 seconds of video at $0.04 a second; the story director adds about $0.001). Shared story trees are filmed once and reused by every family, so free stories have a fixed cost. Scenes filmed only for one family use Sparks, sold through the Amazon Appstore. A global daily video budget and a per device cap keep spending bounded, and when the budget runs out the already made paths keep playing. The numbers, including a 1000 signups a day simulation, are in [docs/economics.md](docs/economics.md).
+1. **A plan first.** Before filming, a language model plans the whole story: the characters, the art style and what each of the four chapters must do, so every path reaches a real ending.
+2. **One chapter at a time.** For each chapter it writes three shots, each with a caption and a video prompt, plus the next two choices.
+3. **One continuous film.** MiniMax H3 Max Turbo on fal films each shot starting from the last frame of the shot before, so the clips flow together. The next shot is filmed while the current one plays.
+4. **Shared paths.** A path one family picks is filmed once and then plays instantly for everyone. Your own ideas grow a private branch.
 
-## Website
+| Part | Folder |
+| --- | --- |
+| Fire TV app (Vega OS, React Native) | `apps/vega` |
+| Screens and story logic shared by every TV | `packages/shared-ui` |
+| Server, website and share pages (Node, Fastify, SQLite) | `apps/server` |
+| Android TV and browser version for development | `apps/expo-multi-tv` |
+| Types shared by the app and the server | `packages/contracts` |
 
-The server also serves the public site: a home page, privacy policy, terms and support at `/`, `/privacy`, `/terms` and `/support`, plus share pages at `/s/<code>`.
+A filmed chapter costs about $1.80 (45 seconds of video at $0.04 a second). The story writer adds about a fifth of a cent.
 
-## Built during the hackathon
+## Privacy
 
-StoryQuest started from Amazon's open source [react-native-multi-tv-app-sample](https://github.com/AmazonAppDev/react-native-multi-tv-app-sample) (MIT-0, notice kept in [docs/LICENSE-amazon-sample-MIT-0.txt](docs/LICENSE-amazon-sample-MIT-0.txt)). We kept its monorepo layout, remote control plumbing and Vega media player integration. Everything else, the screens, the story engine, the server and the share page, was built during the hackathon.
+* No accounts and no personal data. Each TV gets a random id for limits and its own stories.
+* Purchases use the anonymous id from Amazon In App Purchasing, never a name or email.
+* What a family types or says is only used as story material.
 
-* [Friction log](docs/friction-log.md)
-* [Product feedback](docs/product-feedback.md)
+## Credits
+
+StoryQuest started from Amazon's [react-native-multi-tv-app-sample](https://github.com/AmazonAppDev/react-native-multi-tv-app-sample) ([MIT-0](docs/LICENSE-amazon-sample-MIT-0.txt)). We kept its project layout, remote control handling and video player setup. The screens, the story engine, the server and the website were built during the hackathon.
 
 ## License
 
