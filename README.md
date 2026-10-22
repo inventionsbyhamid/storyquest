@@ -6,6 +6,15 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
 * Made for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
 
+| | |
+| --- | --- |
+| ![Home with tonight's story](docs/screenshots/1-home.jpg) | ![A chapter playing with its caption](docs/screenshots/2-chapter.jpg) |
+| Pick tonight's story | Watch a chapter: 45 seconds of film |
+| ![The choice screen with its countdown](docs/screenshots/3-choices.jpg) | ![The family's own idea on the keyboard](docs/screenshots/4-your-idea.jpg) |
+| Choose what happens next | Or say your own idea |
+| ![The finale filmed from the family's idea](docs/screenshots/5-live-finale.jpg) | ![The end screen with a QR code to share](docs/screenshots/6-the-end.jpg) |
+| The finale is filmed live from it | Share the whole story as one movie |
+
 ## What it does
 
 * **Pick a story.** New stories wait on Home under Tonight's Stories.
