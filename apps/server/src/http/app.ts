@@ -407,12 +407,13 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     ideaId: z.string().regex(PATH_ID),
     path: z.array(z.number().int().min(0).max(1)).max(20),
     siblings: z.boolean().optional(),
+    previews: z.boolean().optional(),
   });
 
   app.post('/v1/admin/film', async (request, reply) => {
     requireAdmin(request);
     const body = parse(FilmRequest, request.body);
-    return reply.code(202).send(services.jobs.startFilm(body.ideaId, body.path, body.siblings ?? false));
+    return reply.code(202).send(services.jobs.startFilm(body.ideaId, body.path, body.siblings ?? false, body.previews ?? false));
   });
 
   app.get<{ Params: { id: string } }>('/v1/admin/film/:id', async (request) => {

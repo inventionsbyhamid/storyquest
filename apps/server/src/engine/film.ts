@@ -25,6 +25,7 @@ interface Job {
   nodeId: string | null;
   path: number[];
   siblings: boolean;
+  previews: boolean;
   steps: FilmStep[];
   error: string | null;
   startedAt: string;
@@ -57,7 +58,7 @@ export class AdminJobs {
     return this.view(job);
   }
 
-  startFilm(ideaId: string, path: number[], siblings: boolean) {
+  startFilm(ideaId: string, path: number[], siblings: boolean, previews = false) {
     const { repo } = this.deps;
     const idea = repo.getIdea(ideaId);
     if (!idea) throw notFound();
@@ -66,7 +67,7 @@ export class AdminJobs {
     const root = repo.getNode(idea.rootNodeId)!;
     if (root.hiddenAt) throw pathClosed();
 
-    const job = this.create('film', { ideaId, path, siblings });
+    const job = this.create('film', { ideaId, path, siblings, previews });
     this.run(job, () => this.film(job, root));
     return this.view(job);
   }
@@ -89,7 +90,7 @@ export class AdminJobs {
     return this.view(job);
   }
 
-  private create(kind: Job['kind'], fields: { ideaId?: string; nodeId?: string; path?: number[]; siblings?: boolean }): Job {
+  private create(kind: Job['kind'], fields: { ideaId?: string; nodeId?: string; path?: number[]; siblings?: boolean; previews?: boolean }): Job {
     const job: Job = {
       id: newId('jb'),
       kind,
@@ -98,6 +99,7 @@ export class AdminJobs {
       nodeId: fields.nodeId ?? null,
       path: fields.path ?? [],
       siblings: fields.siblings ?? false,
+      previews: fields.previews ?? false,
       steps: [],
       error: null,
       startedAt: this.deps.now().toISOString(),
@@ -135,8 +137,8 @@ export class AdminJobs {
 
   /**
    * Films the path: whole chapters along it, and with siblings only the first clip of
-   * each other choice, so its card has a picture. The rest of those chapters is filmed
-   * when a family picks them.
+   * each other choice, so its card has a picture. With previews the choices where the
+   * path stops get their first clip too. The rest is filmed when a family picks them.
    */
   private async film(job: Job, root: NodeRecord): Promise<void> {
     const { repo } = this.deps;
@@ -154,6 +156,13 @@ export class AdminJobs {
         }
       }
       node = await this.finishChapter(job, await this.make(job, repo.getOrCreatePresetChild(node, index, 0).node, index, false));
+    }
+    if (job.previews && !node.isEnding) {
+      node.choices.forEach((_label, index) => {
+        const preview = this.make(job, repo.getOrCreatePresetChild(node, index, 0).node, index, true);
+        preview.catch(() => {});
+        siblings.push(preview);
+      });
     }
     const results = await Promise.allSettled(siblings);
     const failed = results.filter((result) => result.status === 'rejected').length;

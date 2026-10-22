@@ -346,6 +346,25 @@ describe('chapters', () => {
     expect(again.statusCode).toBe(409);
   });
 
+  it('films a picture for every choice where an admin path stops', async () => {
+    const { app, services } = await boot();
+    const ideaId = TodayResponse.parse((await app.inject({ method: 'GET', url: '/v1/today' })).json()).ideas[0]!.id;
+    const job = (await app.inject({ method: 'POST', url: '/v1/admin/film', headers: ADMIN, payload: { ideaId, path: [], previews: true } })).json();
+    let state = job;
+    for (let i = 0; i < 50 && state.status === 'running'; i++) {
+      await services.engine.idle();
+      state = (await app.inject({ method: 'GET', url: `/v1/admin/film/${job.id}`, headers: ADMIN })).json();
+    }
+    expect(state.status).toBe('done');
+    let node = services.repo.getNode(services.repo.getIdea(ideaId)!.rootNodeId)!;
+    while (node.script) node = services.repo.getPresetChildren(node.id).find((child) => child.choiceIndex === 0)!;
+    const children = services.repo.getPresetChildren(node.id);
+    expect(children.map((child) => [child.choiceIndex, child.shot, child.status])).toEqual([
+      [0, 0, 'ready'],
+      [1, 0, 'ready'],
+    ]);
+  });
+
   it('shows one picture per chapter on the website', async () => {
     const { app, services } = await boot();
     const story = await start(app);

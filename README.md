@@ -135,7 +135,12 @@ docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data sto
 | Android TV and browser version for development | `apps/expo-multi-tv` |
 | Types shared by the app and the server | `packages/contracts` |
 
-A filmed chapter costs about $1.80 (45 seconds of video at $0.04 a second). The story writer adds about a fifth of a cent.
+## Business model
+
+* Watching the daily stories is free.
+* Families buy Sparks in the app with Amazon In App Purchasing: 10 Sparks for $11.99 or 25 for $24.99.
+* A chapter filmed just for your family, from your own idea or a path nobody took yet, costs 3 Sparks. The first one is free.
+* A filmed chapter costs us about $1.80 in video. Shared paths are filmed once and replay for every family, so free stories stay cheap.
 
 ## Privacy
 
