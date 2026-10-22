@@ -108,7 +108,7 @@ function looseShot(value: unknown): unknown {
         return colon > 0 ? { speaker: line.slice(0, colon).trim(), line: line.slice(colon + 1).trim() } : null;
       })
       .filter(Boolean)
-      .slice(0, 2);
+      .slice(0, 4);
   }
   return shot;
 }
