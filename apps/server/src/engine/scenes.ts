@@ -65,8 +65,11 @@ function cleanHandle(handle: string | undefined): string {
 
 // "Pip is a small red fox kit with a blue scarf" gives "the small red fox kit".
 function derivedHandle(character: Character): string | undefined {
-  const body = character.description.trim().replace(/^[^,.;:!?]*?(?:,| is )\s*/, '');
-  const kind = /^an? ((?:[\p{L}']+ ){1,5}?[\p{L}']+?)(?= (?:with|in|wearing|who|whose|that|and|of|from|carrying)\b|[,.;:!?]|$)/iu.exec(body);
+  const description = character.description.trim();
+  // Skip a leading "Maya is" or "Sergeant Okafor," but never a clause that is already the look.
+  const lead = /^[^,.;:!?]*?(?:,| is )\s*/.exec(description);
+  const body = lead && lead[0].toLowerCase().includes(character.name.toLowerCase()) ? description.slice(lead[0].length) : description;
+  const kind = /^an? ((?:[\p{L}']+ ){1,5}?[\p{L}']+?)(?= (?:with|in|wearing|who|whose|that|and|of|from|carrying|the|a|an)\b|[,.;:!?]|$)/iu.exec(body);
   return kind ? `the ${kind[1]!.toLowerCase()}` : undefined;
 }
 
