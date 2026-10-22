@@ -5,6 +5,7 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 * Demo video: [watch on YouTube](https://youtu.be/3a6cNijho_s)
 * Watch a story in your browser: [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play)
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
+* What slowed us down with the Vega SDK, and how we got past it: [friction log](docs/friction-log.md)
 * Made for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
 
 | | |
