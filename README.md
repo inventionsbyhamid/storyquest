@@ -15,11 +15,13 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 | Choose what happens next | Or say your own idea |
 | ![The finale filmed from the family's idea](docs/screenshots/5-live-finale.jpg) | ![The end screen with a QR code to share](docs/screenshots/6-the-end.jpg) |
 | The finale is filmed live from it | Share the whole story as one movie |
+| ![The Clockwork Detective on Home](docs/screenshots/7-detective-home.jpg) | ![Edith opens the vault while Wren and Okafor watch](docs/screenshots/8-detective-vault.jpg) |
+| A mystery for grown ups | Chapter 3, filmed from the family's idea |
 
 ## What it does
 
-* **Pick a story.** New stories wait on Home under Tonight's Stories.
-* **Watch a chapter.** Each chapter is 45 seconds of film with music, sound and voices: three 15 second clips that play as one.
+* **Pick a story.** New stories wait on Home under Tonight's Stories, from cozy family adventures to a noir mystery for grown ups.
+* **Watch a chapter.** Each chapter is 45 seconds of film with sound and voices: three 15 second clips that play as one.
 * **Choose what happens next.** Pick one of two choices with the remote, or choose Something else and say your own idea with the remote's microphone. The next chapter is written and filmed in seconds.
 * **Or just watch.** If nobody presses anything, a countdown picks a filmed path.
 * **Continue watching.** Your recent stories sit at the front of Home.
@@ -57,7 +59,7 @@ vega device launch-app -a com.storyquest.tv.main
 
 ### What to try
 
-1. On Tonight's Stories, select **Maya and the Foggy Lighthouse**.
+1. On Tonight's Stories, select **Maya and the Foggy Lighthouse**, or **The Clockwork Detective** for a mystery for grown ups.
 2. Watch the first chapter: three clips that play as one film. When it ends, pick a choice with the remote, or let the countdown pick one for you.
 3. Press Back at any time to pause, report a scene or go Home.
 4. Go Home. Your story is first in the row. Select it to continue.
