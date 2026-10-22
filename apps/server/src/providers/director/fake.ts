@@ -155,7 +155,7 @@ export class FakeDirector implements Director {
     this.metered({ task: 'scene', nodeId: request.nodeId, treeId: request.treeId });
     for (let i = 0; i < request.clips; i++) {
       last = this.compose({ ...request, pathKey: `${request.pathKey}#${i}` });
-      shots.push({ caption: last.caption, videoPrompt: last.videoPrompt });
+      shots.push({ caption: last.caption, videoPrompt: `${last.videoPrompt} Shot ${i + 1} of ${request.clips}.` });
     }
     return {
       summary: last!.summary,

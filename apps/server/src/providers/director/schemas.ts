@@ -78,14 +78,23 @@ export function chapterSchema(chapterNumber: number, totalChapters: number, clip
   return z
     .object({
       summary: z.string().trim().min(10).max(900),
-      shots: z
-        .array(
-          z.object({
-            caption: z.string().trim().min(2).max(140),
-            videoPrompt: z.string().trim().min(80).max(2200),
-          }),
-        )
-        .length(clips, `must contain exactly ${clips} shots`),
+      // Extra or empty shots are dropped before counting, so a long reply still makes a chapter.
+      shots: z.preprocess(
+        (value) =>
+          Array.isArray(value)
+            ? value
+                .filter((shot) => typeof shot?.videoPrompt === 'string' && shot.videoPrompt.trim().length >= 80)
+                .slice(0, clips)
+            : value,
+        z
+          .array(
+            z.object({
+              caption: z.string().trim().min(2).max(140),
+              videoPrompt: z.string().trim().min(80).max(2200),
+            }),
+          )
+          .length(clips, `must contain exactly ${clips} shots`),
+      ),
       choices: z
         .array(
           z

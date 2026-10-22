@@ -315,13 +315,13 @@ Reply with a single JSON object and nothing else, no code fences. Escape any dou
 {
   "summary": "Two or three sentences in past tense about what happened in this chapter, naming the people, objects and promises later chapters must remember.",
   "shots": [
-    { "caption": "One short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }
+${Array.from({ length: clips }, (_, i) => `    { "caption": "Shot ${i + 1}: one short line shown on screen while this clip plays, at most 90 characters.", "videoPrompt": "Shot ${i + 1}: 80 to 140 words in present tense. Start with the art style line. Then each character in the shot with their fixed description. Then the setting and light, one camera shot and movement, and the action and what it leads to. End with Sound: the ambience, the music mood and at most one short spoken line in quotes, said by a named character." }`).join(',\n')}
   ],
   "choices": ["First choice", "Second choice"],
   "isEnding": false,
   "newCharacters": []
 }
-The shots array has exactly ${clips} entries, in order.`;
+The shots array has exactly ${clips} entries, in order, in every chapter including the last one.`;
 }
 
 export function chapterUserPrompt(request: ChapterRequest): string {
@@ -348,7 +348,7 @@ export function chapterUserPrompt(request: ChapterRequest): string {
     ? `This chapter in the plan: ${plan} Adapt it to the choices the family made, but keep the story heading to its planned ending.`
     : `What this chapter does: ${chapterBeat(sceneNumber, totalScenes)}`;
   const ending = isLast
-    ? 'This is the final chapter. Set isEnding to true and choices to an empty array.'
+    ? `This is the final chapter. It still has exactly ${clips} shots. Set isEnding to true and choices to an empty array.`
     : `This is not the final chapter. Set isEnding to false and give exactly two choices. The story ends in chapter ${totalScenes}.`;
   const continuity =
     sceneNumber > 1 || request.history.length

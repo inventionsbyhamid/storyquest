@@ -7,8 +7,14 @@ import { FakeDirector } from '../src/providers/director/fake';
 import { extractJsonObject, parseModelJson } from '../src/providers/director/json';
 import { LlmDirector } from '../src/providers/director/llm';
 import { OpenAiChat } from '../src/providers/director/openai';
-import { arcBeat, sceneSystemPrompt, sceneUserPrompt, seasonNote } from '../src/providers/director/prompts';
-import { sceneSchema } from '../src/providers/director/schemas';
+import {
+  arcBeat,
+  chapterSystemPrompt,
+  sceneSystemPrompt,
+  sceneUserPrompt,
+  seasonNote,
+} from '../src/providers/director/prompts';
+import { chapterSchema, sceneSchema } from '../src/providers/director/schemas';
 import {
   DirectorFormatError,
   DirectorRefusal,
@@ -56,7 +62,10 @@ describe('scene validation', () => {
   });
 
   it('rejects an early ending and a single choice with readable errors', () => {
-    const parsed = parseModelJson(sceneSchema(3, 6), JSON.stringify({ ...goodScene, isEnding: true, choices: ['Only one'] }));
+    const parsed = parseModelJson(
+      sceneSchema(3, 6),
+      JSON.stringify({ ...goodScene, isEnding: true, choices: ['Only one'] }),
+    );
     expect(parsed.ok).toBe(false);
     if (!parsed.ok) {
       expect(parsed.error).toContain('isEnding');
@@ -67,7 +76,10 @@ describe('scene validation', () => {
   it('accepts a new character written as "Name: description"', () => {
     const parsed = parseModelJson(
       sceneSchema(2, 6),
-      JSON.stringify({ ...goodScene, newCharacters: ['Pip: a small lantern bird folded from russet leaves with a glowing eye'] }),
+      JSON.stringify({
+        ...goodScene,
+        newCharacters: ['Pip: a small lantern bird folded from russet leaves with a glowing eye'],
+      }),
     );
     expect(parsed.ok).toBe(true);
     if (parsed.ok) {
@@ -75,7 +87,9 @@ describe('scene validation', () => {
         { name: 'Pip', description: 'a small lantern bird folded from russet leaves with a glowing eye' },
       ]);
     }
-    expect(parseModelJson(sceneSchema(2, 6), JSON.stringify({ ...goodScene, newCharacters: ['no colon here'] })).ok).toBe(false);
+    expect(
+      parseModelJson(sceneSchema(2, 6), JSON.stringify({ ...goodScene, newCharacters: ['no colon here'] })).ok,
+    ).toBe(false);
   });
 
   it('rejects choices that are too long', () => {
@@ -193,10 +207,7 @@ describe('LlmDirector with Claude', () => {
   });
 
   it('retries once with the validation error fed back', async () => {
-    const { client, requests } = stubClient([
-      reply('{"summary": "too short"}'),
-      reply(JSON.stringify(goodScene)),
-    ]);
+    const { client, requests } = stubClient([reply('{"summary": "too short"}'), reply(JSON.stringify(goodScene))]);
     const scene = await claude(client).writeScene(sceneRequest());
     expect(scene.summary).toBe(goodScene.summary);
     expect(requests).toHaveLength(2);
@@ -295,7 +306,12 @@ describe('LlmDirector with an OpenAI compatible model', () => {
 
   it('uses max_completion_tokens on OpenAI itself and no key header without a key', async () => {
     const { fetch, sent } = stubFetch([{ body: completion(JSON.stringify(goodScene)) }]);
-    const model = new OpenAiChat({ provider: 'openai', model: 'gpt-test', baseUrl: 'https://api.openai.com/v1', fetch });
+    const model = new OpenAiChat({
+      provider: 'openai',
+      model: 'gpt-test',
+      baseUrl: 'https://api.openai.com/v1',
+      fetch,
+    });
     await new LlmDirector(model, { sceneSeconds: 8 }, silentLogger).writeScene(sceneRequest());
     expect(sent[0]!.body.max_completion_tokens).toBe(4000);
     expect('max_tokens' in sent[0]!.body).toBe(false);
@@ -306,12 +322,19 @@ describe('LlmDirector with an OpenAI compatible model', () => {
     const { fetch } = stubFetch([
       { body: completion(null, 'length', { message: { content: [{ type: 'text', text: '{"summary": "half' }] } }) },
     ]);
-    const reply = await openRouter(fetch).complete({ system: 's', messages: [{ role: 'user', content: 'u' }], maxTokens: 10 });
+    const reply = await openRouter(fetch).complete({
+      system: 's',
+      messages: [{ role: 'user', content: 'u' }],
+      maxTokens: 10,
+    });
     expect(reply).toEqual({ text: '{"summary": "half', stop: 'max_tokens', inputTokens: 120, outputTokens: 80 });
   });
 
   it('treats a content filter or a refusal as unsafe', async () => {
-    for (const body of [completion('', 'content_filter'), completion('', 'stop', { native_finish_reason: 'refusal' })]) {
+    for (const body of [
+      completion('', 'content_filter'),
+      completion('', 'stop', { native_finish_reason: 'refusal' }),
+    ]) {
       const { fetch } = stubFetch([{ body }]);
       await expect(
         new LlmDirector(openRouter(fetch), { sceneSeconds: 8 }, silentLogger).writeScene(sceneRequest()),
@@ -320,9 +343,14 @@ describe('LlmDirector with an OpenAI compatible model', () => {
   });
 
   it('retries once on throttling and dropped connections, not on a bad key', async () => {
-    const throttled = stubFetch([{ status: 429, body: { error: { message: 'slow down', code: 429 } } }, new TypeError('fetch failed')]);
+    const throttled = stubFetch([
+      { status: 429, body: { error: { message: 'slow down', code: 429 } } },
+      new TypeError('fetch failed'),
+    ]);
     await expect(
-      new LlmDirector(openRouter(throttled.fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger).writeScene(sceneRequest()),
+      new LlmDirector(openRouter(throttled.fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger).writeScene(
+        sceneRequest(),
+      ),
     ).rejects.toThrow(/fetch failed/);
     expect(throttled.sent).toHaveLength(2);
 
@@ -344,6 +372,29 @@ describe('LlmDirector with an OpenAI compatible model', () => {
       new LlmDirector(openRouter(fetch), { sceneSeconds: 8, retryDelayMs: 0 }, silentLogger).writeScene(sceneRequest()),
     ).rejects.toMatchObject({ status: 502 });
     expect(sent).toHaveLength(2);
+  });
+});
+
+describe('chapter validation', () => {
+  const shot = { caption: 'Mia opens the moon door.', videoPrompt: goodScene.videoPrompt };
+  const chapter = { summary: goodScene.summary, choices: goodScene.choices, isEnding: false };
+
+  it('keeps the first shots of a long reply and drops empty ones', () => {
+    const extra = parseModelJson(
+      chapterSchema(1, 4, 3),
+      JSON.stringify({ ...chapter, shots: [shot, shot, shot, shot] }),
+    );
+    expect(extra.ok && extra.value.shots).toHaveLength(3);
+    const empty = parseModelJson(
+      chapterSchema(1, 4, 3),
+      JSON.stringify({ ...chapter, shots: [{ caption: '', videoPrompt: '' }, shot, shot, shot] }),
+    );
+    expect(empty.ok).toBe(true);
+    expect(parseModelJson(chapterSchema(1, 4, 3), JSON.stringify({ ...chapter, shots: [shot, shot] })).ok).toBe(false);
+  });
+
+  it('shows every shot in the reply format', () => {
+    expect(chapterSystemPrompt(15, 3)).toContain('Shot 3:');
   });
 });
 
@@ -435,7 +486,12 @@ describe('FakeDirector', () => {
   });
 
   it('builds a bible from a family prompt', async () => {
-    const result = await director.createBible({ prompt: 'a robot who wants to dance', moods: ['funny'], audience: 'family', totalScenes: 6 });
+    const result = await director.createBible({
+      prompt: 'a robot who wants to dance',
+      moods: ['funny'],
+      audience: 'family',
+      totalScenes: 6,
+    });
     expect(result.title).toBe('A Robot Who Wants to');
     expect(result.audience).toBe('family');
     expect(result.characters.length).toBeGreaterThan(0);
