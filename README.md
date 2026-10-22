@@ -12,14 +12,16 @@ New stories arrive regularly. Every family starts from the same openings, every 
 ## What it does
 
 * **Tonight's Stories.** Fresh stories planned by the story director with a seasonal touch.
-* **Every scene is video.** Each scene is a 12 second clip with music, sound effects and voices, made by MiniMax H3 Max Turbo. A story is four scenes, and a new scene from a family's own idea is ready in about 12 seconds.
-* **Choices with the D pad, ideas with your voice.** Two choices after every scene, plus Something else, where the remote microphone dictates any idea into the story. When nobody presses anything, a countdown picks a filmed path, so the story carries on for families who just want to watch.
+* **Every scene is video, told in chapters.** A story is four chapters. Each chapter is three continuous 15 second clips with music, sound effects and voices, made by MiniMax H3 Max Turbo, so the family watches 45 seconds of film before the next decision. The first clip of a chapter from a family's own idea is ready in about 12 seconds, and the rest is filmed while it plays.
+* **Choices with the D pad, ideas with your voice.** Two choices at the end of every chapter, plus Something else, where the remote microphone dictates any idea into the story. When nobody presses anything, a countdown picks a fully filmed path, so the story carries on for families who just want to watch.
+* **Stories that hold together.** Before the first clip, the story director writes a plan for the whole story: what each chapter must achieve and how it ends. Every chapter follows it, whatever the family picks, so stories arrive somewhere.
+* **Continue watching.** Home keeps each TV's recent stories at the front of the row, so a family can pick up exactly where they left off, or rewatch a finished story.
 * **Seamless cuts.** Each clip starts on the exact last frame of the previous one, so the story flows like one film.
-* **Instant choices.** While a scene plays, both possible next scenes are already being made.
+* **Instant choices.** The next clip of a chapter is filmed while the current one plays, and filmed choices are downloaded to the TV ahead of time.
 * **Shared story trees.** Popular paths are made once and then play instantly for every family. Custom ideas grow a private branch.
 * **Share the ending.** The end screen shows a QR code to a web page with the whole story as one movie, plus stats like "Only 8% of families opened the moon door".
 * **Safe for everyone.** An audience setting (Kids, Family, Grown ups) shapes the writing, and every typed idea and every scene passes a safety check.
-* **Free to watch, Sparks to film your own.** Daily stories and their paths are free. Scenes filmed only for your family use Sparks, bought with Amazon In App Purchasing. No sign up: Sparks follow your Amazon account. Your first custom scene is free.
+* **Free to watch, Sparks to film your own.** Daily stories and their paths are free. Chapters filmed only for your family use 3 Sparks, bought with Amazon In App Purchasing. No sign up: Sparks follow your Amazon account. Your first custom chapter is free.
 
 ## Try it (judges)
 

@@ -2,15 +2,18 @@
 
 Video generation is the main cost. Everything else (server on our own VPS, bandwidth, the story director, safety checks) is small.
 
-## Cost per filmed scene
+## Cost per filmed chapter
 
 | Item | Cost |
 | --- | --- |
-| MiniMax H3 Max Turbo, 768p, at $0.04 per second | $0.48 for 12 seconds ($0.32 for 8) |
-| Story director (DeepSeek V4.1 Flash on OpenRouter) | about $0.001 (Claude on Bedrock: about $0.04) |
-| **Scene** | **about $0.48** |
+| MiniMax H3 Max Turbo, 768p, at $0.04 per second ($0.026 until October 31) | $0.60 a 15 second clip |
+| Three clips per chapter | $1.80 |
+| Story director (DeepSeek V4.1 Flash on OpenRouter), one call per chapter | about $0.002 |
+| **Chapter** | **about $1.80** |
 
-Stories now use four 12 second scenes, so a whole shared tree is 15 scenes (about $7.20) instead of 63 (about $20 at 8 seconds). A 10 Spark pack at $11.99 is about $0.96 a Spark after Amazon's 20%, against about $0.62 of filming per Spark (1.3 scenes made per scene watched). The simulation below was run with 8 second scenes and Claude, so its costs are on the high side for trees and on the low side for private scenes.
+A story is four chapters. A shared story's main path is 12 clips (about $7.20), and each other choice only needs its first clip filmed ahead (one clip, $0.60) so its card has a picture; the rest of that chapter is filmed when a family actually picks it.
+
+A chapter filmed only for one family costs 3 Sparks. A 10 Spark pack at $11.99 is about $0.96 a Spark after Amazon's 20%, so about $2.88 a chapter against $1.80 of filming. The simulation below was run with 8 second single clip scenes and Claude, so read its absolute numbers as an earlier model.
 
 Private scenes are prepared ahead only for the choice a family focuses on, so we budget 1.3 scenes made per scene watched.
 
