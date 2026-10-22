@@ -2,7 +2,7 @@
 
 Family stories on Fire TV where every chapter is a short film made by AI, and the family decides what happens next.
 
-* Demo video: [watch on YouTube](https://youtu.be/TZKUhnOkTNk)
+* Demo video: [watch on YouTube](https://youtu.be/3a6cNijho_s)
 * Watch a story in your browser: [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play)
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
 * Made for the Fire TV track of the Amazon Developer hackathon "Build, Ship, Shape"
