@@ -10,6 +10,7 @@ export interface HomeSnapshot {
 
 let reading: Promise<HomeSnapshot | null> | null = null;
 let latest: HomeSnapshot | null = null;
+let settled = false;
 
 // The last Home this TV showed, so the next launch has stories on screen while fresh ones load.
 export function readHomeCache(): Promise<HomeSnapshot | null> {
@@ -25,6 +26,7 @@ export function readHomeCache(): Promise<HomeSnapshot | null> {
       } catch {
         latest = null;
       }
+      settled = true;
       return latest;
     })();
   }
@@ -32,12 +34,13 @@ export function readHomeCache(): Promise<HomeSnapshot | null> {
 }
 
 // The saved Home if the read started at launch has already finished, so Home can draw it in its first frame.
-export function peekHomeCache(): HomeSnapshot | null {
-  return latest;
+export function peekHomeCache(): { settled: boolean; saved: HomeSnapshot | null } {
+  return { settled, saved: latest };
 }
 
 export function saveHomeCache(snapshot: HomeSnapshot): void {
   latest = snapshot;
+  settled = true;
   reading = Promise.resolve(snapshot);
   try {
     loadStore()

@@ -45,8 +45,11 @@ const MAX_CONTINUE = 4;
 // How long Home keeps its skeleton up while it retries, before it explains what is wrong.
 const OFFLINE_PATIENCE_MS = 6000;
 const PATIENCE_MS = 20000;
+// Home waits this long for the saved copy before it shows the skeleton.
+const CACHE_WAIT_MS = 400;
 
 type LoadState =
+  | { status: 'starting' }
   | { status: 'loading' }
   | { status: 'ready'; today: TodayResponse }
   | { status: 'error'; offline: boolean; message: string };
@@ -226,14 +229,15 @@ export default function HomeScreen() {
   const navigation = useNavigation<ScreenNavigation<'Home'>>();
   const isFocused = useIsFocused();
   const [load, setLoad] = useState<LoadState>(() => {
-    const saved = peekHomeCache();
-    return saved ? { status: 'ready', today: saved.today } : { status: 'loading' };
+    const { settled, saved } = peekHomeCache();
+    if (saved) return { status: 'ready', today: saved.today };
+    return { status: settled ? 'loading' : 'starting' };
   });
   const [attempt, setAttempt] = useState(0);
   const [focusedIndex, setFocusedIndex] = useState(1);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
-  const [stories, setStories] = useState<StorySummary[]>(() => peekHomeCache()?.stories ?? []);
+  const [stories, setStories] = useState<StorySummary[]>(() => peekHomeCache().saved?.stories ?? []);
   const opening = useRef(false);
   const appActive = useAppActive();
   const loadRef = useRef(load);
@@ -250,15 +254,20 @@ export default function HomeScreen() {
   // The last Home this TV saw shows straight away and the fresh one replaces it when it arrives.
   useEffect(() => {
     let live = true;
+    const skeleton = () => {
+      if (live && loadRef.current.status === 'starting') setLoad({ status: 'loading' });
+    };
+    const timer = setTimeout(skeleton, CACHE_WAIT_MS);
     readHomeCache().then((saved) => {
-      if (!live || !saved) return;
+      if (!saved) return skeleton();
       const current = loadRef.current;
-      if (current.status === 'ready' && current.today !== saved.today) return;
+      if (!live || (current.status === 'ready' && current.today !== saved.today)) return;
       setStories(saved.stories);
       show(saved.today);
     });
     return () => {
       live = false;
+      clearTimeout(timer);
     };
   }, [show]);
 
@@ -312,7 +321,7 @@ export default function HomeScreen() {
   }, [attempt, isFocused, appActive, show]);
 
   useEffect(() => {
-    if (load.status !== 'loading') markHomeShown();
+    if (load.status === 'ready' || load.status === 'error') markHomeShown();
   }, [load.status]);
 
   const retry = useCallback(() => {
