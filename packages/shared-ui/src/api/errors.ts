@@ -7,13 +7,16 @@ export type ApiErrorCode = ErrorCode | ClientErrorCode;
 export class ApiError extends Error {
   readonly code: ApiErrorCode;
   readonly status: number | null;
+  // How long the server asked us to wait before trying again (Retry-After on a 429).
+  readonly retryAfterMs: number | null;
 
-  constructor(code: ApiErrorCode, message: string, status: number | null = null) {
+  constructor(code: ApiErrorCode, message: string, status: number | null = null, retryAfterMs: number | null = null) {
     super(message);
     Object.setPrototypeOf(this, ApiError.prototype);
     this.name = 'ApiError';
     this.code = code;
     this.status = status;
+    this.retryAfterMs = retryAfterMs;
   }
 }
 
@@ -47,6 +50,11 @@ const TRANSIENT: ReadonlySet<ApiErrorCode> = new Set<ApiErrorCode>([
 
 export function isTransient(error: unknown): boolean {
   return isApiError(error) && TRANSIENT.has(error.code);
+}
+
+export function parseRetryAfter(value: string | null | undefined): number | null {
+  const seconds = Number(value);
+  return value && Number.isFinite(seconds) && seconds >= 0 ? Math.round(seconds * 1000) : null;
 }
 
 export function codeForStatus(status: number): ErrorCode {

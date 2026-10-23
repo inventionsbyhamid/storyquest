@@ -4,6 +4,8 @@ export type { RootStackParamList } from './navigation/types';
 export { DEFAULT_API_BASE_URL, getApiBaseUrl, setApiBaseUrl } from './config';
 export { setWatchOnly } from './platform/watchOnly';
 export { api, createApiClient, ApiError, isApiError, resolveMediaUrl, getDeviceId } from './api';
+export { readHomeCache } from './api/homeCache';
+export { whenHomeShown } from './app/homeShown';
 
 export * from './theme';
 export { scaledPixels } from './hooks/useScale';

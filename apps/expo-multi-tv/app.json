@@ -48,7 +48,25 @@
           }
         }
       ],
-      "./plugins/withFmtXcode26Fix"
+      "./plugins/withFmtXcode26Fix",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#1C2240",
+          "image": "./assets/adaptive-icon.png",
+          "imageWidth": 240,
+          "dark": {
+            "backgroundColor": "#1C2240",
+            "image": "./assets/adaptive-icon.png"
+          }
+        }
+      ],
+      [
+        "expo-font",
+        {
+          "fonts": ["./assets/fonts/Fraunces.ttf"]
+        }
+      ]
     ],
     "name": "StoryQuest",
     "slug": "storyquest",

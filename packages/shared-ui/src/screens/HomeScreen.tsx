@@ -9,8 +9,13 @@ import {
 } from 'react-tv-space-navigation';
 import type { IdeaView, StorySummary, TodayResponse } from '@storyquest/contracts';
 import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
+import { readHomeCache, saveHomeCache } from '../api/homeCache';
+import { retryPatiently } from '../api/patient';
+import { markHomeShown } from '../app/homeShown';
+import { useAppActive } from '../hooks/useAppActive';
+import { isWatchOnly } from '../platform/watchOnly';
 import { audienceFact, formatPlays, moodLabel } from '../story/format';
-import { messageForError } from '../story/messages';
+import { messageForError, messages } from '../story/messages';
 import { ToneContext, colors, radii, screen, space, toneFor, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { prefetchImage } from '../utils/prefetch';
@@ -36,11 +41,14 @@ import type { ScreenNavigation } from '../navigation/types';
 import { warmClip } from '../utils/warmClip';
 
 const MAX_CONTINUE = 4;
+// How long Home keeps its skeleton up while it retries, before it explains what is wrong.
+const OFFLINE_PATIENCE_MS = 6000;
+const PATIENCE_MS = 20000;
 
 type LoadState =
   | { status: 'loading' }
   | { status: 'ready'; today: TodayResponse }
-  | { status: 'error'; message: string };
+  | { status: 'error'; offline: boolean; message: string };
 
 // The hero text settles in when the focused story changes.
 const FadeIn = ({ children }: { children: React.ReactNode }) => {
@@ -223,36 +231,86 @@ export default function HomeScreen() {
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
   const [stories, setStories] = useState<StorySummary[]>([]);
   const opening = useRef(false);
-  const hasIdeas = load.status === 'ready';
+  const appActive = useAppActive();
+  const loadRef = useRef(load);
+  loadRef.current = load;
+  const storiesRef = useRef(stories);
+  storiesRef.current = stories;
 
-  // Loads on first visit and on retry; refreshes quietly whenever the family comes back home.
+  const show = useCallback((today: TodayResponse) => {
+    reportFilmingPaused(today.filmingPaused);
+    today.ideas.forEach((idea) => prefetchImage(resolveMediaUrl(idea.posterUrl)));
+    setLoad({ status: 'ready', today });
+  }, []);
+
+  // The last Home this TV saw shows straight away and the fresh one replaces it when it arrives.
   useEffect(() => {
-    if (!isFocused) return;
+    let live = true;
+    readHomeCache().then((saved) => {
+      if (!live || !saved || loadRef.current.status === 'ready') return;
+      setStories(saved.stories);
+      show(saved.today);
+    });
+    return () => {
+      live = false;
+    };
+  }, [show]);
+
+  // Loads on first visit, on retry and when the TV wakes up, and keeps trying until it works,
+  // since a TV that just woke up can take a while to get back online.
+  useEffect(() => {
+    if (!isFocused || !appActive) return;
     const controller = new AbortController();
-    const quiet = hasIdeas;
-    if (!quiet) setLoad({ status: 'loading' });
+    const started = Date.now();
     // Both lists arrive together so the first focus lands on the family's latest story.
     // Unfinished stories come first, then recently finished ones; Home works without them.
-    const ownStories = api
-      .listStories({ signal: controller.signal, retries: 0 })
-      .then((list) => [...list.filter((s) => s.status === 'active'), ...list.filter((s) => s.status === 'finished')])
-      .catch(() => null);
-    Promise.all([api.getToday({ signal: controller.signal }), ownStories])
+    const loadBoth = () =>
+      Promise.all([
+        api.getToday({ signal: controller.signal, retries: 0 }),
+        api
+          .listStories({ signal: controller.signal, retries: 0 })
+          .then((list) => [
+            ...list.filter((s) => s.status === 'active'),
+            ...list.filter((s) => s.status === 'finished'),
+          ])
+          .catch(() => null),
+      ]);
+    const explain = (error: unknown) => {
+      const code = toApiError(error).code;
+      const offline = code === 'network' && !isWatchOnly();
+      const message = messageForError(code, 'today');
+      const current = loadRef.current;
+      if (current.status === 'ready') return;
+      if (current.status === 'error' && current.offline === offline && current.message === message) return;
+      setLoad({ status: 'error', offline, message });
+    };
+    retryPatiently(loadBoth, {
+      signal: controller.signal,
+      onFailure: (error) => {
+        const patience = error.code === 'network' ? OFFLINE_PATIENCE_MS : PATIENCE_MS;
+        if (Date.now() - started >= patience) explain(error);
+      },
+    })
       .then(([today, own]) => {
-        reportFilmingPaused(today.filmingPaused);
-        today.ideas.forEach((idea) => prefetchImage(resolveMediaUrl(idea.posterUrl)));
-        if (own) setStories(own.slice(0, MAX_CONTINUE));
-        setLoad({ status: 'ready', today });
+        const kept = own ? own.slice(0, MAX_CONTINUE) : storiesRef.current;
+        setStories(kept);
+        show(today);
+        saveHomeCache({ today, stories: kept });
       })
       .catch((error) => {
-        if (isAbortError(error) || quiet) return;
-        setLoad({ status: 'error', message: messageForError(toApiError(error).code, 'today') });
+        if (!isAbortError(error)) explain(error);
       });
     return () => controller.abort();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [attempt, isFocused]);
+  }, [attempt, isFocused, appActive, show]);
 
-  const retry = useCallback(() => setAttempt((n) => n + 1), []);
+  useEffect(() => {
+    if (load.status !== 'loading') markHomeShown();
+  }, [load.status]);
+
+  const retry = useCallback(() => {
+    if (loadRef.current.status === 'error') setLoad({ status: 'loading' });
+    setAttempt((n) => n + 1);
+  }, []);
   const dismissNotice = useCallback(() => setNotice(null), []);
   const filmingPaused = useFilmingPaused();
   const makeYourOwn = useCallback(() => {
@@ -348,8 +406,8 @@ export default function HomeScreen() {
 
             {load.status === 'error' && (
               <View style={[styles.text, styles.errorText]}>
-                <Text style={styles.title} numberOfLines={1}>
-                  The stories did not load
+                <Text style={styles.title} numberOfLines={2}>
+                  {load.offline ? messages.offline : 'The stories did not load'}
                 </Text>
                 <Text style={styles.logline}>{load.message}</Text>
                 <DefaultFocus>

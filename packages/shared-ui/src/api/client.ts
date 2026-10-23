@@ -21,7 +21,7 @@ import type {
   StartStoryRequest,
   VerifyPurchaseRequest,
 } from '@storyquest/contracts';
-import { ApiError, codeForStatus, isApiError, isTransient, toApiError } from './errors';
+import { ApiError, codeForStatus, isApiError, isTransient, parseRetryAfter, toApiError } from './errors';
 import { resolveMediaUrl } from './media';
 import { sleep as defaultSleep } from './sleep';
 
@@ -55,6 +55,8 @@ export interface ApiClientOptions {
 const DEFAULT_TIMEOUT_MS = 10000;
 const DEFAULT_GET_RETRIES = 2;
 const LONG_POLL_GRACE_MS = 7000;
+// A longer Retry-After is left to the caller rather than waited out inside one call.
+const MAX_INLINE_RETRY_AFTER_MS = 3000;
 
 export function backoffDelay(attempt: number, random: () => number = Math.random): number {
   const base = Math.min(400 * 2 ** (attempt - 1), 4000);
@@ -112,17 +114,19 @@ export function createApiClient(options: ApiClientOptions) {
       }
 
       if (!response.ok) {
+        const retryAfterMs = parseRetryAfter(response.headers?.get?.('retry-after'));
         const parsedError = ErrorResponse.safeParse(json);
         if (parsedError.success) {
           const { code, message } = parsedError.data.error;
           // The server answers 409 not_found for a path whose scene was taken down.
           const closed = response.status === 409 && code === 'not_found';
-          throw new ApiError(closed ? 'path_closed' : code, message, response.status);
+          throw new ApiError(closed ? 'path_closed' : code, message, response.status, retryAfterMs);
         }
         throw new ApiError(
           codeForStatus(response.status),
           `Request failed with status ${response.status}`,
           response.status,
+          retryAfterMs,
         );
       }
 
@@ -156,11 +160,17 @@ export function createApiClient(options: ApiClientOptions) {
         return await once(method, path, schema, body, opts.signal, timeoutMs);
       } catch (error) {
         const apiError = toApiError(error);
-        if (apiError.code === 'aborted' || attempt > retries || !isTransient(apiError)) {
+        const retryAfter = apiError.retryAfterMs ?? 0;
+        if (
+          apiError.code === 'aborted' ||
+          attempt > retries ||
+          !isTransient(apiError) ||
+          retryAfter > MAX_INLINE_RETRY_AFTER_MS
+        ) {
           if (apiError.code !== 'aborted') options.onError?.(apiError);
           throw apiError;
         }
-        await sleep(backoffDelay(attempt, random), opts.signal);
+        await sleep(Math.max(backoffDelay(attempt, random), retryAfter), opts.signal);
       }
     }
   }

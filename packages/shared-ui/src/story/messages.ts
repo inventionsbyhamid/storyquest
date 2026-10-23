@@ -22,6 +22,7 @@ export const messages = {
   reportThanks: 'Thanks. We removed this scene for your family and will review it.',
   reportFailed: 'The report could not be sent. Try again.',
   storyRemoved: 'Thanks for telling us. We took this story down and will review it. Pick another one from home.',
+  offline: 'This TV is not connected to the internet',
 };
 
 export function messageForError(code: ApiErrorCode | 'node_failed', context: MessageContext = 'general'): string {
@@ -49,7 +50,10 @@ export function messageForError(code: ApiErrorCode | 'node_failed', context: Mes
     case 'rate_limited':
       return 'StoryQuest is busy right now. Try again in a moment.';
     case 'network':
-      return "StoryQuest can't be reached. Check the connection and try again.";
+      // Cloudflare answers for the server even when it is down, so a request that gets nowhere means the TV is offline.
+      if (isWatchOnly()) return "StoryQuest can't be reached. Check the connection and try again.";
+      if (context === 'today') return 'StoryQuest opens by itself as soon as the TV is back online.';
+      return `${messages.offline}. Check the connection and try again.`;
     case 'timeout':
       return context === 'preset' || context === 'custom'
         ? messages.slowScene
