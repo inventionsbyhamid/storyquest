@@ -9,7 +9,7 @@ import {
 } from 'react-tv-space-navigation';
 import type { IdeaView, StorySummary, TodayResponse } from '@storyquest/contracts';
 import { api, isAbortError, resolveMediaUrl, toApiError } from '../api';
-import { readHomeCache, saveHomeCache } from '../api/homeCache';
+import { peekHomeCache, readHomeCache, saveHomeCache } from '../api/homeCache';
 import { retryPatiently } from '../api/patient';
 import { markHomeShown } from '../app/homeShown';
 import { useAppActive } from '../hooks/useAppActive';
@@ -225,12 +225,15 @@ const StoryRow = React.memo(
 export default function HomeScreen() {
   const navigation = useNavigation<ScreenNavigation<'Home'>>();
   const isFocused = useIsFocused();
-  const [load, setLoad] = useState<LoadState>({ status: 'loading' });
+  const [load, setLoad] = useState<LoadState>(() => {
+    const saved = peekHomeCache();
+    return saved ? { status: 'ready', today: saved.today } : { status: 'loading' };
+  });
   const [attempt, setAttempt] = useState(0);
   const [focusedIndex, setFocusedIndex] = useState(1);
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [notice, setNotice] = useState<{ id: number; text: string } | null>(null);
-  const [stories, setStories] = useState<StorySummary[]>([]);
+  const [stories, setStories] = useState<StorySummary[]>(() => peekHomeCache()?.stories ?? []);
   const opening = useRef(false);
   const appActive = useAppActive();
   const loadRef = useRef(load);
@@ -248,7 +251,9 @@ export default function HomeScreen() {
   useEffect(() => {
     let live = true;
     readHomeCache().then((saved) => {
-      if (!live || !saved || loadRef.current.status === 'ready') return;
+      if (!live || !saved) return;
+      const current = loadRef.current;
+      if (current.status === 'ready' && current.today !== saved.today) return;
       setStories(saved.stories);
       show(saved.today);
     });
