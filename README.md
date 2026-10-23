@@ -52,6 +52,12 @@ vega device install-app -p StoryQuest_armv7.vpkg
 vega device launch-app -a com.storyquest.tv.main
 ```
 
+### On Android TV or an older Fire TV (Fire OS)
+
+1. Download `StoryQuest_android.apk` from the latest [release](../../releases).
+2. Install it with `adb install StoryQuest_android.apk`, or on the TV open the free Downloader app and enter `https://github.com/inventionsbyhamid/storyquest/releases/latest/download/StoryQuest_android.apk`.
+3. Open StoryQuest from your apps and use the remote. This build is made for TVs, so phones and touch screens are not supported.
+
 ### In the Vega Virtual Device
 
 1. Install the Vega SDK and start the device: `vega virtual-device start`
@@ -127,6 +133,17 @@ The same screens also run in a browser: `yarn dev:web` while you work. To serve 
 cd apps/expo-multi-tv
 EXPO_PUBLIC_API_BASE_URL=https://your.server npx expo export --platform web --output-dir dist
 ```
+
+The Android TV and Fire OS app comes from the same folder. You need JDK 17 and the Android SDK:
+
+```bash
+cd apps/expo-multi-tv
+EXPO_TV=1 npx expo prebuild --platform android
+cd android
+EXPO_TV=1 EXPO_PUBLIC_API_BASE_URL=https://your.server ./gradlew assembleRelease
+```
+
+The APK is in `android/app/build/outputs/apk/release/`.
 
 ### Run the tests
 
