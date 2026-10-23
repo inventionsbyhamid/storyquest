@@ -7,7 +7,7 @@
       [
         "@react-native-tvos/config-tv",
         {
-          "androidTVBanner": "./assets/tv_icons/icon-400x240.png",
+          "androidTVBanner": "./assets/tv_icons/android-tv-banner.png",
           "appleTVImages": {
             "icon": "./assets/tv_icons/icon-1280x768.png",
             "iconSmall": "./assets/tv_icons/icon-400x240.png",
@@ -54,7 +54,11 @@
     "slug": "storyquest",
     "scheme": "storyquest",
     "android": {
-      "package": "com.storyquest.tv"
+      "package": "com.storyquest.tv",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1C2240"
+      }
     },
     "ios": {
       "bundleIdentifier": "com.storyquest.tv"
@@ -69,6 +73,7 @@
     },
     "experiments": {
       "baseUrl": "/play"
-    }
+    },
+    "icon": "./assets/icon.png"
   }
 }

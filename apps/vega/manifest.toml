@@ -2,6 +2,7 @@ schema-version = 1
 
 [package]
 title = "StoryQuest"
+icon = "@image/app_icon.png"
 version = "0.1.0"
 id = "com.storyquest.tv"
 
