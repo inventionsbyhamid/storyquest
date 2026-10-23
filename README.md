@@ -2,6 +2,8 @@
 
 Family stories on Fire TV where every chapter is a short film made by AI, and the family decides what happens next.
 
+[![Watch the StoryQuest demo (2:54)](docs/demo-thumbnail.jpg)](https://youtu.be/3a6cNijho_s)
+
 * Demo video: [watch on YouTube](https://youtu.be/3a6cNijho_s)
 * Watch a story in your browser: [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play)
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
@@ -100,12 +102,20 @@ Set these in `apps/server/.env`:
 | What | Setting |
 | --- | --- |
 | Video | `VIDEO=fal` and `FAL_KEY` |
-| Story writer on OpenRouter | `DIRECTOR=openrouter` and `OPENROUTER_API_KEY` |
 | Story writer on Amazon Bedrock | `DIRECTOR=bedrock` and `BEDROCK_API_KEY` or AWS credentials |
+| Story writer on OpenRouter | `DIRECTOR=openrouter` and `OPENROUTER_API_KEY` |
 | Story writer on the Anthropic API | `DIRECTOR=anthropic` and `ANTHROPIC_API_KEY` |
 | Any OpenAI compatible API | `DIRECTOR=openai`, `OPENAI_API_KEY` and `OPENAI_BASE_URL` |
 
-`DIRECTOR_MODEL` picks the model. Our server uses DeepSeek V4.1 Flash on OpenRouter:
+`DIRECTOR_MODEL` picks the model; each provider has its own default. Our server uses Claude on Amazon Bedrock:
+
+```bash
+DIRECTOR=bedrock
+BEDROCK_API_KEY=...
+AWS_REGION=us-east-1
+```
+
+DeepSeek V4.1 Flash on OpenRouter also works well and costs less:
 
 ```bash
 DIRECTOR=openrouter
@@ -162,7 +172,7 @@ docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data sto
 
 ![StoryQuest system design](docs/architecture.svg)
 
-The Fire TV, Android TV and browser apps talk to one Node server through Cloudflare, which also caches the clips and posters. DeepSeek V4.1 Flash on OpenRouter writes each chapter, MiniMax on fal films it, and the server keeps the stories in SQLite and the films on the same Docker volume. Dashed lines are one setting away, such as Claude on Amazon Bedrock, Bedrock Guardrails and Amazon receipt verification.
+The Fire TV, Android TV and browser apps talk to one Node server through Cloudflare, which also caches the clips and posters. Claude on Amazon Bedrock writes each chapter, MiniMax on fal films it, and the server keeps the stories in SQLite and the films on the same Docker volume. Dashed lines are one setting away, such as DeepSeek on OpenRouter, Bedrock Guardrails and Amazon receipt verification.
 
 ## How it works
 

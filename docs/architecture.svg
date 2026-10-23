@@ -147,12 +147,12 @@
   <rect x="1020" y="132" width="340" height="186" rx="10" fill="#F4F5F7" stroke="#BCC3CE" stroke-width="1.3"/>
   <text class="box" x="1036" y="158" fill="#2D3A4A">Story director (LLM)</text>
   <rect x="1036" y="170" width="308" height="44" rx="6" fill="#FFFFFF" stroke="#8E9AAB" stroke-width="1.2"/>
-  <text class="em" x="1048" y="188">OpenRouter: DeepSeek V4.1 Flash</text>
+  <text class="em" x="1048" y="188">Amazon Bedrock: Claude</text>
   <text class="lab" x="1332" y="188" text-anchor="end" fill="#22573A">in use</text>
-  <text class="note" x="1048" y="205">Skips hosts that keep or train on prompts</text>
+  <text class="note" x="1048" y="205">Plans each story and writes every chapter</text>
   <rect x="1036" y="224" width="308" height="80" rx="6" fill="#FFFFFF" stroke="#9AA5B4" stroke-width="1.2" stroke-dasharray="6 5"/>
   <text class="lab" x="1048" y="241">Switchable with one setting</text>
-  <text class="opt" x="1048" y="259">Amazon Bedrock: Claude</text>
+  <text class="opt" x="1048" y="259">OpenRouter: DeepSeek V4.1 Flash</text>
   <text class="opt" x="1048" y="276">Anthropic API: Claude</text>
   <text class="opt" x="1048" y="293">Any OpenAI compatible API</text>
 
