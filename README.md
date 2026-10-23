@@ -158,6 +158,12 @@ docker build -f apps/server/Dockerfile -t storyquest-api .
 docker run -p 8080:8080 --env-file apps/server/.env -v storyquest-data:/data storyquest-api
 ```
 
+## Architecture
+
+![StoryQuest system design](docs/architecture.svg)
+
+The Fire TV, Android TV and browser apps talk to one Node server through Cloudflare, which also caches the clips and posters. DeepSeek V4.1 Flash on OpenRouter writes each chapter, MiniMax on fal films it, and the server keeps the stories in SQLite and the films on the same Docker volume. Dashed lines are one setting away, such as Claude on Amazon Bedrock, Bedrock Guardrails and Amazon receipt verification.
+
 ## How it works
 
 1. **A plan first.** Before filming, a language model plans the whole story: the characters, the art style and what each of the four chapters must do, so every path reaches a real ending.
