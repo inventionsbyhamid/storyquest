@@ -19,6 +19,7 @@ import { messageForError, messages } from '../story/messages';
 import { ToneContext, colors, radii, screen, space, toneFor, type } from '../theme';
 import { scaledPixels } from '../hooks/useScale';
 import { prefetchImage } from '../utils/prefetch';
+import { sparks } from '../purchases';
 import { isFilmingPaused, reportFilmingPaused } from '../budget/filming';
 import { useFilmingPaused } from '../budget/useFilmingPaused';
 import { Brand } from '../components/Brand';
@@ -296,6 +297,8 @@ export default function HomeScreen() {
         setStories(kept);
         show(today);
         saveHomeCache({ today, stories: kept });
+        // The wallet gave up if the TV was offline at launch.
+        if (!sparks.getSnapshot().wallet) sparks.refreshWallet();
       })
       .catch((error) => {
         if (!isAbortError(error)) explain(error);
