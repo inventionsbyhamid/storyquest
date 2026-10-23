@@ -5,6 +5,7 @@ Family stories on Fire TV where every chapter is a short film made by AI, and th
 [![Watch the StoryQuest demo (2:54)](docs/demo-thumbnail.jpg)](https://youtu.be/3a6cNijho_s)
 
 * Demo video: [watch on YouTube](https://youtu.be/3a6cNijho_s)
+* On a real TV: [StoryQuest running on an Android TV](https://youtu.be/wpAD3hREGoY)
 * Watch a story in your browser: [storyquest.dijmo.com/play](https://storyquest.dijmo.com/play)
 * Website: [storyquest.dijmo.com](https://storyquest.dijmo.com)
 * What slowed us down with the Vega SDK, and how we got past it: [friction log](docs/friction-log.md)
