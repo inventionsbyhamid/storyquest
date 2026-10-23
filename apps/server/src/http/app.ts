@@ -23,13 +23,14 @@ import {
   WalletView,
 } from '@storyquest/contracts';
 import { z } from 'zod';
-import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import type { Config } from '../config';
 import type { Bible } from '../domain';
 import { PlannedIdeaSchema } from '../providers/director/schemas';
 import { AppError, badRequest, MESSAGES, notFound, rateLimited } from '../engine/errors';
 import { PATH_ID, SLUG } from '../ids';
 import { createServices, type ServiceOverrides, type Services } from '../services';
+import { clientIp } from './clientIp';
 import { renderNotFoundPage, renderSharePage } from './share-page';
 import { registerSite } from './site';
 import { Views } from './views';
@@ -107,7 +108,8 @@ export async function createServer(config: Config, overrides: ServiceOverrides =
 export async function registerRoutes(app: FastifyInstance, services: Services): Promise<void> {
   const { config, repo, engine, daily } = services;
   const views = new Views(services);
-  const rateKey = (request: FastifyRequest) => `${request.ip}|${deviceHeader(request) ?? ''}`;
+  // Limits count per visitor address and stay generous, since a family has several TVs and an office shares one address.
+  const perIp = (max: number, timeWindow: string) => ({ max, timeWindow, keyGenerator: clientIp });
 
   // Clients often send an empty body with a JSON content type on POSTs like finish.
   app.removeContentTypeParser('application/json');
@@ -140,13 +142,31 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   await app.register(fastifyRateLimit, {
     global: true,
-    max: 600,
-    timeWindow: '1 minute',
-    keyGenerator: rateKey,
+    ...perIp(300, '1 minute'),
+    cache: 10_000,
     allowList: (request) =>
-      request.url.startsWith('/media/') || request.url.startsWith('/static/') || request.url === '/healthz',
+      request.url.startsWith('/media/') ||
+      request.url.startsWith('/static/') ||
+      request.url.startsWith('/play/') ||
+      request.url === '/healthz',
   });
-  const customChoiceLimit = app.createRateLimit({ max: 10, timeWindow: '1 minute', keyGenerator: rateKey });
+  // Custom ideas are filmed on the spot, so they get a tight limit on top of the wallet and budget caps.
+  const customIdeas = app.createRateLimit({
+    max: 6,
+    timeWindow: '10 minutes',
+    keyGenerator: (request) => `custom|${clientIp(request)}`,
+  });
+  const reportsPerIp = app.createRateLimit({
+    max: 30,
+    timeWindow: '1 hour',
+    keyGenerator: (request) => `reports|${clientIp(request)}`,
+  });
+  const enforce = async (limiter: typeof customIdeas, request: FastifyRequest, reply: FastifyReply) => {
+    const limit = await limiter(request);
+    if (limit.isAllowed || !limit.isExceeded) return;
+    reply.header('retry-after', limit.ttlInSeconds);
+    throw rateLimited();
+  };
 
   await app.register(fastifyStatic, {
     root: services.store.root,
@@ -189,9 +209,10 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     });
   });
 
-  app.post('/v1/stories', { config: { rateLimit: { max: 20, timeWindow: '1 minute', keyGenerator: rateKey } } }, async (request) => {
+  app.post('/v1/stories', { config: { rateLimit: perIp(30, '1 minute') } }, async (request, reply) => {
     const device = requireDevice(request);
     const body = parse(StartStoryRequest, request.body);
+    if (body.kind === 'custom') await enforce(customIdeas, request, reply);
     const story = await engine.startStory(device, body, iapUser(request));
     return parse(StoryView, views.story(story));
   });
@@ -237,7 +258,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   app.post<{ Params: { id: string } }>(
     '/v1/nodes/:id/prefetch',
-    { config: { rateLimit: { max: 60, timeWindow: '1 minute', keyGenerator: rateKey } } },
+    { config: { rateLimit: perIp(120, '1 minute') } },
     async (request) => {
       const body = parse(PrefetchRequest, request.body);
       const node = engine.prepareChoice(idParam(request.params.id), body.index, optionalDevice(request), iapUser(request));
@@ -249,29 +270,29 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
     '/v1/nodes/:id/report',
     {
       config: {
-        rateLimit: { max: 10, timeWindow: '1 hour', keyGenerator: (request) => `report|${deviceHeader(request) ?? request.ip}` },
+        rateLimit: { max: 10, timeWindow: '1 hour', keyGenerator: (request) => `report|${deviceHeader(request) ?? clientIp(request)}` },
       },
     },
-    async (request) => {
+    async (request, reply) => {
       const device = requireDevice(request);
+      await enforce(reportsPerIp, request, reply);
       const body = parse(ReportRequest, request.body);
       services.moderation.report(idParam(request.params.id), device, body.reason, body.storyId ?? null);
       return parse(ReportResponse, { ok: true });
     },
   );
 
-  app.post<{ Params: { id: string } }>('/v1/stories/:id/choose', async (request) => {
+  const storyWrites = () => ({ config: { rateLimit: perIp(30, '1 minute') } });
+
+  app.post<{ Params: { id: string } }>('/v1/stories/:id/choose', storyWrites(), async (request, reply) => {
     const storyId = idParam(request.params.id);
     const body = parse(ChooseRequest, request.body);
-    if (body.kind === 'custom') {
-      const limit = await customChoiceLimit(request);
-      if (!limit.isAllowed && limit.isExceeded) throw rateLimited();
-    }
+    if (body.kind === 'custom') await enforce(customIdeas, request, reply);
     const result = await engine.choose(storyId, optionalDevice(request), body, iapUser(request));
     return parse(ChooseResponse, { story: views.story(result.story), nextNodeId: result.nextNodeId });
   });
 
-  app.post<{ Params: { id: string } }>('/v1/stories/:id/finish', async (request) => {
+  app.post<{ Params: { id: string } }>('/v1/stories/:id/finish', storyWrites(), async (request) => {
     const story = await engine.finish(idParam(request.params.id), optionalDevice(request));
     return parse(FinishResponse, views.finish(story));
   });
@@ -286,7 +307,7 @@ export async function registerRoutes(app: FastifyInstance, services: Services): 
 
   app.post(
     '/v1/purchases/verify',
-    { config: { rateLimit: { max: 30, timeWindow: '1 minute', keyGenerator: rateKey } } },
+    { config: { rateLimit: perIp(30, '1 minute') } },
     async (request) => {
       const body = parse(VerifyPurchaseRequest, request.body);
       const result = await services.wallet.verifyPurchase(optionalDevice(request), body);

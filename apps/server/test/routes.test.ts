@@ -280,3 +280,22 @@ describe('HTTP API', () => {
     expect(daily.json()).toMatchObject({ created: 0 });
   });
 });
+
+describe('rate limits', () => {
+  it('counts each visitor behind Cloudflare on their own', async () => {
+    const { app } = await boot();
+    const edge = '172.70.108.121';
+    const get = (ip: string, remoteAddress = edge) =>
+      app.inject({ method: 'GET', url: '/v1/today', remoteAddress, headers: { 'cf-connecting-ip': ip } });
+
+    for (let i = 0; i < 300; i++) expect((await get('203.0.113.7')).statusCode).toBe(200);
+    const limited = await get('203.0.113.7');
+    expect(limited.statusCode).toBe(429);
+    expect(ErrorResponse.parse(limited.json()).error.code).toBe('rate_limited');
+    expect(Number(limited.headers['retry-after'])).toBeGreaterThan(0);
+
+    expect((await get('198.51.100.9')).statusCode).toBe(200);
+    // Straight to the server the header is ignored, so it cannot dodge the limit.
+    expect((await get('198.51.100.10', '203.0.113.7')).statusCode).toBe(429);
+  });
+});
